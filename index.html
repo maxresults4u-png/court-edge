@@ -59,7 +59,7 @@ function getHardcodedVegasData() {
 const RULES = {
     SALARY_CAP: 60000,
     MIN_SALARY_USED: 58000,
-    NEVER_PLAY_OWN_THRESHOLD: 3.0,
+    NEVER_PLAY_OWN_THRESHOLD: 5.0,
     ANCHOR_FPPG_THRESHOLD: 40,
     FLOOR_FPPG_MIN: 15,
     POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
@@ -255,6 +255,11 @@ function generateLineups(players, count, lockedNames, excludedNames) {
     return lineups;
 }
 function lineupStats(lu) {
+    if (!lu || !Array.isArray(lu) || lu.length === 0)
+        return {
+            total: 0, proj: 0, avgOwn: 0, chalk: 0, mid: 0, punt: 0,
+            anchor: { name: "—", fppg: 0 }
+        };
     return {
         total: lu.reduce((s, p) => s + p.salary, 0),
         proj: lu.reduce((s, p) => s + p.fppg, 0),
@@ -743,11 +748,19 @@ function App() {
             if (name)
                 defaultOwn[name] = 15;
         });
-        setOwnershipMap(defaultOwn);
-        rebuildPlayers(text, defaultOwn, {});
-        setStatMuseMap({});
+        // If Vegas data already loaded, re-apply ownership estimates to new player pool
+        let finalOwn = Object.assign({}, defaultOwn);
+        if (vegasMap && Object.keys(vegasMap).length > 0) {
+            const tempPlayers = parsePlayers(text, defaultOwn, {});
+            tempPlayers.forEach(p => {
+                const est = estimateOwnership(p, vegasMap);
+                finalOwn[p.name.toLowerCase()] = est;
+            });
+        }
+        setOwnershipMap(finalOwn);
+        rebuildPlayers(text, finalOwn, statMuseMap);
         setStep("build");
-    }, [rebuildPlayers]);
+    }, [rebuildPlayers, vegasMap, statMuseMap]);
     const handleFile = (e) => {
         const file = e.target.files[0];
         if (!file)
@@ -1107,6 +1120,8 @@ function App() {
                 React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } }, lineups.map((lu, i) => React.createElement(LineupCard, { key: i, lineup: lu, index: i, isSelected: selectedLineup === i, onSelect: setSelectedLineup }))),
                 (() => {
                     const lu = lineups[selectedLineup];
+                    if (!lu || !Array.isArray(lu) || lu.length === 0)
+                        return null;
                     const stats = lineupStats(lu);
                     const sorted = [...lu].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
                     const ownColor = o => o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171";
@@ -1163,7 +1178,7 @@ function App() {
                             }))),
                         React.createElement("div", { style: { marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 } }, [
                             ["Anchor present", lu.some(p => p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD)],
-                            ["No <3% punts", !lu.some(p => p.ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)],
+                            ["No <5% punts", !lu.some(p => p.ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)],
                             ["Ownership OK", stats.avgOwn >= 15 && stats.avgOwn <= 35],
                             ["Salary used", stats.total >= RULES.MIN_SALARY_USED],
                             ["Floor clear", lu.every(p => p.fppg >= RULES.FLOOR_FPPG_MIN)],
