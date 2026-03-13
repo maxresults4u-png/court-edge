@@ -59,7 +59,7 @@ function getHardcodedVegasData() {
 const RULES = {
     SALARY_CAP: 60000,
     MIN_SALARY_USED: 58000,
-    NEVER_PLAY_OWN_THRESHOLD: 5.0,
+    NEVER_PLAY_OWN_THRESHOLD: 7.0,
     ANCHOR_FPPG_THRESHOLD: 40,
     FLOOR_FPPG_MIN: 15,
     POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
@@ -1178,7 +1178,7 @@ function App() {
                             }))),
                         React.createElement("div", { style: { marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 } }, [
                             ["Anchor present", lu.some(p => p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD)],
-                            ["No <5% punts", !lu.some(p => p.ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)],
+                            ["No <7% punts", !lu.some(p => p.ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)],
                             ["Ownership OK", stats.avgOwn >= 15 && stats.avgOwn <= 35],
                             ["Salary used", stats.total >= RULES.MIN_SALARY_USED],
                             ["Floor clear", lu.every(p => p.fppg >= RULES.FLOOR_FPPG_MIN)],
