@@ -288,7 +288,7 @@ function gradeSlate(gamesList) {
     }
     else {
         score += 5;
-        notes.push("\u{1F6AB} Only " + gamesList.length + " games \u2014 thin slate");
+        notes.push("\uD83D\uDEAB Only " + gamesList.length + " games \u2014 thin slate");
     }
     // Average total
     if (avgTotal >= 228) {
@@ -301,7 +301,7 @@ function gradeSlate(gamesList) {
     }
     else {
         score += 5;
-        notes.push("\u{1F6AB} Avg O/U " + avgTotal.toFixed(1) + " \u2014 low scoring slate");
+        notes.push("\uD83D\uDEAB Avg O/U " + avgTotal.toFixed(1) + " \u2014 low scoring slate");
     }
     // High total games
     if (highTotalGames >= 3) {
@@ -314,7 +314,7 @@ function gradeSlate(gamesList) {
     }
     else {
         score += 5;
-        notes.push("\u{1F6AB} No games over 228 \u2014 tough to stack");
+        notes.push("\uD83D\uDEAB No games over 228 \u2014 tough to stack");
     }
     // Elite implied team
     if (maxImpl >= 122) {
@@ -327,15 +327,15 @@ function gradeSlate(gamesList) {
     }
     else {
         score += 5;
-        notes.push("\u{1F6AB} Max implied only " + maxImpl + " \u2014 no elite pace-up");
+        notes.push("\uD83D\uDEAB Max implied only " + maxImpl + " \u2014 no elite pace-up");
     }
     const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
     const playIt = score >= 55;
-    const recommendation = score >= 85 ? "\u{1F525} MUST PLAY \u2014 elite slate" :
+    const recommendation = score >= 85 ? "\uD83D\uDD25 MUST PLAY \u2014 elite slate" :
         score >= 70 ? "\u2705 PLAY \u2014 solid slate" :
             score >= 55 ? "\u26A0\uFE0F PLAY SMALL \u2014 average slate" :
-                score >= 40 ? "\u{1F6AB} SKIP OR MIN ENTRY \u2014 bad slate" :
-                    "\u{1F6AB} SKIP \u2014 terrible slate";
+                score >= 40 ? "\uD83D\uDEAB SKIP OR MIN ENTRY \u2014 bad slate" :
+                    "\uD83D\uDEAB SKIP \u2014 terrible slate";
     return { score, grade, notes, recommendation, playIt, highTotalGames, avgTotal, maxImpl };
 }
 // \u2500\u2500 STACK ENGINE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -458,9 +458,9 @@ const TONIGHT_INJURIES = [
     { name: "Dereck Lively II", team: "DAL", status: "OUT", reason: "Foot surgery", dfsImpact: "Minor" },
     { name: "Ja Morant", team: "MEM", status: "OUT", reason: "Elbow UCL sprain", dfsImpact: "MEM stack unplayable" },
     { name: "Santi Aldama", team: "MEM", status: "OUT", reason: "Knee mgmt", dfsImpact: "MEM stack unplayable" },
-    { name: "Tyrese Haliburton", team: "IND", status: "OUT", reason: "Achilles tear", dfsImpact: "\u{1F525} NYK stack \u2014 IND depleted" },
-    { name: "Pascal Siakam", team: "IND", status: "OUT", reason: "Knee sprain", dfsImpact: "\u{1F525} NYK stack \u2014 IND depleted" },
-    { name: "T.J. McConnell", team: "IND", status: "OUT", reason: "Hamstring", dfsImpact: "\u{1F525} NYK stack \u2014 IND depleted" },
+    { name: "Tyrese Haliburton", team: "IND", status: "OUT", reason: "Achilles tear", dfsImpact: "\uD83D\uDD25 NYK stack \u2014 IND depleted" },
+    { name: "Pascal Siakam", team: "IND", status: "OUT", reason: "Knee sprain", dfsImpact: "\uD83D\uDD25 NYK stack \u2014 IND depleted" },
+    { name: "T.J. McConnell", team: "IND", status: "OUT", reason: "Hamstring", dfsImpact: "\uD83D\uDD25 NYK stack \u2014 IND depleted" },
     { name: "Aaron Nesmith", team: "IND", status: "OUT", reason: "Ankle mgmt", dfsImpact: "Minor" },
     { name: "Obi Toppin", team: "IND", status: "OUT", reason: "Foot mgmt", dfsImpact: "Minor" },
     { name: "Ausar Thompson", team: "DET", status: "OUT", reason: "Ankle sprain", dfsImpact: "Minor \u2014 DET still huge fav" },
@@ -469,15 +469,15 @@ const TONIGHT_INJURIES = [
     { name: "Trey Murphy III", team: "NOP", status: "OUT", reason: "Check FD CSV", dfsImpact: "NOP already unplayable" },
     // \u2500\u2500 QUESTIONABLE \u2500\u2500
     { name: "Josh Hart", team: "NYK", status: "Q", reason: "Knee soreness", dfsImpact: "Monitor \u2014 NYK still plays well without" },
-    { name: "Karl-Anthony Towns", team: "NYK", status: "Q", reason: "On report", dfsImpact: "\u{1F6A8} If out \u2192 Brunson/OG usage massive" },
+    { name: "Karl-Anthony Towns", team: "NYK", status: "Q", reason: "On report", dfsImpact: "\uD83D\uDEA8 If out \u2192 Brunson/OG usage massive" },
     { name: "Andrew Nembhard", team: "IND", status: "Q", reason: "Back/neck soreness", dfsImpact: "Likely starts \u2014 IND has no one else" },
     { name: "Ivica Zubac", team: "IND", status: "Q", reason: "Ankle sprain", dfsImpact: "If out \u2192 IND completely exposed" },
     // \u2500\u2500 USAGE BOOSTERS (players who benefit) \u2500\u2500
-    { name: "Donovan Mitchell", team: "CLE", status: "UP", reason: "Allen out \u2014 usage \u2191", dfsImpact: "\u{1F525} Top anchor candidate" },
+    { name: "Donovan Mitchell", team: "CLE", status: "UP", reason: "Allen out \u2014 usage \u2191", dfsImpact: "\uD83D\uDD25 Top anchor candidate" },
     { name: "Evan Mobley", team: "CLE", status: "UP", reason: "Allen out \u2014 rebounds/pts", dfsImpact: "Value play" },
-    { name: "Jalen Brunson", team: "NYK", status: "UP", reason: "IND decimated", dfsImpact: "\u{1F525} Lock candidate" },
-    { name: "Deni Avdija", team: "POR", status: "UP", reason: "UTA 6 players out", dfsImpact: "\u{1F525} POR 126.5 implied \u2014 must play" },
-    { name: "Cade Cunningham", team: "DET", status: "UP", reason: "MEM missing Morant+", dfsImpact: "\u{1F525} DET 119.5 implied" },
+    { name: "Jalen Brunson", team: "NYK", status: "UP", reason: "IND decimated", dfsImpact: "\uD83D\uDD25 Lock candidate" },
+    { name: "Deni Avdija", team: "POR", status: "UP", reason: "UTA 6 players out", dfsImpact: "\uD83D\uDD25 POR 126.5 implied \u2014 must play" },
+    { name: "Cade Cunningham", team: "DET", status: "UP", reason: "MEM missing Morant+", dfsImpact: "\uD83D\uDD25 DET 119.5 implied" },
 ];
 // \u2500\u2500 CASCADE RULES ENGINE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const CASCADE_RULES = [
@@ -554,7 +554,7 @@ function InjuryPanel({ onExclude, excludedNames }) {
                 " Q \\u00B7 ",
                 TONIGHT_INJURIES.filter(p => p.status === "UP").length,
                 " boosters"),
-            React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(f => (React.createElement("button", { key: f, onClick: () => setFilter(f), style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"}`, background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "\u{1F525} BOOST" : f))))),
+            React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(f => (React.createElement("button", { key: f, onClick: () => setFilter(f), style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"}`, background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "\uD83D\uDD25 BOOST" : f))))),
         React.createElement("div", { style: { maxHeight: 360, overflowY: "auto" } }, filtered.map((p, i) => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` } },
             React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 28, textAlign: "center", border: `1px solid ${statusColor[p.status]}44` } }, p.status),
             React.createElement("span", { style: { fontSize: 10, color: "#3b82f6", minWidth: 28 } }, p.team),
@@ -569,7 +569,7 @@ function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
     const [manualName, setManualName] = useState("");
     const [manualFD, setManualFD] = useState("");
     const filtered = players.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())).slice(0, 40);
-    const trendIcon = (t) => t === "hot" ? "\u{1F525}" : t === "cold" ? "\u2744\uFE0F" : "\u27A1\uFE0F";
+    const trendIcon = (t) => t === "hot" ? "\uD83D\uDD25" : t === "cold" ? "\u2744\uFE0F" : "\u27A1\uFE0F";
     const trendColor = (t) => t === "hot" ? "#22c55e" : t === "cold" ? "#60a5fa" : "#94a3b8";
     return (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
         React.createElement("div", { style: { background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 } },
@@ -665,7 +665,7 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
                         background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : "#a78bfa22",
                         color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : "#a78bfa",
                         border: `1px solid ${lineup._type === "chalk" ? "#f59e0b44" : lineup._type === "leverage" ? "#22c55e44" : "#a78bfa44"}`,
-                    } }, lineup._type === "chalk" ? "\u{1F4CC} CHALK" : lineup._type === "leverage" ? "\u{1F517} LEVERAGE" : "\u{1F680} TOURN")),
+                    } }, lineup._type === "chalk" ? "\uD83D\uDCCC CHALK" : lineup._type === "leverage" ? "\uD83D\uDD17 LEVERAGE" : "\uD83D\uDE80 TOURN")),
                 lineup._hasStack && (React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e", border: "1px solid #22c55e44" } }, "STACKED")),
                 React.createElement("span", { style: { color: "#64b587", fontWeight: 600 } }, stats.proj.toFixed(1)),
                 React.createElement("span", { style: { color: "#94a3b8" } },
@@ -897,10 +897,7 @@ function App() {
             })(),
             React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { textAlign: "center", marginBottom: 28 } },
-                    React.createElement("div", { style: { fontSize: 36, marginBottom: 10 } },
-                        "\\u",
-                        1,
-                        "F3C0}"),
+                    React.createElement("div", { style: { fontSize: 36, marginBottom: 10 } }, "\\uD83C\\uDFC0"),
                     React.createElement("div", { style: { fontSize: 18, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 } }, "UPLOAD FANDUEL CSV"),
                     React.createElement("div", { style: { fontSize: 11, color: "#4a6a80", lineHeight: 1.8 } },
                         "Export player list from FanDuel contest lobby.",
@@ -912,7 +909,7 @@ function App() {
                 React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } }),
                 React.createElement("div", { style: { marginTop: 18, padding: "12px 14px", background: "#0a1a2a", borderRadius: 8, border: "1px solid #1e3040" } },
                     React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 } }, "WHAT'S NEW IN V4"),
-                    ["\u{1F3AF} Slate Grader \u2014 A/B/C/D/F before you enter", "\u{1F517} Game stacking engine \u2014 correlate high-total games", "\u{1F4CA} MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "\u{1F4B0} Bankroll advisor \u2014 how many entries at what stakes"].map(r => (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r))))))),
+                    ["\uD83C\uDFAF Slate Grader \u2014 A/B/C/D/F before you enter", "\uD83D\uDD17 Game stacking engine \u2014 correlate high-total games", "\uD83D\uDCCA MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "\uD83D\uDCB0 Bankroll advisor \u2014 how many entries at what stakes"].map(r => (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r))))))),
         step === "build" && (React.createElement("div", { style: S.sec },
             React.createElement("div", { style: { marginBottom: 14, background: "#091520", border: "1px solid #1e3040", borderRadius: 10, overflow: "hidden" } },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: vegasStatus === "done" ? "1px solid #1e3040" : "none" } },
@@ -929,10 +926,7 @@ function App() {
                         " players"))),
                 vegasStatus === "done" && (React.createElement("div", { style: { padding: "12px 16px" } },
                     React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
-                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b", letterSpacing: 2, fontWeight: 700 } },
-                            "\\u",
-                            1,
-                            "F4C8} LINE MOVEMENT TRACKER"),
+                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b", letterSpacing: 2, fontWeight: 700 } }, "\\uD83D\\uDCC8 LINE MOVEMENT TRACKER"),
                         React.createElement("div", { style: { fontSize: 9, color: "#3b6280" } }, "Opening vs current \\u2014 delta = market-priced injury impact. Edit any field to update.")),
                     React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 } }, lineMovement.map((g, i) => {
                         const spreadDelta = +(g.currentSpread - g.openSpread).toFixed(1);
@@ -978,10 +972,7 @@ function App() {
                             React.createElement("button", { style: S.pill(rightTab === "statmuse"), onClick: () => setRightTab("statmuse") },
                                 "STATMUSE ",
                                 Object.keys(statMuseMap).length > 0 && `(${Object.keys(statMuseMap).length})`),
-                            React.createElement("button", { style: S.pill(rightTab === "injuries"), onClick: () => setRightTab("injuries") },
-                                "\\u",
-                                1,
-                                "F3E5} INJURIES"),
+                            React.createElement("button", { style: S.pill(rightTab === "injuries"), onClick: () => setRightTab("injuries") }, "\\uD83C\\uDFE5 INJURIES"),
                             React.createElement("button", { style: S.btn("ghost"), onClick: () => fileRef.current.click() }, "\\u2191 CSV"))),
                     rightTab === "ownership"
                         ? React.createElement(OwnershipEditor, { players: players, ownershipMap: ownershipMap, onUpdate: updateOwnership })
@@ -1003,10 +994,7 @@ function App() {
                     React.createElement("div", { style: S.card },
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "LOCK / EXCLUDE"),
                         React.createElement("div", { style: { maxHeight: 220, overflowY: "auto" } }, players.slice(0, 35).map(p => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 5, marginBottom: 5, fontSize: 11 } },
-                            React.createElement("button", { onClick: () => toggleLock(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } },
-                                "\\u",
-                                1,
-                                "F512}"),
+                            React.createElement("button", { onClick: () => toggleLock(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "\\uD83D\\uDD12"),
                             React.createElement("button", { onClick: () => toggleExclude(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#991b1b" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "\\u2715"),
                             React.createElement("span", { style: { flex: 1, color: excludedNames.includes(p.name) ? "#4a6a80" : "#e2e8f0", textDecoration: excludedNames.includes(p.name) ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, p.name),
                             p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9 } }, "\\u25CF")))))),
@@ -1014,10 +1002,10 @@ function App() {
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "GENERATE"),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 6, letterSpacing: 1 } }, "LINEUP STRATEGY"),
                         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 14 } }, [
-                            ["mixed", "\u{1F3AF} MIXED", "30% chalk \u00B7 40% leverage \u00B7 30% tourn"],
-                            ["chalk", "\u{1F4CC} CHALK", "Safe, high-ownership \u2014 cash games"],
-                            ["leverage", "\u{1F517} LEVERAGE", "Game-stacked, correlated builds"],
-                            ["tournament", "\u{1F680} TOURNAMENT", "Contrarian pivots \u2014 GPP only"],
+                            ["mixed", "\uD83C\uDFAF MIXED", "30% chalk \u00B7 40% leverage \u00B7 30% tourn"],
+                            ["chalk", "\uD83D\uDCCC CHALK", "Safe, high-ownership \u2014 cash games"],
+                            ["leverage", "\uD83D\uDD17 LEVERAGE", "Game-stacked, correlated builds"],
+                            ["tournament", "\uD83D\uDE80 TOURNAMENT", "Contrarian pivots \u2014 GPP only"],
                         ].map(([val, label, desc]) => (React.createElement("button", { key: val, onClick: () => setLineupStrategy(val), style: {
                                 padding: "8px 10px", borderRadius: 7, border: `1px solid ${lineupStrategy === val ? "#3b82f6" : "#1e3040"}`,
                                 background: lineupStrategy === val ? "#1a3550" : "#0a1520",
@@ -1029,10 +1017,7 @@ function App() {
                         vegasGames.length > 0 && (() => {
                             const best = getBestStackGame(vegasGames, players);
                             return best ? (React.createElement("div", { style: { marginBottom: 12, padding: "7px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 } },
-                                React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 3 } },
-                                    "\\u",
-                                    1,
-                                    "F517} STACK TARGET"),
+                                React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 3 } }, "\\uD83D\\uDD17 STACK TARGET"),
                                 React.createElement("div", { style: { fontSize: 11, color: "#e2e8f0" } },
                                     best.gameStr,
                                     " \\u00B7 O/U ",
@@ -1048,10 +1033,7 @@ function App() {
                         React.createElement("input", { type: "range", min: "1", max: "20", value: lineupCount, onChange: e => setLineupCount(+e.target.value), style: { width: "100%", marginBottom: 4 } }),
                         React.createElement("div", { style: { textAlign: "center", color: "#60a5fa", fontWeight: 700, fontSize: 18, marginBottom: 12 } }, lineupCount),
                         React.createElement("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8 } },
-                            React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 7 } },
-                                "\\u",
-                                1,
-                                "F4B0} BANKROLL ADVISOR"),
+                            React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 7 } }, "\\uD83D\\uDCB0 BANKROLL ADVISOR"),
                             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
                                 React.createElement("span", { style: { fontSize: 10, color: "#4a6a80" } }, "$"),
                                 React.createElement("input", { type: "number", min: "0", placeholder: "Your bankroll", value: bankroll, onChange: e => setBankroll(e.target.value), style: { flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 5, color: "#e2e8f0", padding: "5px 8px", fontSize: 11, fontFamily: "inherit" } })),
@@ -1076,14 +1058,11 @@ function App() {
                                             ")")))))) : null;
                             })()),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 8 } },
-                            lockedNames.length > 0 && `\u{1F512} ${lockedNames.length} locked  `,
+                            lockedNames.length > 0 && `\uD83D\uDD12 ${lockedNames.length} locked  `,
                             excludedNames.length > 0 && `\u2715 ${excludedNames.length} excluded  `,
-                            Object.keys(statMuseMap).length > 0 && `\u{1F4CA} ${Object.keys(statMuseMap).length} SM`),
+                            Object.keys(statMuseMap).length > 0 && `\uD83D\uDCCA ${Object.keys(statMuseMap).length} SM`),
                         cascadeLog.length > 0 && (React.createElement("div", { style: { marginBottom: 10, padding: "8px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 } },
-                            React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 } },
-                                "\\u",
-                                1,
-                                "F517} CASCADE BOOSTS APPLIED"),
+                            React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 } }, "\\uD83D\\uDD17 CASCADE BOOSTS APPLIED"),
                             cascadeLog.map((c, i) => (React.createElement("div", { key: i, style: { fontSize: 9, color: "#4a6a80", marginBottom: 2 } },
                                 React.createElement("span", { style: { color: "#ef4444" } },
                                     c.out.split(" ").pop(),
@@ -1104,10 +1083,7 @@ function App() {
                                 "Last generated: ",
                                 lastGenTime.toLocaleTimeString()),
                             React.createElement("div", { style: { fontSize: 9, color: "#f59e0b", marginTop: 2 } }, "\\u26A0\\uFE0F Re-upload CSV + re-run 60min before tip for late scratches"),
-                            React.createElement("button", { onClick: handleGenerate, style: Object.assign(Object.assign({}, S.btn("warning")), { width: "100%", marginTop: 6, fontSize: 10, padding: "6px 0" }) },
-                                "\\u",
-                                1,
-                                "F504} LATE SCRATCH RE-RUN")))))))),
+                            React.createElement("button", { onClick: handleGenerate, style: Object.assign(Object.assign({}, S.btn("warning")), { width: "100%", marginTop: 6, fontSize: 10, padding: "6px 0" }) }, "\\uD83D\\uDD04 LATE SCRATCH RE-RUN")))))))),
         step === "results" && (React.createElement("div", { style: S.sec },
             lineups.length === 0 && (React.createElement("div", { style: { background: "#1a0a0a", border: "1px solid #ef444444", borderRadius: 10, padding: 24, textAlign: "center", marginBottom: 16 } },
                 React.createElement("div", { style: { fontSize: 14, color: "#ef4444", marginBottom: 8 } }, "\\u26A0\\uFE0F No lineups generated"),
