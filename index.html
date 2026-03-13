@@ -543,7 +543,7 @@ function applyCascades(outPlayers, ownershipMap) {
                 // Find matching player by checking players array — use team suppression via ownership drop
                 newMap[key] = newMap[key]; // ownership stays but we'll filter by team below
             });
-            log.push(`${outName} OUT — ${suppressTeam} stack suppressed`);
+            log.push({ out: outName, player: suppressTeam + " stack", from: 0, to: 0, note: "suppressed — unplayable" });
         }
     }
     for (const outName of outPlayers) {
@@ -1121,10 +1121,10 @@ function App() {
                             React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 } }, "\uD83D\uDD17 CASCADE BOOSTS APPLIED"),
                             cascadeLog.map((c, i) => (React.createElement("div", { key: i, style: { fontSize: 9, color: "#4a6a80", marginBottom: 2 } },
                                 React.createElement("span", { style: { color: "#ef4444" } },
-                                    c.out.split(" ").pop(),
+                                    (c.out || "").split(" ").pop(),
                                     " OUT"),
                                 " → ",
-                                React.createElement("span", { style: { color: "#22c55e" } }, c.player.split(" ").pop()),
+                                React.createElement("span", { style: { color: "#22c55e" } }, (c.player || c.note || "").split(" ").pop()),
                                 " ",
                                 React.createElement("span", { style: { color: "#94a3b8" } },
                                     c.from,
