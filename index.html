@@ -841,7 +841,10 @@ function App() {
     const handleGenerate = () => {
         setGenerating(true);
         setTimeout(() => {
-            const lus = generateLineupsWithStrategy(players, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
+            // Enforce ownership floor and excluded list at generation time
+            const eligiblePlayers = players.filter(p => p.ownership >= RULES.NEVER_PLAY_OWN_THRESHOLD &&
+                !excludedNames.includes(p.name));
+            const lus = generateLineupsWithStrategy(eligiblePlayers, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
             setLineups(lus);
             setSelectedLineup(0);
             setStep("results");
