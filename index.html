@@ -876,9 +876,14 @@ function App() {
             const STAR_TEAM_MAP = { "Ja Morant": "MEM", "Santi Aldama": "MEM" };
             excludedNames.forEach(n => { if (STAR_TEAM_MAP[n])
                 suppressedTeams.add(STAR_TEAM_MAP[n]); });
-            const eligiblePlayers = players.filter(p => p.ownership >= RULES.NEVER_PLAY_OWN_THRESHOLD &&
-                !excludedNames.includes(p.name) &&
-                !suppressedTeams.has(p.team));
+            const eligiblePlayers = players.filter(p => {
+                var _a, _b;
+                // Use ownershipMap directly (current) rather than p.ownership (may be stale)
+                const currentOwn = (_b = (_a = ownershipMap[p.name.toLowerCase()]) !== null && _a !== void 0 ? _a : p.ownership) !== null && _b !== void 0 ? _b : 15;
+                return currentOwn >= RULES.NEVER_PLAY_OWN_THRESHOLD &&
+                    !excludedNames.includes(p.name) &&
+                    !suppressedTeams.has(p.team);
+            });
             const lus = generateLineupsWithStrategy(eligiblePlayers, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
             setLineups(lus);
             setSelectedLineup(0);
