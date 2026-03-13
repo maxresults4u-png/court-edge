@@ -25,7 +25,6 @@ window.onerror = function(msg,src,line,col,err){
 };
 </script>
 <script>
-// Make React hooks available as globals
 const { useState, useCallback, useRef, useEffect } = React;
 
 var __assign = (this && this.__assign) || function () {
@@ -464,7 +463,10 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             var gameCounts = {};
             lu.forEach(function (p) { gameCounts[p.team] = (gameCounts[p.team] || 0) + 1; });
             var hasStack = Object.values(gameCounts).some(function (c) { return c >= 2; });
-            allLineups.push(__assign(__assign({}, lu), { _type: type, _hasStack: hasStack, _stackGame: bestGame === null || bestGame === void 0 ? void 0 : bestGame.gameStr }));
+            lu._type = type;
+            lu._hasStack = hasStack;
+            lu._stackGame = bestGame ? bestGame.gameStr : null;
+            allLineups.push(lu);
         };
         for (var attempt = 0; attempt < batchCount * 50 && allLineups.filter(function (l) { return l._type === type; }).length < batchCount; attempt++) {
             _loop_3(attempt);
