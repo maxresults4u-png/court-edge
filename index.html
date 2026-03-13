@@ -773,6 +773,19 @@ function App() {
                 finalOwn[p.name.toLowerCase()] = est;
             });
         }
+        // Always auto-apply Vegas ownership on CSV upload
+        try {
+            const { teamMap, gamesList } = getHardcodedVegasData();
+            const tempPlayers = parsePlayers(text, finalOwn, statMuseMap);
+            tempPlayers.forEach(p => {
+                finalOwn[p.name.toLowerCase()] = estimateOwnership(p, teamMap);
+            });
+            setVegasMap(teamMap);
+            setVegasGames(gamesList);
+            setVegasStatus("done");
+            setVegasMsg("⚡ Auto-loaded: " + gamesList.length + " games · ownership estimated");
+        }
+        catch (e) { /* silent fail */ }
         setOwnershipMap(finalOwn);
         rebuildPlayers(text, finalOwn, statMuseMap);
         setStep("build");
