@@ -27,7 +27,7 @@ window.onerror = function(msg,src,line,col,err){
 <script>
 const { useState, useCallback, useRef, useEffect } = React;
 
-// &#x2500;&#x2500; ODDS API CONFIG &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 ODDS API CONFIG \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
@@ -55,7 +55,7 @@ function getHardcodedVegasData() {
     }
     return { teamMap, gamesList, fetchedAt: "2026-03-13 hardcoded", gamesCount: games.length };
 }
-// &#x2500;&#x2500; REGRESSION RULES &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 REGRESSION RULES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const RULES = {
     SALARY_CAP: 60000,
     MIN_SALARY_USED: 58000,
@@ -66,8 +66,8 @@ const RULES = {
     OWN_WEIGHTS: { chalk: 1.15, mid: 1.05, low: 0.88, punt: 0.0 }, // punt = 0 = never used (hard 3% floor)
 };
 const POSITION_ORDER = ["PG", "SG", "SF", "PF", "C"];
-// &#x2500;&#x2500; STATMUSE URL BUILDER &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
-// Converts "Karl-Anthony Towns" &#x2192; "karl-anthony-towns"
+// \u2500\u2500 STATMUSE URL BUILDER \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Converts "Karl-Anthony Towns" \u2192 "karl-anthony-towns"
 function toStatMuseSlug(name) {
     return name.toLowerCase()
         .replace(/['']/g, "")
@@ -78,7 +78,7 @@ function toStatMuseSlug(name) {
 function statMuseUrl(name) {
     return `https://www.statmuse.com/nba/ask/${toStatMuseSlug(name)}-fanduel-stat-log`;
 }
-// &#x2500;&#x2500; HELPERS &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 HELPERS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function ownershipBucket(own) {
     if (own >= 30)
         return "chalk";
@@ -164,12 +164,12 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
     }
     return players.sort((a, b) => b.score - a.score);
 }
-// &#x2500;&#x2500; LINEUP ENGINE &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 LINEUP ENGINE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function buildLineup(players, lockedNames = [], excludedNames = []) {
     // Separate locked from pool
     const locked = players.filter(p => lockedNames.includes(p.name));
     const pool = players.filter(p => !excludedNames.includes(p.name) && !lockedNames.includes(p.name));
-    // We need exactly: PG&#xD7;2, SG&#xD7;2, SF&#xD7;2, PF&#xD7;2, C&#xD7;1 = 9 players
+    // We need exactly: PG\u00D72, SG\u00D72, SF\u00D72, PF\u00D72, C\u00D71 = 9 players
     const needed = { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 };
     const lineup = [];
     const used = new Set();
@@ -265,7 +265,7 @@ function lineupStats(lu) {
         anchor: lu.reduce((best, p) => p.fppg > best.fppg ? p : best, lu[0]),
     };
 }
-// &#x2500;&#x2500; SLATE GRADER &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 SLATE GRADER \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function gradeSlate(gamesList) {
     if (!gamesList || gamesList.length === 0)
         return null;
@@ -280,65 +280,65 @@ function gradeSlate(gamesList) {
     // Game count (8 games = perfect)
     if (gamesList.length >= 8) {
         score += 25;
-        notes.push("&#x2705; Full 8-game slate");
+        notes.push("\u2705 Full 8-game slate");
     }
     else if (gamesList.length >= 6) {
         score += 15;
-        notes.push("&#x26A0; " + gamesList.length + " games &#x2014; smaller slate");
+        notes.push("\u26A0\uFE0F " + gamesList.length + " games \u2014 smaller slate");
     }
     else {
         score += 5;
-        notes.push("&#x1F6AB; Only " + gamesList.length + " games &#x2014; thin slate");
+        notes.push("\u{1F6AB} Only " + gamesList.length + " games \u2014 thin slate");
     }
     // Average total
     if (avgTotal >= 228) {
         score += 25;
-        notes.push("&#x2705; Avg O/U " + avgTotal.toFixed(1) + " &#x2014; high scoring");
+        notes.push("\u2705 Avg O/U " + avgTotal.toFixed(1) + " \u2014 high scoring");
     }
     else if (avgTotal >= 222) {
         score += 15;
-        notes.push("&#x26A0; Avg O/U " + avgTotal.toFixed(1) + " &#x2014; moderate");
+        notes.push("\u26A0\uFE0F Avg O/U " + avgTotal.toFixed(1) + " \u2014 moderate");
     }
     else {
         score += 5;
-        notes.push("&#x1F6AB; Avg O/U " + avgTotal.toFixed(1) + " &#x2014; low scoring slate");
+        notes.push("\u{1F6AB} Avg O/U " + avgTotal.toFixed(1) + " \u2014 low scoring slate");
     }
     // High total games
     if (highTotalGames >= 3) {
         score += 25;
-        notes.push("&#x2705; " + highTotalGames + " games O/U 228+ &#x2014; stacking gold");
+        notes.push("\u2705 " + highTotalGames + " games O/U 228+ \u2014 stacking gold");
     }
     else if (highTotalGames >= 1) {
         score += 15;
-        notes.push("&#x26A0; " + highTotalGames + " game(s) O/U 228+");
+        notes.push("\u26A0\uFE0F " + highTotalGames + " game(s) O/U 228+");
     }
     else {
         score += 5;
-        notes.push("&#x1F6AB; No games over 228 &#x2014; tough to stack");
+        notes.push("\u{1F6AB} No games over 228 \u2014 tough to stack");
     }
     // Elite implied team
     if (maxImpl >= 122) {
         score += 25;
-        notes.push("&#x2705; " + maxImpl + " implied pts &#x2014; elite pace-up spot");
+        notes.push("\u2705 " + maxImpl + " implied pts \u2014 elite pace-up spot");
     }
     else if (maxImpl >= 116) {
         score += 15;
-        notes.push("&#x26A0; " + maxImpl + " max implied &#x2014; decent spot");
+        notes.push("\u26A0\uFE0F " + maxImpl + " max implied \u2014 decent spot");
     }
     else {
         score += 5;
-        notes.push("&#x1F6AB; Max implied only " + maxImpl + " &#x2014; no elite pace-up");
+        notes.push("\u{1F6AB} Max implied only " + maxImpl + " \u2014 no elite pace-up");
     }
     const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
     const playIt = score >= 55;
-    const recommendation = score >= 85 ? "&#x1F525; MUST PLAY &#x2014; elite slate" :
-        score >= 70 ? "&#x2705; PLAY &#x2014; solid slate" :
-            score >= 55 ? "&#x26A0; PLAY SMALL &#x2014; average slate" :
-                score >= 40 ? "&#x1F6AB; SKIP OR MIN ENTRY &#x2014; bad slate" :
-                    "&#x1F6AB; SKIP &#x2014; terrible slate";
+    const recommendation = score >= 85 ? "\u{1F525} MUST PLAY \u2014 elite slate" :
+        score >= 70 ? "\u2705 PLAY \u2014 solid slate" :
+            score >= 55 ? "\u26A0\uFE0F PLAY SMALL \u2014 average slate" :
+                score >= 40 ? "\u{1F6AB} SKIP OR MIN ENTRY \u2014 bad slate" :
+                    "\u{1F6AB} SKIP \u2014 terrible slate";
     return { score, grade, notes, recommendation, playIt, highTotalGames, avgTotal, maxImpl };
 }
-// &#x2500;&#x2500; STACK ENGINE &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 STACK ENGINE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // Find the best game to stack based on Vegas totals
 function getBestStackGame(gamesList, players) {
     if (!gamesList || gamesList.length === 0)
@@ -374,7 +374,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         leverageCount = 0;
         tournCount = count;
     }
-    else { // mixed &#x2014; the millionaire way
+    else { // mixed \u2014 the millionaire way
         chalkCount = Math.max(1, Math.round(count * 0.3));
         leverageCount = Math.max(1, Math.round(count * 0.4));
         tournCount = count - chalkCount - leverageCount;
@@ -383,7 +383,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         for (let attempt = 0; attempt < batchCount * 50 && allLineups.filter(l => l._type === type).length < batchCount; attempt++) {
             let pool = [...players];
             if (type === "chalk") {
-                // Sort by score, minimal noise &#x2014; maximize chalk high-ownership players
+                // Sort by score, minimal noise \u2014 maximize chalk high-ownership players
                 pool.sort((a, b) => (b.score - a.score) + (Math.random() - 0.5) * 4);
             }
             else if (type === "leverage") {
@@ -424,7 +424,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     buildBatch(chalkCount, "chalk");
     buildBatch(leverageCount, "leverage");
     buildBatch(tournCount, "tournament");
-    // Flatten &#x2014; chalk first, then leverage, then tournament
+    // Flatten \u2014 chalk first, then leverage, then tournament
     return [
         ...allLineups.filter(l => l._type === "chalk"),
         ...allLineups.filter(l => l._type === "leverage"),
@@ -444,13 +444,13 @@ function getEntryStrategy(bankroll, slateGrade) {
             { type: "Large field ($1)", entries: Math.floor(budget * 0.20 / 1), stake: 1, pct: "20%" },
             { type: "Big tournament ($25)", entries: Math.floor(budget * 0.10 / 25), stake: 25, pct: "10%" },
         ],
-        note: slateGrade >= 70 ? "Full send &#x2014; good slate" : slateGrade >= 55 ? "Half size &#x2014; average slate" : "Min entries only",
+        note: slateGrade >= 70 ? "Full send \u2014 good slate" : slateGrade >= 55 ? "Half size \u2014 average slate" : "Min entries only",
     };
 }
-// &#x2500;&#x2500; INJURY PANEL &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 INJURY PANEL \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const TONIGHT_INJURIES = [
-    // &#x2500;&#x2500; OUTS &#x2500;&#x2500;
-    { name: "Jarrett Allen", team: "CLE", status: "OUT", reason: "Knee tendonitis", dfsImpact: "Mitchell/Mobley usage &#x2191;" },
+    // \u2500\u2500 OUTS \u2500\u2500
+    { name: "Jarrett Allen", team: "CLE", status: "OUT", reason: "Knee tendonitis", dfsImpact: "Mitchell/Mobley usage \u2191" },
     { name: "Max Strus", team: "CLE", status: "OUT", reason: "Foot surgery", dfsImpact: "Minor" },
     { name: "Tyrese Proctor", team: "CLE", status: "OUT", reason: "Quad strain", dfsImpact: "Minor" },
     { name: "Kyrie Irving", team: "DAL", status: "OUT", reason: "Knee surgery", dfsImpact: "Luka anchor role grows" },
@@ -458,28 +458,28 @@ const TONIGHT_INJURIES = [
     { name: "Dereck Lively II", team: "DAL", status: "OUT", reason: "Foot surgery", dfsImpact: "Minor" },
     { name: "Ja Morant", team: "MEM", status: "OUT", reason: "Elbow UCL sprain", dfsImpact: "MEM stack unplayable" },
     { name: "Santi Aldama", team: "MEM", status: "OUT", reason: "Knee mgmt", dfsImpact: "MEM stack unplayable" },
-    { name: "Tyrese Haliburton", team: "IND", status: "OUT", reason: "Achilles tear", dfsImpact: "&#x1F525; NYK stack &#x2014; IND depleted" },
-    { name: "Pascal Siakam", team: "IND", status: "OUT", reason: "Knee sprain", dfsImpact: "&#x1F525; NYK stack &#x2014; IND depleted" },
-    { name: "T.J. McConnell", team: "IND", status: "OUT", reason: "Hamstring", dfsImpact: "&#x1F525; NYK stack &#x2014; IND depleted" },
+    { name: "Tyrese Haliburton", team: "IND", status: "OUT", reason: "Achilles tear", dfsImpact: "\u{1F525} NYK stack \u2014 IND depleted" },
+    { name: "Pascal Siakam", team: "IND", status: "OUT", reason: "Knee sprain", dfsImpact: "\u{1F525} NYK stack \u2014 IND depleted" },
+    { name: "T.J. McConnell", team: "IND", status: "OUT", reason: "Hamstring", dfsImpact: "\u{1F525} NYK stack \u2014 IND depleted" },
     { name: "Aaron Nesmith", team: "IND", status: "OUT", reason: "Ankle mgmt", dfsImpact: "Minor" },
     { name: "Obi Toppin", team: "IND", status: "OUT", reason: "Foot mgmt", dfsImpact: "Minor" },
-    { name: "Ausar Thompson", team: "DET", status: "OUT", reason: "Ankle sprain", dfsImpact: "Minor &#x2014; DET still huge fav" },
+    { name: "Ausar Thompson", team: "DET", status: "OUT", reason: "Ankle sprain", dfsImpact: "Minor \u2014 DET still huge fav" },
     { name: "Caris LeVert", team: "DET", status: "OUT", reason: "Wrist sprain", dfsImpact: "Minor" },
     { name: "Scottie Barnes", team: "TOR", status: "OUT", reason: "Injury report", dfsImpact: "TOR value plays open up" },
     { name: "Trey Murphy III", team: "NOP", status: "OUT", reason: "Check FD CSV", dfsImpact: "NOP already unplayable" },
-    // &#x2500;&#x2500; QUESTIONABLE &#x2500;&#x2500;
-    { name: "Josh Hart", team: "NYK", status: "Q", reason: "Knee soreness", dfsImpact: "Monitor &#x2014; NYK still plays well without" },
-    { name: "Karl-Anthony Towns", team: "NYK", status: "Q", reason: "On report", dfsImpact: "&#x1F6A8; If out &#x2192; Brunson/OG usage massive" },
-    { name: "Andrew Nembhard", team: "IND", status: "Q", reason: "Back/neck soreness", dfsImpact: "Likely starts &#x2014; IND has no one else" },
-    { name: "Ivica Zubac", team: "IND", status: "Q", reason: "Ankle sprain", dfsImpact: "If out &#x2192; IND completely exposed" },
-    // &#x2500;&#x2500; USAGE BOOSTERS (players who benefit) &#x2500;&#x2500;
-    { name: "Donovan Mitchell", team: "CLE", status: "UP", reason: "Allen out &#x2014; usage &#x2191;", dfsImpact: "&#x1F525; Top anchor candidate" },
-    { name: "Evan Mobley", team: "CLE", status: "UP", reason: "Allen out &#x2014; rebounds/pts", dfsImpact: "Value play" },
-    { name: "Jalen Brunson", team: "NYK", status: "UP", reason: "IND decimated", dfsImpact: "&#x1F525; Lock candidate" },
-    { name: "Deni Avdija", team: "POR", status: "UP", reason: "UTA 6 players out", dfsImpact: "&#x1F525; POR 126.5 implied &#x2014; must play" },
-    { name: "Cade Cunningham", team: "DET", status: "UP", reason: "MEM missing Morant+", dfsImpact: "&#x1F525; DET 119.5 implied" },
+    // \u2500\u2500 QUESTIONABLE \u2500\u2500
+    { name: "Josh Hart", team: "NYK", status: "Q", reason: "Knee soreness", dfsImpact: "Monitor \u2014 NYK still plays well without" },
+    { name: "Karl-Anthony Towns", team: "NYK", status: "Q", reason: "On report", dfsImpact: "\u{1F6A8} If out \u2192 Brunson/OG usage massive" },
+    { name: "Andrew Nembhard", team: "IND", status: "Q", reason: "Back/neck soreness", dfsImpact: "Likely starts \u2014 IND has no one else" },
+    { name: "Ivica Zubac", team: "IND", status: "Q", reason: "Ankle sprain", dfsImpact: "If out \u2192 IND completely exposed" },
+    // \u2500\u2500 USAGE BOOSTERS (players who benefit) \u2500\u2500
+    { name: "Donovan Mitchell", team: "CLE", status: "UP", reason: "Allen out \u2014 usage \u2191", dfsImpact: "\u{1F525} Top anchor candidate" },
+    { name: "Evan Mobley", team: "CLE", status: "UP", reason: "Allen out \u2014 rebounds/pts", dfsImpact: "Value play" },
+    { name: "Jalen Brunson", team: "NYK", status: "UP", reason: "IND decimated", dfsImpact: "\u{1F525} Lock candidate" },
+    { name: "Deni Avdija", team: "POR", status: "UP", reason: "UTA 6 players out", dfsImpact: "\u{1F525} POR 126.5 implied \u2014 must play" },
+    { name: "Cade Cunningham", team: "DET", status: "UP", reason: "MEM missing Morant+", dfsImpact: "\u{1F525} DET 119.5 implied" },
 ];
-// &#x2500;&#x2500; CASCADE RULES ENGINE &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 CASCADE RULES ENGINE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const CASCADE_RULES = [
     { trigger: "Jarrett Allen", team: "CLE", beneficiaries: [
             { name: "Evan Mobley", ownBoost: 1.35, projBoost: 1.12, note: "Rebounds+pts fill" },
@@ -547,29 +547,29 @@ function InjuryPanel({ onExclude, excludedNames }) {
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } },
-                "Mar 13 official report \u00B7 ",
+                "Mar 13 official report \\u00B7 ",
                 TONIGHT_INJURIES.filter(p => p.status === "OUT").length,
-                " OUT \u00B7 ",
+                " OUT \\u00B7 ",
                 TONIGHT_INJURIES.filter(p => p.status === "Q").length,
-                " Q \u00B7 ",
+                " Q \\u00B7 ",
                 TONIGHT_INJURIES.filter(p => p.status === "UP").length,
                 " boosters"),
-            React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(f => (React.createElement("button", { key: f, onClick: () => setFilter(f), style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"}`, background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "&#x1F525; BOOST" : f))))),
+            React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(f => (React.createElement("button", { key: f, onClick: () => setFilter(f), style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"}`, background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "\u{1F525} BOOST" : f))))),
         React.createElement("div", { style: { maxHeight: 360, overflowY: "auto" } }, filtered.map((p, i) => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` } },
             React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 28, textAlign: "center", border: `1px solid ${statusColor[p.status]}44` } }, p.status),
             React.createElement("span", { style: { fontSize: 10, color: "#3b82f6", minWidth: 28 } }, p.team),
             React.createElement("span", { style: { flex: 1, fontSize: 11, color: p.status === "OUT" ? "#94a3b8" : "#e2e8f0", fontWeight: p.status === "UP" ? 600 : 400, textDecoration: p.status === "OUT" ? "line-through" : "none" } }, p.name),
             React.createElement("span", { style: { fontSize: 9, color: "#4a6a80", flex: 1 } }, p.reason),
             React.createElement("span", { style: { fontSize: 9, color: p.status === "UP" ? "#22c55e" : p.status === "Q" ? "#f59e0b" : "#4a6a80", flex: 1 } }, p.dfsImpact),
-            p.status === "OUT" && (React.createElement("button", { onClick: () => onExclude(p.name), disabled: excludedNames.includes(p.name), style: { fontSize: 9, padding: "2px 7px", borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#16a34a" : "#ef444466"}`, background: excludedNames.includes(p.name) ? "#16a34a22" : "#1a0a0a", color: excludedNames.includes(p.name) ? "#22c55e" : "#ef4444", cursor: "pointer", whiteSpace: "nowrap" } }, excludedNames.includes(p.name) ? "&#x2713; OUT" : "EXCLUDE"))))))));
+            p.status === "OUT" && (React.createElement("button", { onClick: () => onExclude(p.name), disabled: excludedNames.includes(p.name), style: { fontSize: 9, padding: "2px 7px", borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#16a34a" : "#ef444466"}`, background: excludedNames.includes(p.name) ? "#16a34a22" : "#1a0a0a", color: excludedNames.includes(p.name) ? "#22c55e" : "#ef4444", cursor: "pointer", whiteSpace: "nowrap" } }, excludedNames.includes(p.name) ? "\u2713 OUT" : "EXCLUDE"))))))));
 }
-// &#x2500;&#x2500; STATMUSE PANEL &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 STATMUSE PANEL \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
     const [search, setSearch] = useState("");
     const [manualName, setManualName] = useState("");
     const [manualFD, setManualFD] = useState("");
     const filtered = players.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())).slice(0, 40);
-    const trendIcon = (t) => t === "hot" ? "&#x1F525;" : t === "cold" ? "&#x2744;&#xFE0F;" : "&#x27A1;&#xFE0F;";
+    const trendIcon = (t) => t === "hot" ? "\u{1F525}" : t === "cold" ? "\u2744\uFE0F" : "\u27A1\uFE0F";
     const trendColor = (t) => t === "hot" ? "#22c55e" : t === "cold" ? "#60a5fa" : "#94a3b8";
     return (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
         React.createElement("div", { style: { background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 } },
@@ -579,7 +579,7 @@ function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
                 " ",
                 React.createElement("a", { href: "https://www.statmuse.com/nba", target: "_blank", rel: "noreferrer", style: { color: "#60a5fa" } }, "statmuse.com/nba"),
                 " ",
-                "\u2192 search player \u2192 \"fanduel stat log\" \u2192 enter their FD avg below."),
+                "\\u2192 search player \\u2192 \"fanduel stat log\" \\u2192 enter their FD avg below."),
             React.createElement("div", { style: { display: "flex", gap: 8 } },
                 React.createElement("input", { list: "player-names", placeholder: "Player name...", value: manualName, onChange: e => setManualName(e.target.value), style: { flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12 } }),
                 React.createElement("datalist", { id: "player-names" }, players.map(p => React.createElement("option", { key: p.name, value: p.name }))),
@@ -605,7 +605,7 @@ function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
                         " FD")) : (React.createElement("span", { style: { color: "#3b6280", fontSize: 10 } },
                         "CSV: ",
                         p.csvFppg.toFixed(1))),
-                    React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { color: "#3b82f6", fontSize: 10, textDecoration: "none", background: "#0d2235", border: "1px solid #1e3040", borderRadius: 4, padding: "2px 6px" } }, "\u2197 LOOKUP")));
+                    React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { color: "#3b82f6", fontSize: 10, textDecoration: "none", background: "#0d2235", border: "1px solid #1e3040", borderRadius: 4, padding: "2px 6px" } }, "\\u2197 LOOKUP")));
             }))),
         React.createElement("div", { style: { background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 } },
             React.createElement("div", { style: { fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 } }, "DATA COVERAGE"),
@@ -620,7 +620,7 @@ function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
                     React.createElement("div", { style: { fontSize: 22, fontWeight: 700, color: "#60a5fa" } }, players.length),
                     React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } }, "total"))))));
 }
-// &#x2500;&#x2500; OWNERSHIP EDITOR &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 OWNERSHIP EDITOR \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function OwnershipEditor({ players, ownershipMap, onUpdate }) {
     return (React.createElement("div", { style: { maxHeight: 380, overflowY: "auto" } },
         React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
@@ -645,7 +645,7 @@ function OwnershipEditor({ players, ownershipMap, onUpdate }) {
                         React.createElement("input", { type: "number", min: "0", max: "100", step: "0.5", value: (_a = ownershipMap[p.name.toLowerCase()]) !== null && _a !== void 0 ? _a : 15, onChange: e => onUpdate(p.name, parseFloat(e.target.value) || 0), style: { width: 60, background: "#1a2e40", border: "1px solid #2a4560", color: "#e2e8f0", borderRadius: 4, padding: "2px 6px", fontSize: 12 } }))));
             })))));
 }
-// &#x2500;&#x2500; LINEUP CARD &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 LINEUP CARD \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function LineupCard({ lineup, index, isSelected, onSelect }) {
     const stats = lineupStats(lineup);
     const sorted = [...lineup].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
@@ -665,7 +665,7 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
                         background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : "#a78bfa22",
                         color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : "#a78bfa",
                         border: `1px solid ${lineup._type === "chalk" ? "#f59e0b44" : lineup._type === "leverage" ? "#22c55e44" : "#a78bfa44"}`,
-                    } }, lineup._type === "chalk" ? "&#x1F4CC; CHALK" : lineup._type === "leverage" ? "&#x1F517; LEVERAGE" : "&#x1F680; TOURN")),
+                    } }, lineup._type === "chalk" ? "\u{1F4CC} CHALK" : lineup._type === "leverage" ? "\u{1F517} LEVERAGE" : "\u{1F680} TOURN")),
                 lineup._hasStack && (React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e", border: "1px solid #22c55e44" } }, "STACKED")),
                 React.createElement("span", { style: { color: "#64b587", fontWeight: 600 } }, stats.proj.toFixed(1)),
                 React.createElement("span", { style: { color: "#94a3b8" } },
@@ -679,7 +679,7 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
                     "M",
                     stats.mid),
                 React.createElement("span", { style: { background: "#94a3b822", color: "#94a3b8", border: "1px solid #94a3b844", borderRadius: 4, padding: "1px 5px" } },
-                    "\u00D8",
+                    "\\u00D8",
                     stats.avgOwn.toFixed(0),
                     "%"))),
         React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
@@ -687,15 +687,15 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
                 React.createElement("td", { style: { padding: "2px 0", color: "#3b82f6", width: 24, fontWeight: 700, fontSize: 10 } }, p.slot),
                 React.createElement("td", { style: { padding: "2px 4px", color: "#e2e8f0", fontWeight: p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD ? 700 : 400 } },
                     p.name,
-                    p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\u25CF"),
-                    p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD && React.createElement("span", { style: { color: "#f59e0b", fontSize: 10, marginLeft: 2 } }, "\u26A1")),
+                    p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\\u25CF"),
+                    p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD && React.createElement("span", { style: { color: "#f59e0b", fontSize: 10, marginLeft: 2 } }, "\\u26A1")),
                 React.createElement("td", { style: { padding: "2px 4px", color: "#64b587", textAlign: "right" } }, p.fppg.toFixed(1)),
                 React.createElement("td", { style: { padding: "2px 4px", textAlign: "right" } },
                     React.createElement("span", { style: { color: ownColor(p.ownership), fontSize: 10 } },
                         p.ownership.toFixed(0),
                         "%")))))))));
 }
-// &#x2500;&#x2500; MAIN APP &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// \u2500\u2500 MAIN APP \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function App() {
     const [vegasMap, setVegasMap] = useState({});
     const [vegasGames, setVegasGames] = useState([]);
@@ -765,7 +765,7 @@ function App() {
     // Manual StatMuse override: user enters player name + FD avg from StatMuse
     const handleStatMuseManual = (name, fdAvg) => {
         const key = name.toLowerCase();
-        // Estimate trend from single point &#x2014; if they enter it, assume it's intentional
+        // Estimate trend from single point \u2014 if they enter it, assume it's intentional
         const newSM = Object.assign(Object.assign({}, statMuseMap), { [key]: { fdAvg, lastGame: null, trend: "neutral" } });
         setStatMuseMap(newSM);
         rebuildPlayers(csvText, ownershipMap, newSM);
@@ -786,11 +786,11 @@ function App() {
             setOwnershipMap(newOwnMap);
             rebuildPlayers(csvText, newOwnMap, statMuseMap);
             setVegasStatus("done");
-            setVegasMsg(`&#x2705; ${gamesCount} games loaded &#xB7; Mar 13 slate &#xB7; ownership estimated`);
+            setVegasMsg(`\u2705 ${gamesCount} games loaded \u00B7 Mar 13 slate \u00B7 ownership estimated`);
         }
         catch (e) {
             setVegasStatus("error");
-            setVegasMsg(`&#x274C; ${e.message}`);
+            setVegasMsg(`\u274C ${e.message}`);
         }
     };
     const applyLineMovement = () => {
@@ -866,7 +866,7 @@ function App() {
         React.createElement("div", { style: S.hdr },
             React.createElement("div", null,
                 React.createElement("div", { style: { fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" } }, "COURT EDGE"),
-                React.createElement("div", { style: { fontSize: 9, color: "#3b82f6", letterSpacing: 3 } }, "NBA DFS OPTIMIZER v4 \u00B7 STACK + SLATE GRADE + BANKROLL")),
+                React.createElement("div", { style: { fontSize: 9, color: "#3b82f6", letterSpacing: 3 } }, "NBA DFS OPTIMIZER v4 \\u00B7 STACK + SLATE GRADE + BANKROLL")),
             React.createElement("div", { style: { display: "flex", gap: 6 } }, [["upload", "1.UPLOAD"], ["build", "2.BUILD"], ["results", "3.RESULTS"]].map(([st, label]) => (React.createElement("button", { key: st, style: S.pill(step === st), onClick: () => players.length > 0 && setStep(st) }, label))))),
         step === "upload" && (React.createElement("div", { style: { maxWidth: 620, margin: "40px auto", padding: "0 24px" } },
             (() => {
@@ -882,22 +882,25 @@ function App() {
                             React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: gradeColor, marginBottom: 3 } }, g.recommendation),
                             React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } },
                                 gamesList.length,
-                                " games \u00B7 Avg O/U ",
+                                " games \\u00B7 Avg O/U ",
                                 g.avgTotal.toFixed(1),
-                                " \u00B7 ",
+                                " \\u00B7 ",
                                 g.highTotalGames,
-                                " game(s) 228+ \u00B7 Max implied ",
+                                " game(s) 228+ \\u00B7 Max implied ",
                                 g.maxImpl)),
                         React.createElement("div", { style: { textAlign: "right" } },
                             React.createElement("div", { style: { fontSize: 22, fontWeight: 700, color: gradeColor } },
                                 g.score,
                                 "/100"),
                             React.createElement("div", { style: { fontSize: 9, color: "#4a6a80" } }, "SCORE"))),
-                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } }, g.notes.map((n, i) => (React.createElement("div", { key: i, style: { fontSize: 10, color: n.startsWith("&#x2705;") ? "#22c55e" : n.startsWith("&#x26A0;") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" } }, n))))));
+                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } }, g.notes.map((n, i) => (React.createElement("div", { key: i, style: { fontSize: 10, color: n.startsWith("\u2705") ? "#22c55e" : n.startsWith("\u26A0\uFE0F") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" } }, n))))));
             })(),
             React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { textAlign: "center", marginBottom: 28 } },
-                    React.createElement("div", { style: { fontSize: 36, marginBottom: 10 } }, "\uD83C\uDFC0"),
+                    React.createElement("div", { style: { fontSize: 36, marginBottom: 10 } },
+                        "\\u",
+                        1,
+                        "F3C0}"),
                     React.createElement("div", { style: { fontSize: 18, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 } }, "UPLOAD FANDUEL CSV"),
                     React.createElement("div", { style: { fontSize: 11, color: "#4a6a80", lineHeight: 1.8 } },
                         "Export player list from FanDuel contest lobby.",
@@ -909,11 +912,11 @@ function App() {
                 React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } }),
                 React.createElement("div", { style: { marginTop: 18, padding: "12px 14px", background: "#0a1a2a", borderRadius: 8, border: "1px solid #1e3040" } },
                     React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 } }, "WHAT'S NEW IN V4"),
-                    ["&#x1F3AF; Slate Grader &#x2014; A/B/C/D/F before you enter", "&#x1F517; Game stacking engine &#x2014; correlate high-total games", "&#x1F4CA; MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "&#x1F4B0; Bankroll advisor &#x2014; how many entries at what stakes"].map(r => (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r))))))),
+                    ["\u{1F3AF} Slate Grader \u2014 A/B/C/D/F before you enter", "\u{1F517} Game stacking engine \u2014 correlate high-total games", "\u{1F4CA} MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "\u{1F4B0} Bankroll advisor \u2014 how many entries at what stakes"].map(r => (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r))))))),
         step === "build" && (React.createElement("div", { style: S.sec },
             React.createElement("div", { style: { marginBottom: 14, background: "#091520", border: "1px solid #1e3040", borderRadius: 10, overflow: "hidden" } },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: vegasStatus === "done" ? "1px solid #1e3040" : "none" } },
-                    React.createElement("button", { onClick: () => handleFetchVegas(players), disabled: vegasStatus === "loading" || players.length === 0, style: Object.assign(Object.assign({}, S.btn("primary")), { padding: "7px 18px", fontSize: 11, letterSpacing: 1, background: vegasStatus === "done" ? "#16a34a" : "#2563eb", whiteSpace: "nowrap" }) }, vegasStatus === "loading" ? "&#x23F3; FETCHING..." : vegasStatus === "done" ? "&#x2705; VEGAS LIVE" : "&#x26A1; FETCH VEGAS INTEL"),
+                    React.createElement("button", { onClick: () => handleFetchVegas(players), disabled: vegasStatus === "loading" || players.length === 0, style: Object.assign(Object.assign({}, S.btn("primary")), { padding: "7px 18px", fontSize: 11, letterSpacing: 1, background: vegasStatus === "done" ? "#16a34a" : "#2563eb", whiteSpace: "nowrap" }) }, vegasStatus === "loading" ? "\u23F3 FETCHING..." : vegasStatus === "done" ? "\u2705 VEGAS LIVE" : "\u26A1 FETCH VEGAS INTEL"),
                     vegasMsg && (React.createElement("span", { style: { fontSize: 11, color: vegasStatus === "error" ? "#f87171" : vegasStatus === "done" ? "#22c55e" : "#94a3b8" } }, vegasMsg)),
                     vegasStatus === "done" && (React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" } }, Object.entries(vegasMap).slice(0, 8).map(([team, v]) => (React.createElement("span", { key: team, style: { color: v.impliedPts >= 115 ? "#f59e0b" : "#60a5fa" } },
                         React.createElement("span", { style: { color: "#4a6a80" } },
@@ -926,8 +929,11 @@ function App() {
                         " players"))),
                 vegasStatus === "done" && (React.createElement("div", { style: { padding: "12px 16px" } },
                     React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
-                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b", letterSpacing: 2, fontWeight: 700 } }, "\uD83D\uDCC8 LINE MOVEMENT TRACKER"),
-                        React.createElement("div", { style: { fontSize: 9, color: "#3b6280" } }, "Opening vs current \u2014 delta = market-priced injury impact. Edit any field to update.")),
+                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b", letterSpacing: 2, fontWeight: 700 } },
+                            "\\u",
+                            1,
+                            "F4C8} LINE MOVEMENT TRACKER"),
+                        React.createElement("div", { style: { fontSize: 9, color: "#3b6280" } }, "Opening vs current \\u2014 delta = market-priced injury impact. Edit any field to update.")),
                     React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 } }, lineMovement.map((g, i) => {
                         const spreadDelta = +(g.currentSpread - g.openSpread).toFixed(1);
                         const totalDelta = +(g.currentTotal - g.openTotal).toFixed(1);
@@ -936,10 +942,10 @@ function App() {
                         const spreadColor = bigSpread ? (spreadDelta > 0 ? "#f87171" : "#22c55e") : "#4a6a80";
                         const totalColor = bigTotal ? (totalDelta > 0 ? "#22c55e" : "#f87171") : "#4a6a80";
                         const signal = bigSpread || bigTotal
-                            ? spreadDelta > 2 ? "STAR OUT &#x2014; fade"
-                                : spreadDelta < -2 ? "PACE-UP &#x2014; stack"
-                                    : totalDelta > 2 ? "Total up &#x2014; more pts"
-                                        : "Total down &#x2014; less pts"
+                            ? spreadDelta > 2 ? "STAR OUT \u2014 fade"
+                                : spreadDelta < -2 ? "PACE-UP \u2014 stack"
+                                    : totalDelta > 2 ? "Total up \u2014 more pts"
+                                        : "Total down \u2014 less pts"
                             : null;
                         const signalColor = spreadDelta < -2 || totalDelta > 2 ? "#22c55e" : "#f87171";
                         return (React.createElement("div", { key: i, style: { background: "#060e18", border: "1px solid " + (bigSpread || bigTotal ? "#f59e0b44" : "#1e3040"), borderRadius: 8, padding: "9px 11px" } },
@@ -948,16 +954,16 @@ function App() {
                                 React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "SPREAD"),
                                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
                                     React.createElement("input", { type: "number", step: "0.5", value: g.currentSpread, onChange: e => setLineMovement(prev => prev.map((x, j) => j === i ? Object.assign(Object.assign({}, x), { currentSpread: +e.target.value }) : x)), style: { width: 46, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "2px 5px", fontSize: 11, fontFamily: "inherit", textAlign: "center" } }),
-                                    React.createElement("span", { style: { fontSize: 10, color: spreadColor, fontWeight: bigSpread ? 700 : 400, minWidth: 30, textAlign: "right" } }, spreadDelta !== 0 ? (spreadDelta > 0 ? "+" : "") + spreadDelta : "&#x2014;"))),
+                                    React.createElement("span", { style: { fontSize: 10, color: spreadColor, fontWeight: bigSpread ? 700 : 400, minWidth: 30, textAlign: "right" } }, spreadDelta !== 0 ? (spreadDelta > 0 ? "+" : "") + spreadDelta : "\u2014"))),
                             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
                                 React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "TOTAL"),
                                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
                                     React.createElement("input", { type: "number", step: "0.5", value: g.currentTotal, onChange: e => setLineMovement(prev => prev.map((x, j) => j === i ? Object.assign(Object.assign({}, x), { currentTotal: +e.target.value }) : x)), style: { width: 46, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "2px 5px", fontSize: 11, fontFamily: "inherit", textAlign: "center" } }),
-                                    React.createElement("span", { style: { fontSize: 10, color: totalColor, fontWeight: bigTotal ? 700 : 400, minWidth: 30, textAlign: "right" } }, totalDelta !== 0 ? (totalDelta > 0 ? "+" : "") + totalDelta : "&#x2014;"))),
+                                    React.createElement("span", { style: { fontSize: 10, color: totalColor, fontWeight: bigTotal ? 700 : 400, minWidth: 30, textAlign: "right" } }, totalDelta !== 0 ? (totalDelta > 0 ? "+" : "") + totalDelta : "\u2014"))),
                             signal && (React.createElement("div", { style: { fontSize: 9, color: signalColor, marginTop: 5, paddingTop: 4, borderTop: "1px solid #1e3040" } }, signal))));
                     })),
                     lineMovement.some(g => Math.abs(g.currentSpread - g.openSpread) >= 2 || Math.abs(g.currentTotal - g.openTotal) >= 2) && (React.createElement("div", { style: { marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#0a1a0a", border: "1px solid #f59e0b44", borderRadius: 7 } },
-                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b" } }, "Significant line movement detected \u2014 ownership estimates may need recalibration"),
+                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b" } }, "Significant line movement detected \\u2014 ownership estimates may need recalibration"),
                         React.createElement("button", { onClick: applyLineMovement, style: Object.assign(Object.assign({}, S.btn("primary")), { fontSize: 10, padding: "5px 14px", whiteSpace: "nowrap", marginLeft: 12 }) }, "APPLY MOVEMENT")))))),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 } },
                 React.createElement("div", { style: S.card },
@@ -972,8 +978,11 @@ function App() {
                             React.createElement("button", { style: S.pill(rightTab === "statmuse"), onClick: () => setRightTab("statmuse") },
                                 "STATMUSE ",
                                 Object.keys(statMuseMap).length > 0 && `(${Object.keys(statMuseMap).length})`),
-                            React.createElement("button", { style: S.pill(rightTab === "injuries"), onClick: () => setRightTab("injuries") }, "\uD83C\uDFE5 INJURIES"),
-                            React.createElement("button", { style: S.btn("ghost"), onClick: () => fileRef.current.click() }, "\u2191 CSV"))),
+                            React.createElement("button", { style: S.pill(rightTab === "injuries"), onClick: () => setRightTab("injuries") },
+                                "\\u",
+                                1,
+                                "F3E5} INJURIES"),
+                            React.createElement("button", { style: S.btn("ghost"), onClick: () => fileRef.current.click() }, "\\u2191 CSV"))),
                     rightTab === "ownership"
                         ? React.createElement(OwnershipEditor, { players: players, ownershipMap: ownershipMap, onUpdate: updateOwnership })
                         : rightTab === "statmuse"
@@ -994,18 +1003,21 @@ function App() {
                     React.createElement("div", { style: S.card },
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "LOCK / EXCLUDE"),
                         React.createElement("div", { style: { maxHeight: 220, overflowY: "auto" } }, players.slice(0, 35).map(p => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 5, marginBottom: 5, fontSize: 11 } },
-                            React.createElement("button", { onClick: () => toggleLock(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "\uD83D\uDD12"),
-                            React.createElement("button", { onClick: () => toggleExclude(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#991b1b" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "\u2715"),
+                            React.createElement("button", { onClick: () => toggleLock(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } },
+                                "\\u",
+                                1,
+                                "F512}"),
+                            React.createElement("button", { onClick: () => toggleExclude(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#991b1b" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "\\u2715"),
                             React.createElement("span", { style: { flex: 1, color: excludedNames.includes(p.name) ? "#4a6a80" : "#e2e8f0", textDecoration: excludedNames.includes(p.name) ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, p.name),
-                            p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9 } }, "\u25CF")))))),
+                            p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9 } }, "\\u25CF")))))),
                     React.createElement("div", { style: S.card },
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "GENERATE"),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 6, letterSpacing: 1 } }, "LINEUP STRATEGY"),
                         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 14 } }, [
-                            ["mixed", "&#x1F3AF; MIXED", "30% chalk &#xB7; 40% leverage &#xB7; 30% tourn"],
-                            ["chalk", "&#x1F4CC; CHALK", "Safe, high-ownership &#x2014; cash games"],
-                            ["leverage", "&#x1F517; LEVERAGE", "Game-stacked, correlated builds"],
-                            ["tournament", "&#x1F680; TOURNAMENT", "Contrarian pivots &#x2014; GPP only"],
+                            ["mixed", "\u{1F3AF} MIXED", "30% chalk \u00B7 40% leverage \u00B7 30% tourn"],
+                            ["chalk", "\u{1F4CC} CHALK", "Safe, high-ownership \u2014 cash games"],
+                            ["leverage", "\u{1F517} LEVERAGE", "Game-stacked, correlated builds"],
+                            ["tournament", "\u{1F680} TOURNAMENT", "Contrarian pivots \u2014 GPP only"],
                         ].map(([val, label, desc]) => (React.createElement("button", { key: val, onClick: () => setLineupStrategy(val), style: {
                                 padding: "8px 10px", borderRadius: 7, border: `1px solid ${lineupStrategy === val ? "#3b82f6" : "#1e3040"}`,
                                 background: lineupStrategy === val ? "#1a3550" : "#0a1520",
@@ -1017,10 +1029,13 @@ function App() {
                         vegasGames.length > 0 && (() => {
                             const best = getBestStackGame(vegasGames, players);
                             return best ? (React.createElement("div", { style: { marginBottom: 12, padding: "7px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 } },
-                                React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 3 } }, "\uD83D\uDD17 STACK TARGET"),
+                                React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 3 } },
+                                    "\\u",
+                                    1,
+                                    "F517} STACK TARGET"),
                                 React.createElement("div", { style: { fontSize: 11, color: "#e2e8f0" } },
                                     best.gameStr,
-                                    " \u00B7 O/U ",
+                                    " \\u00B7 O/U ",
                                     best.total),
                                 React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } },
                                     "LEVERAGE lineups will stack ",
@@ -1033,7 +1048,10 @@ function App() {
                         React.createElement("input", { type: "range", min: "1", max: "20", value: lineupCount, onChange: e => setLineupCount(+e.target.value), style: { width: "100%", marginBottom: 4 } }),
                         React.createElement("div", { style: { textAlign: "center", color: "#60a5fa", fontWeight: 700, fontSize: 18, marginBottom: 12 } }, lineupCount),
                         React.createElement("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8 } },
-                            React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 7 } }, "\uD83D\uDCB0 BANKROLL ADVISOR"),
+                            React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 7 } },
+                                "\\u",
+                                1,
+                                "F4B0} BANKROLL ADVISOR"),
                             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
                                 React.createElement("span", { style: { fontSize: 10, color: "#4a6a80" } }, "$"),
                                 React.createElement("input", { type: "number", min: "0", placeholder: "Your bankroll", value: bankroll, onChange: e => setBankroll(e.target.value), style: { flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 5, color: "#e2e8f0", padding: "5px 8px", fontSize: 11, fontFamily: "inherit" } })),
@@ -1047,7 +1065,7 @@ function App() {
                                         React.createElement("strong", { style: { color: "#22c55e" } },
                                             "$",
                                             strat.budget),
-                                        " \u00B7 ",
+                                        " \\u00B7 ",
                                         strat.note),
                                     strat.breakdown.map(b => (React.createElement("div", { key: b.type, style: { display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 3 } },
                                         React.createElement("span", { style: { color: "#4a6a80" } }, b.type),
@@ -1058,51 +1076,57 @@ function App() {
                                             ")")))))) : null;
                             })()),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 8 } },
-                            lockedNames.length > 0 && `&#x1F512; ${lockedNames.length} locked  `,
-                            excludedNames.length > 0 && `&#x2715; ${excludedNames.length} excluded  `,
-                            Object.keys(statMuseMap).length > 0 && `&#x1F4CA; ${Object.keys(statMuseMap).length} SM`),
+                            lockedNames.length > 0 && `\u{1F512} ${lockedNames.length} locked  `,
+                            excludedNames.length > 0 && `\u2715 ${excludedNames.length} excluded  `,
+                            Object.keys(statMuseMap).length > 0 && `\u{1F4CA} ${Object.keys(statMuseMap).length} SM`),
                         cascadeLog.length > 0 && (React.createElement("div", { style: { marginBottom: 10, padding: "8px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 } },
-                            React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 } }, "\uD83D\uDD17 CASCADE BOOSTS APPLIED"),
+                            React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 } },
+                                "\\u",
+                                1,
+                                "F517} CASCADE BOOSTS APPLIED"),
                             cascadeLog.map((c, i) => (React.createElement("div", { key: i, style: { fontSize: 9, color: "#4a6a80", marginBottom: 2 } },
                                 React.createElement("span", { style: { color: "#ef4444" } },
                                     c.out.split(" ").pop(),
                                     " OUT"),
-                                " &#x2192; ",
+                                " \u2192 ",
                                 React.createElement("span", { style: { color: "#22c55e" } }, c.player.split(" ").pop()),
                                 " ",
                                 React.createElement("span", { style: { color: "#94a3b8" } },
                                     c.from,
-                                    "%\u2192",
+                                    "%\\u2192",
                                     c.to,
                                     "%"),
                                 " ",
                                 React.createElement("span", { style: { color: "#3b6280" } }, c.note)))))),
-                        React.createElement("button", { style: Object.assign(Object.assign({}, S.btn("primary")), { width: "100%", fontSize: 13, padding: "12px 0" }), onClick: handleGenerate, disabled: generating }, generating ? "BUILDING..." : "&#x26A1; GENERATE LINEUPS"),
+                        React.createElement("button", { style: Object.assign(Object.assign({}, S.btn("primary")), { width: "100%", fontSize: 13, padding: "12px 0" }), onClick: handleGenerate, disabled: generating }, generating ? "BUILDING..." : "\u26A1 GENERATE LINEUPS"),
                         lastGenTime && (React.createElement("div", { style: { marginTop: 8, padding: "6px 10px", background: "#0a1520", borderRadius: 6, border: "1px solid #1e3040" } },
                             React.createElement("div", { style: { fontSize: 9, color: "#3b6280" } },
                                 "Last generated: ",
                                 lastGenTime.toLocaleTimeString()),
-                            React.createElement("div", { style: { fontSize: 9, color: "#f59e0b", marginTop: 2 } }, "\u26A0 Re-upload CSV + re-run 60min before tip for late scratches"),
-                            React.createElement("button", { onClick: handleGenerate, style: Object.assign(Object.assign({}, S.btn("warning")), { width: "100%", marginTop: 6, fontSize: 10, padding: "6px 0" }) }, "\uD83D\uDD04 LATE SCRATCH RE-RUN")))))))),
+                            React.createElement("div", { style: { fontSize: 9, color: "#f59e0b", marginTop: 2 } }, "\\u26A0\\uFE0F Re-upload CSV + re-run 60min before tip for late scratches"),
+                            React.createElement("button", { onClick: handleGenerate, style: Object.assign(Object.assign({}, S.btn("warning")), { width: "100%", marginTop: 6, fontSize: 10, padding: "6px 0" }) },
+                                "\\u",
+                                1,
+                                "F504} LATE SCRATCH RE-RUN")))))))),
         step === "results" && (React.createElement("div", { style: S.sec },
             lineups.length === 0 && (React.createElement("div", { style: { background: "#1a0a0a", border: "1px solid #ef444444", borderRadius: 10, padding: 24, textAlign: "center", marginBottom: 16 } },
-                React.createElement("div", { style: { fontSize: 14, color: "#ef4444", marginBottom: 8 } }, "\u26A0 No lineups generated"),
+                React.createElement("div", { style: { fontSize: 14, color: "#ef4444", marginBottom: 8 } }, "\\u26A0\\uFE0F No lineups generated"),
                 React.createElement("div", { style: { fontSize: 11, color: "#4a6a80", lineHeight: 1.8 } },
                     "Possible causes:",
                     React.createElement("br", null),
-                    "\u2022 Not enough eligible players (need 9 across PG\u00D72, SG\u00D72, SF\u00D72, PF\u00D72, C\u00D71)",
+                    "\\u2022 Not enough eligible players (need 9 across PG\\u00D72, SG\\u00D72, SF\\u00D72, PF\\u00D72, C\\u00D71)",
                     React.createElement("br", null),
-                    "\u2022 Too many players excluded",
+                    "\\u2022 Too many players excluded",
                     React.createElement("br", null),
-                    "\u2022 Salary cap too tight with current pool",
+                    "\\u2022 Salary cap too tight with current pool",
                     React.createElement("br", null),
-                    "\u2022 FPPG floor (15) filtering too many players"),
-                React.createElement("button", { onClick: () => setStep("build"), style: Object.assign(Object.assign({}, S.btn("primary")), { marginTop: 12 }) }, "\u2190 BACK TO BUILD"))),
+                    "\\u2022 FPPG floor (15) filtering too many players"),
+                React.createElement("button", { onClick: () => setStep("build"), style: Object.assign(Object.assign({}, S.btn("primary")), { marginTop: 12 }) }, "\\u2190 BACK TO BUILD"))),
             React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 16 } },
                 ["lineups", "players", "exposure"].map(t => (React.createElement("button", { key: t, style: S.pill(activeTab === t), onClick: () => setActiveTab(t) }, t.toUpperCase()))),
                 React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: 8 } },
-                    React.createElement("button", { style: S.btn("ghost"), onClick: () => setStep("build") }, "\u2190 EDIT"),
-                    React.createElement("button", { style: S.btn("success"), onClick: handleGenerate }, "\u21BB REGEN"))),
+                    React.createElement("button", { style: S.btn("ghost"), onClick: () => setStep("build") }, "\\u2190 EDIT"),
+                    React.createElement("button", { style: S.btn("success"), onClick: handleGenerate }, "\\u21BB REGEN"))),
             activeTab === "lineups" && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 } },
                 React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } }, lineups.map((lu, i) => React.createElement(LineupCard, { key: i, lineup: lu, index: i, isSelected: selectedLineup === i, onSelect: setSelectedLineup }))),
                 (() => {
@@ -1116,7 +1140,7 @@ function App() {
                                 React.createElement("div", { style: { fontSize: 15, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 } },
                                     "LINEUP #",
                                     selectedLineup + 1),
-                                React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginTop: 2 } }, "\u25CF = StatMuse confirmed  \u26A1 = anchor")),
+                                React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginTop: 2 } }, "\\u25CF = StatMuse confirmed  \\u26A1 = anchor")),
                             React.createElement("div", { style: { display: "flex", gap: 18, fontSize: 12 } },
                                 React.createElement("div", null,
                                     React.createElement("span", { style: { color: "#4a6a80" } }, "PROJ "),
@@ -1131,7 +1155,7 @@ function App() {
                                     React.createElement("span", { style: { color: "#f59e0b", fontWeight: 700 } },
                                         stats.avgOwn.toFixed(1),
                                         "%")))),
-                        React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16 } }, [["CHALK 30%+", stats.chalk, "#f59e0b"], ["MID 10-29%", stats.mid, "#60a5fa"], ["PUNT <5%", stats.punt, "#f87171"], [stats.anchor.name.split(" ").pop() + " &#x26A1;", stats.anchor.fppg.toFixed(1), "#22c55e"]].map(([l, v, c]) => (React.createElement("div", { key: l, style: { flex: 1, background: "#0a1a2a", borderRadius: 8, padding: "8px 12px", border: `1px solid ${c}33`, textAlign: "center" } },
+                        React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16 } }, [["CHALK 30%+", stats.chalk, "#f59e0b"], ["MID 10-29%", stats.mid, "#60a5fa"], ["PUNT <5%", stats.punt, "#f87171"], [stats.anchor.name.split(" ").pop() + " \u26A1", stats.anchor.fppg.toFixed(1), "#22c55e"]].map(([l, v, c]) => (React.createElement("div", { key: l, style: { flex: 1, background: "#0a1a2a", borderRadius: 8, padding: "8px 12px", border: `1px solid ${c}33`, textAlign: "center" } },
                             React.createElement("div", { style: { color: c, fontWeight: 700, fontSize: 18 } }, v),
                             React.createElement("div", { style: { color: "#4a6a80", fontSize: 9, marginTop: 2 } }, l))))),
                         React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
@@ -1143,8 +1167,8 @@ function App() {
                                     React.createElement("td", { style: { padding: "9px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11 } }, p.slot),
                                     React.createElement("td", { style: { padding: "9px 8px", color: "#e2e8f0", fontWeight: isAnchor ? 700 : 400 } },
                                         p.name,
-                                        p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 4 } }, "\u25CF"),
-                                        isAnchor && React.createElement("span", { style: { color: "#f59e0b", marginLeft: 2 } }, "\u26A1")),
+                                        p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 4 } }, "\\u25CF"),
+                                        isAnchor && React.createElement("span", { style: { color: "#f59e0b", marginLeft: 2 } }, "\\u26A1")),
                                     React.createElement("td", { style: { padding: "9px 8px", color: "#4a6a80", fontSize: 10 } }, p.team),
                                     React.createElement("td", { style: { padding: "9px 8px", color: "#64b587" } },
                                         "$",
@@ -1159,7 +1183,7 @@ function App() {
                                         React.createElement("span", { style: { color: ownColor(p.ownership), fontWeight: 600 } },
                                             p.ownership.toFixed(1),
                                             "%")),
-                                    React.createElement("td", { style: { padding: "9px 8px" } }, p.injury ? React.createElement("span", { style: { color: p.injury === "Q" ? "#f59e0b" : "#ef4444", fontSize: 11 } }, p.injury) : React.createElement("span", { style: { color: "#22c55e", fontSize: 11 } }, "\u2713"))));
+                                    React.createElement("td", { style: { padding: "9px 8px" } }, p.injury ? React.createElement("span", { style: { color: p.injury === "Q" ? "#f59e0b" : "#ef4444", fontSize: 11 } }, p.injury) : React.createElement("span", { style: { color: "#22c55e", fontSize: 11 } }, "\\u2713"))));
                             }))),
                         React.createElement("div", { style: { marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 } }, [
                             ["Anchor present", lu.some(p => p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD)],
@@ -1169,11 +1193,11 @@ function App() {
                             ["Floor clear", lu.every(p => p.fppg >= RULES.FLOOR_FPPG_MIN)],
                             ["SM data", lu.filter(p => p.statMuseFD).length >= 3],
                         ].map(([l, pass]) => (React.createElement("div", { key: l, style: { background: "#0a1520", borderRadius: 6, padding: "7px 10px", border: `1px solid ${pass ? "#16a34a" : "#991b1b"}33`, display: "flex", alignItems: "center", gap: 6 } },
-                            React.createElement("span", null, pass ? "&#x2705;" : "&#x26A0;"),
+                            React.createElement("span", null, pass ? "\u2705" : "\u26A0\uFE0F"),
                             React.createElement("span", { style: { fontSize: 10, color: pass ? "#22c55e" : "#f87171" } }, l)))))));
                 })())),
             activeTab === "players" && (React.createElement("div", { style: S.card },
-                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \u2014 MODEL SCORE RANKED"),
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \\u2014 MODEL SCORE RANKED"),
                 React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                     React.createElement("thead", null,
                         React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "BUCKET", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
@@ -1184,7 +1208,7 @@ function App() {
                             React.createElement("td", { style: { padding: "6px 8px", color: "#3b6280" } }, i + 1),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#e2e8f0" } },
                                 p.name,
-                                p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\u25CF")),
+                                p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\\u25CF")),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#3b82f6" } }, p.positions[0]),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#64b587" } },
                                 "$",
@@ -1205,11 +1229,11 @@ function App() {
                                 React.createElement("div", { style: { display: "flex", gap: 3 } },
                                     React.createElement("button", { onClick: () => toggleLock(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" } }, "LOCK"),
                                     React.createElement("button", { onClick: () => toggleExclude(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" } }, "OUT"),
-                                    React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" } }, "SM\u2197")))));
+                                    React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" } }, "SM\\u2197")))));
                     }))))),
             activeTab === "exposure" && (React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } },
-                    "PLAYER EXPOSURE \u2014 ",
+                    "PLAYER EXPOSURE \\u2014 ",
                     lineups.length,
                     " LINEUPS"),
                 (() => {
@@ -1225,7 +1249,7 @@ function App() {
                             return (React.createElement("tr", { key: name, style: { borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" } },
                                 React.createElement("td", { style: { padding: "7px 8px", color: "#e2e8f0" } },
                                     name,
-                                    (p === null || p === void 0 ? void 0 : p.statMuseFD) && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\u25CF")),
+                                    (p === null || p === void 0 ? void 0 : p.statMuseFD) && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\\u25CF")),
                                 React.createElement("td", { style: { padding: "7px 8px" } },
                                     React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
                                         React.createElement("div", { style: { flex: 1, background: "#0a1520", borderRadius: 3, height: 7 } },
@@ -1234,12 +1258,12 @@ function App() {
                                 React.createElement("td", { style: { padding: "7px 8px", color: pct > 70 ? "#f59e0b" : "#94a3b8", fontWeight: pct > 70 ? 700 : 400 } },
                                     pct.toFixed(0),
                                     "%"),
-                                React.createElement("td", { style: { padding: "7px 8px", color: "#60a5fa" } }, (_a = p === null || p === void 0 ? void 0 : p.ownership.toFixed(1)) !== null && _a !== void 0 ? _a : "&#x2014;",
+                                React.createElement("td", { style: { padding: "7px 8px", color: "#60a5fa" } }, (_a = p === null || p === void 0 ? void 0 : p.ownership.toFixed(1)) !== null && _a !== void 0 ? _a : "\u2014",
                                     "%"),
-                                React.createElement("td", { style: { padding: "7px 8px", color: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#22c55e" : "#e2e8f0" } }, (_b = p === null || p === void 0 ? void 0 : p.fppg.toFixed(1)) !== null && _b !== void 0 ? _b : "&#x2014;"),
+                                React.createElement("td", { style: { padding: "7px 8px", color: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#22c55e" : "#e2e8f0" } }, (_b = p === null || p === void 0 ? void 0 : p.fppg.toFixed(1)) !== null && _b !== void 0 ? _b : "\u2014"),
                                 React.createElement("td", { style: { padding: "7px 8px" } },
                                     React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#16a34a22" : "#1e3040", color: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#22c55e" : "#4a6a80", border: `1px solid ${(p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#16a34a44" : "#1e3040"}` } }, (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "SM" : "CSV")),
-                                React.createElement("td", { style: { padding: "7px 8px", color: "#3b82f6" } }, (_c = p === null || p === void 0 ? void 0 : p.positions[0]) !== null && _c !== void 0 ? _c : "&#x2014;")));
+                                React.createElement("td", { style: { padding: "7px 8px", color: "#3b82f6" } }, (_c = p === null || p === void 0 ? void 0 : p.positions[0]) !== null && _c !== void 0 ? _c : "\u2014")));
                         }))));
                 })()))))));
 }
