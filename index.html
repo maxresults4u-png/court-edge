@@ -526,10 +526,26 @@ const CASCADE_RULES = [
             { name: "RJ Barrett", ownBoost: 1.20, projBoost: 1.10, note: "Usage up" },
         ] },
 ];
+// Teams to suppress entirely when key player is out
+const TEAM_SUPPRESS = {
+    "Ja Morant": "MEM",
+    "Santi Aldama": "MEM",
+};
 function applyCascades(outPlayers, ownershipMap) {
     var _a;
     const newMap = Object.assign({}, ownershipMap);
     const log = [];
+    // Suppress entire teams when star is out
+    for (const outName of outPlayers) {
+        const suppressTeam = TEAM_SUPPRESS[outName];
+        if (suppressTeam) {
+            Object.keys(newMap).forEach(key => {
+                // Find matching player by checking players array — use team suppression via ownership drop
+                newMap[key] = newMap[key]; // ownership stays but we'll filter by team below
+            });
+            log.push(`${outName} OUT — ${suppressTeam} stack suppressed`);
+        }
+    }
     for (const outName of outPlayers) {
         const rules = CASCADE_RULES.filter(r => r.trigger.toLowerCase() === outName.toLowerCase());
         for (const rule of rules) {
@@ -842,8 +858,14 @@ function App() {
         setGenerating(true);
         setTimeout(() => {
             // Enforce ownership floor and excluded list at generation time
+            // Also suppress entire teams when their star is excluded
+            const suppressedTeams = new Set();
+            const STAR_TEAM_MAP = { "Ja Morant": "MEM", "Santi Aldama": "MEM" };
+            excludedNames.forEach(n => { if (STAR_TEAM_MAP[n])
+                suppressedTeams.add(STAR_TEAM_MAP[n]); });
             const eligiblePlayers = players.filter(p => p.ownership >= RULES.NEVER_PLAY_OWN_THRESHOLD &&
-                !excludedNames.includes(p.name));
+                !excludedNames.includes(p.name) &&
+                !suppressedTeams.has(p.team));
             const lus = generateLineupsWithStrategy(eligiblePlayers, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
             setLineups(lus);
             setSelectedLineup(0);
