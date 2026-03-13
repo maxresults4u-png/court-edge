@@ -27,33 +27,13 @@ window.onerror = function(msg,src,line,col,err){
 <script>
 const { useState, useCallback, useRef, useEffect } = React;
 
-var __assign = (this && this.__assign) || function () {
-    __assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
-    };
-    return __assign.apply(this, arguments);
-};
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
-// ?? ODDS API CONFIG ???????????????????????????????????????????????????????
-var ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
-var ODDS_API_BASE = "https://api.the-odds-api.com/v4";
+// &#x2500;&#x2500; ODDS API CONFIG &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
+const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
 // Tonight's Vegas data - Mar 13 2026 - hardcoded (no API needed)
 function getHardcodedVegasData() {
-    var games = [
+    const games = [
         { away: "CLE", home: "DAL", total: 218.5, homeSpread: 12.5, awayML: -600, homeML: 460 },
         { away: "MEM", home: "DET", total: 224.5, homeSpread: -14.5, awayML: 620, homeML: -900 },
         { away: "NYK", home: "IND", total: 226.5, homeSpread: 13.5, awayML: -560, homeML: 420 },
@@ -63,21 +43,20 @@ function getHardcodedVegasData() {
         { away: "MIN", home: "GSW", total: 228.5, homeSpread: 5.5, awayML: -220, homeML: 182 },
         { away: "CHI", home: "LAC", total: 226.0, homeSpread: -14.5, awayML: 610, homeML: -880 },
     ];
-    var teamMap = {};
-    var gamesList = [];
-    for (var _i = 0, games_1 = games; _i < games_1.length; _i++) {
-        var g = games_1[_i];
-        var spread = g.homeSpread;
-        var homeImpl = +((g.total / 2) - (spread / 2)).toFixed(1);
-        var awayImpl = +(g.total - homeImpl).toFixed(1);
-        teamMap[g.home] = { total: g.total, impliedPts: homeImpl, spread: spread, moneyline: g.homeML, opponent: g.away, gameStr: "".concat(g.away, "@").concat(g.home) };
-        teamMap[g.away] = { total: g.total, impliedPts: awayImpl, spread: -spread, moneyline: g.awayML, opponent: g.home, gameStr: "".concat(g.away, "@").concat(g.home) };
-        gamesList.push({ home: g.home, away: g.away, total: g.total, homeImpl: homeImpl, awayImpl: awayImpl, homeSpread: spread, gameStr: "".concat(g.away, "@").concat(g.home) });
+    const teamMap = {};
+    const gamesList = [];
+    for (const g of games) {
+        const spread = g.homeSpread;
+        const homeImpl = +((g.total / 2) - (spread / 2)).toFixed(1);
+        const awayImpl = +(g.total - homeImpl).toFixed(1);
+        teamMap[g.home] = { total: g.total, impliedPts: homeImpl, spread, moneyline: g.homeML, opponent: g.away, gameStr: `${g.away}@${g.home}` };
+        teamMap[g.away] = { total: g.total, impliedPts: awayImpl, spread: -spread, moneyline: g.awayML, opponent: g.home, gameStr: `${g.away}@${g.home}` };
+        gamesList.push({ home: g.home, away: g.away, total: g.total, homeImpl, awayImpl, homeSpread: spread, gameStr: `${g.away}@${g.home}` });
     }
-    return { teamMap: teamMap, gamesList: gamesList, fetchedAt: "2026-03-13 hardcoded", gamesCount: games.length };
+    return { teamMap, gamesList, fetchedAt: "2026-03-13 hardcoded", gamesCount: games.length };
 }
-// ?? REGRESSION RULES ?????????????????????????????????????????????????????
-var RULES = {
+// &#x2500;&#x2500; REGRESSION RULES &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+const RULES = {
     SALARY_CAP: 60000,
     MIN_SALARY_USED: 58000,
     NEVER_PLAY_OWN_THRESHOLD: 3.0,
@@ -86,9 +65,9 @@ var RULES = {
     POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
     OWN_WEIGHTS: { chalk: 1.15, mid: 1.05, low: 0.88, punt: 0.0 }, // punt = 0 = never used (hard 3% floor)
 };
-var POSITION_ORDER = ["PG", "SG", "SF", "PF", "C"];
-// ?? STATMUSE URL BUILDER ?????????????????????????????????????????????????
-// Converts "Karl-Anthony Towns" ? "karl-anthony-towns"
+const POSITION_ORDER = ["PG", "SG", "SF", "PF", "C"];
+// &#x2500;&#x2500; STATMUSE URL BUILDER &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+// Converts "Karl-Anthony Towns" &#x2192; "karl-anthony-towns"
 function toStatMuseSlug(name) {
     return name.toLowerCase()
         .replace(/['']/g, "")
@@ -97,9 +76,9 @@ function toStatMuseSlug(name) {
         .replace(/\s+/g, "-");
 }
 function statMuseUrl(name) {
-    return "https://www.statmuse.com/nba/ask/".concat(toStatMuseSlug(name), "-fanduel-stat-log");
+    return `https://www.statmuse.com/nba/ask/${toStatMuseSlug(name)}-fanduel-stat-log`;
 }
-// ?? HELPERS ??????????????????????????????????????????????????????????????
+// &#x2500;&#x2500; HELPERS &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
 function ownershipBucket(own) {
     if (own >= 30)
         return "chalk";
@@ -111,19 +90,19 @@ function ownershipBucket(own) {
 }
 function compositeScore(p) {
     var _a;
-    var inj = (_a = { "": 1.0, P: 0.95, Q: 0.72, D: 0.4, O: 0 }[p.injury]) !== null && _a !== void 0 ? _a : 0.72;
-    var ownW = RULES.OWN_WEIGHTS[ownershipBucket(p.ownership)];
-    var value = p.fppg / (p.salary / 1000);
-    var sampleW = Math.min(p.played / 55, 1.0);
+    const inj = (_a = { "": 1.0, P: 0.95, Q: 0.72, D: 0.4, O: 0 }[p.injury]) !== null && _a !== void 0 ? _a : 0.72;
+    const ownW = RULES.OWN_WEIGHTS[ownershipBucket(p.ownership)];
+    const value = p.fppg / (p.salary / 1000);
+    const sampleW = Math.min(p.played / 55, 1.0);
     // statmuse boost: if we have live FD avg, weight it more heavily
-    var statMuseBoost = p.statMuseFD ? 1.08 : 1.0;
+    const statMuseBoost = p.statMuseFD ? 1.08 : 1.0;
     return (p.fppg * inj * ownW + value * 0.12 + sampleW * 0.08) * statMuseBoost;
 }
 function estimateOwnership(player, teamMap) {
-    var v = teamMap[player.team];
+    const v = teamMap[player.team];
     if (!v)
         return 15;
-    var base = 8;
+    let base = 8;
     if (v.impliedPts >= 122)
         base = 24;
     else if (v.impliedPts >= 118)
@@ -134,94 +113,76 @@ function estimateOwnership(player, teamMap) {
         base = 14;
     else if (v.impliedPts >= 106)
         base = 11;
-    var salaryTier = player.salary >= 11000 ? 1.7 : player.salary >= 9000 ? 1.4
+    const salaryTier = player.salary >= 11000 ? 1.7 : player.salary >= 9000 ? 1.4
         : player.salary >= 7500 ? 1.2 : player.salary >= 6000 ? 1.05
             : player.salary >= 4500 ? 0.9 : 0.75;
-    var fppgTier = player.fppg >= 50 ? 1.5 : player.fppg >= 42 ? 1.3
+    const fppgTier = player.fppg >= 50 ? 1.5 : player.fppg >= 42 ? 1.3
         : player.fppg >= 34 ? 1.15 : player.fppg >= 26 ? 1.0 : 0.85;
-    var valueTier = player.value >= 7 ? 1.25 : player.value >= 5.5 ? 1.1 : 1.0;
+    const valueTier = player.value >= 7 ? 1.25 : player.value >= 5.5 ? 1.1 : 1.0;
     return Math.min(65, Math.max(2, +(base * salaryTier * fppgTier * valueTier).toFixed(1)));
 }
-function parsePlayers(csvText, ownershipMap, statMuseMap) {
+function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
     var _a;
-    if (statMuseMap === void 0) { statMuseMap = {}; }
-    var lines = csvText.trim().split("\n");
-    var headers = lines[0].split(",").map(function (h) { return h.trim().toLowerCase().replace(/\s+/g, ""); });
-    var players = [];
-    var _loop_1 = function (i) {
-        var cols = lines[i].split(",");
+    const lines = csvText.trim().split("\n");
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, ""));
+    const players = [];
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",");
         if (cols.length < 8)
-            return "continue";
-        var get = function (key) { var _a, _b; return (_b = (_a = cols[headers.indexOf(key)]) === null || _a === void 0 ? void 0 : _a.trim()) !== null && _b !== void 0 ? _b : ""; };
-        var name_1 = get("nickname") || get("firstname") + " " + get("lastname");
-        var csvFppg = parseFloat(get("fppg")) || 0;
-        var salary = parseInt(get("salary")) || 0;
-        var injury = get("injuryindicator") || "";
-        var played = parseInt(get("played")) || 0;
-        var team = get("team");
-        var game = get("game");
-        var posRaw = get("rosterposition") || get("position");
-        var positions = posRaw.split("/").map(function (p) { return p.trim(); }).filter(function (p) { return POSITION_ORDER.includes(p); });
-        if (!name_1 || !salary || !csvFppg || injury === "O")
-            return "continue";
+            continue;
+        const get = (key) => { var _a, _b; return (_b = (_a = cols[headers.indexOf(key)]) === null || _a === void 0 ? void 0 : _a.trim()) !== null && _b !== void 0 ? _b : ""; };
+        const name = get("nickname") || get("firstname") + " " + get("lastname");
+        const csvFppg = parseFloat(get("fppg")) || 0;
+        const salary = parseInt(get("salary")) || 0;
+        const injury = get("injuryindicator") || "";
+        const played = parseInt(get("played")) || 0;
+        const team = get("team");
+        const game = get("game");
+        const posRaw = get("rosterposition") || get("position");
+        const positions = posRaw.split("/").map(p => p.trim()).filter(p => POSITION_ORDER.includes(p));
+        if (!name || !salary || !csvFppg || injury === "O")
+            continue;
         // Use StatMuse FD avg if available, otherwise fall back to CSV FPPG
-        var smData = statMuseMap[name_1.toLowerCase()];
-        var fppg = (smData === null || smData === void 0 ? void 0 : smData.fdAvg) || csvFppg;
-        var statMuseFD = !!smData;
+        const smData = statMuseMap[name.toLowerCase()];
+        const fppg = (smData === null || smData === void 0 ? void 0 : smData.fdAvg) || csvFppg;
+        const statMuseFD = !!smData;
         if (fppg < RULES.FLOOR_FPPG_MIN)
-            return "continue";
-        var ownership = (_a = ownershipMap[name_1.toLowerCase()]) !== null && _a !== void 0 ? _a : 15;
+            continue;
+        const ownership = (_a = ownershipMap[name.toLowerCase()]) !== null && _a !== void 0 ? _a : 15;
         if (ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)
-            return "continue";
-        var value = fppg / (salary / 1000);
-        var p = {
-            name: name_1,
-            fppg: fppg,
-            csvFppg: csvFppg,
-            salary: salary,
-            injury: injury,
-            played: played,
-            team: team,
-            game: game,
-            positions: positions,
-            ownership: ownership,
-            value: value,
-            statMuseFD: statMuseFD,
+            continue;
+        const value = fppg / (salary / 1000);
+        const p = {
+            name, fppg, csvFppg, salary, injury, played, team, game,
+            positions, ownership, value, statMuseFD,
             smLast: smData === null || smData === void 0 ? void 0 : smData.lastGame,
             smAvg: smData === null || smData === void 0 ? void 0 : smData.fdAvg,
             smTrend: smData === null || smData === void 0 ? void 0 : smData.trend,
         };
         p.score = compositeScore(p);
         players.push(p);
-    };
-    for (var i = 1; i < lines.length; i++) {
-        _loop_1(i);
     }
-    return players.sort(function (a, b) { return b.score - a.score; });
+    return players.sort((a, b) => b.score - a.score);
 }
-// ?? LINEUP ENGINE ????????????????????????????????????????????????????????
-function buildLineup(players, lockedNames, excludedNames) {
-    if (lockedNames === void 0) { lockedNames = []; }
-    if (excludedNames === void 0) { excludedNames = []; }
+// &#x2500;&#x2500; LINEUP ENGINE &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+function buildLineup(players, lockedNames = [], excludedNames = []) {
     // Separate locked from pool
-    var locked = players.filter(function (p) { return lockedNames.includes(p.name); });
-    var pool = players.filter(function (p) { return !excludedNames.includes(p.name) && !lockedNames.includes(p.name); });
-    // We need exactly: PG?2, SG?2, SF?2, PF?2, C?1 = 9 players
-    var needed = { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 };
-    var lineup = [];
-    var used = new Set();
-    var budget = RULES.SALARY_CAP;
-    var place = function (p, pos) {
+    const locked = players.filter(p => lockedNames.includes(p.name));
+    const pool = players.filter(p => !excludedNames.includes(p.name) && !lockedNames.includes(p.name));
+    // We need exactly: PG&#xD7;2, SG&#xD7;2, SF&#xD7;2, PF&#xD7;2, C&#xD7;1 = 9 players
+    const needed = { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 };
+    const lineup = [];
+    const used = new Set();
+    let budget = RULES.SALARY_CAP;
+    const place = (p, pos) => {
         needed[pos]--;
-        lineup.push(__assign(__assign({}, p), { slot: pos }));
+        lineup.push(Object.assign(Object.assign({}, p), { slot: pos }));
         used.add(p.name);
         budget -= p.salary;
     };
     // 1. Place locked players
-    for (var _i = 0, locked_1 = locked; _i < locked_1.length; _i++) {
-        var p = locked_1[_i];
-        for (var _a = 0, _b = p.positions; _a < _b.length; _a++) {
-            var pos = _b[_a];
+    for (const p of locked) {
+        for (const pos of p.positions) {
             if ((needed[pos] || 0) > 0) {
                 place(p, pos);
                 break;
@@ -230,18 +191,16 @@ function buildLineup(players, lockedNames, excludedNames) {
     }
     // 2. Greedy fill: iterate pool in given order, place each player in first available slot
     //    Budget guard: always keep enough for remaining slots at min $3500 each
-    for (var _c = 0, pool_1 = pool; _c < pool_1.length; _c++) {
-        var p = pool_1[_c];
+    for (const p of pool) {
         if (used.has(p.name))
             continue;
-        var slotsLeft = Object.values(needed).reduce(function (a, b) { return a + b; }, 0);
+        const slotsLeft = Object.values(needed).reduce((a, b) => a + b, 0);
         if (slotsLeft === 0)
             break;
-        for (var _d = 0, _e = p.positions; _d < _e.length; _d++) {
-            var pos = _e[_d];
+        for (const pos of p.positions) {
             if ((needed[pos] || 0) > 0) {
-                var budgetAfter = budget - p.salary;
-                var minNeeded = (slotsLeft - 1) * 3500;
+                const budgetAfter = budget - p.salary;
+                const minNeeded = (slotsLeft - 1) * 3500;
                 if (budgetAfter >= minNeeded) {
                     place(p, pos);
                     break;
@@ -250,15 +209,13 @@ function buildLineup(players, lockedNames, excludedNames) {
         }
     }
     // 3. If any slots still open, fill with cheapest eligible players regardless of score
-    if (Object.values(needed).reduce(function (a, b) { return a + b; }, 0) > 0) {
-        var cheap = __spreadArray([], pool, true).filter(function (p) { return !used.has(p.name); }).sort(function (a, b) { return a.salary - b.salary; });
-        for (var _f = 0, cheap_1 = cheap; _f < cheap_1.length; _f++) {
-            var p = cheap_1[_f];
-            var slotsLeft = Object.values(needed).reduce(function (a, b) { return a + b; }, 0);
+    if (Object.values(needed).reduce((a, b) => a + b, 0) > 0) {
+        const cheap = [...pool].filter(p => !used.has(p.name)).sort((a, b) => a.salary - b.salary);
+        for (const p of cheap) {
+            const slotsLeft = Object.values(needed).reduce((a, b) => a + b, 0);
             if (slotsLeft === 0)
                 break;
-            for (var _g = 0, _h = p.positions; _g < _h.length; _g++) {
-                var pos = _h[_g];
+            for (const pos of p.positions) {
                 if ((needed[pos] || 0) > 0 && budget - p.salary >= 0) {
                     place(p, pos);
                     break;
@@ -269,144 +226,139 @@ function buildLineup(players, lockedNames, excludedNames) {
     return lineup.length === 9 ? lineup : null;
 }
 function generateLineups(players, count, lockedNames, excludedNames) {
-    var lineups = [];
-    var used = new Set();
-    var maxAttempts = count * 40;
-    var _loop_2 = function (attempt) {
+    const lineups = [];
+    const used = new Set();
+    const maxAttempts = count * 40;
+    for (let attempt = 0; attempt < maxAttempts && lineups.length < count; attempt++) {
         // Increase randomness as we find more lineups (forces more diversity)
-        var noise = 3 + (lineups.length / count) * 25;
-        var varied = __spreadArray([], players, true).sort(function (a, b) { return (b.score - a.score) + (Math.random() - 0.5) * noise; });
+        const noise = 3 + (lineups.length / count) * 25;
+        const varied = [...players].sort((a, b) => (b.score - a.score) + (Math.random() - 0.5) * noise);
         // Randomly deprioritize top players occasionally to force different builds
         if (attempt > 5) {
-            var topCount = Math.floor(2 + Math.random() * 4);
-            for (var i = 0; i < topCount; i++) {
-                var idx = Math.floor(Math.random() * Math.min(8, varied.length));
-                var moved = varied.splice(idx, 1)[0];
-                var insertAt = Math.floor(varied.length * 0.3 + Math.random() * varied.length * 0.5);
+            const topCount = Math.floor(2 + Math.random() * 4);
+            for (let i = 0; i < topCount; i++) {
+                const idx = Math.floor(Math.random() * Math.min(8, varied.length));
+                const moved = varied.splice(idx, 1)[0];
+                const insertAt = Math.floor(varied.length * 0.3 + Math.random() * varied.length * 0.5);
                 varied.splice(insertAt, 0, moved);
             }
         }
-        var lu = buildLineup(varied, lockedNames, excludedNames);
+        const lu = buildLineup(varied, lockedNames, excludedNames);
         if (!lu)
-            return "continue";
-        var key = lu.map(function (p) { return p.name; }).sort().join("|");
+            continue;
+        const key = lu.map(p => p.name).sort().join("|");
         if (used.has(key))
-            return "continue";
+            continue;
         used.add(key);
         lineups.push(lu);
-    };
-    for (var attempt = 0; attempt < maxAttempts && lineups.length < count; attempt++) {
-        _loop_2(attempt);
     }
     return lineups;
 }
 function lineupStats(lu) {
     return {
-        total: lu.reduce(function (s, p) { return s + p.salary; }, 0),
-        proj: lu.reduce(function (s, p) { return s + p.fppg; }, 0),
-        avgOwn: lu.reduce(function (s, p) { return s + p.ownership; }, 0) / lu.length,
-        chalk: lu.filter(function (p) { return p.ownership >= 30; }).length,
-        mid: lu.filter(function (p) { return p.ownership >= 10 && p.ownership < 30; }).length,
-        punt: lu.filter(function (p) { return p.ownership < 5; }).length,
-        anchor: lu.reduce(function (best, p) { return p.fppg > best.fppg ? p : best; }, lu[0]),
+        total: lu.reduce((s, p) => s + p.salary, 0),
+        proj: lu.reduce((s, p) => s + p.fppg, 0),
+        avgOwn: lu.reduce((s, p) => s + p.ownership, 0) / lu.length,
+        chalk: lu.filter(p => p.ownership >= 30).length,
+        mid: lu.filter(p => p.ownership >= 10 && p.ownership < 30).length,
+        punt: lu.filter(p => p.ownership < 5).length,
+        anchor: lu.reduce((best, p) => p.fppg > best.fppg ? p : best, lu[0]),
     };
 }
-// ?? SLATE GRADER ??????????????????????????????????????????????????????????
+// &#x2500;&#x2500; SLATE GRADER &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
 function gradeSlate(gamesList) {
     if (!gamesList || gamesList.length === 0)
         return null;
-    var totals = gamesList.map(function (g) { return g.total; }).filter(Boolean);
-    var impliedPts = gamesList.flatMap(function (g) { return [g.homeImpl, g.awayImpl]; }).filter(Boolean);
-    var avgTotal = totals.reduce(function (a, b) { return a + b; }, 0) / totals.length;
-    var highTotalGames = gamesList.filter(function (g) { return g.total >= 228; }).length;
-    var eliteGames = gamesList.filter(function (g) { return g.total >= 233; }).length;
-    var maxImpl = Math.max.apply(Math, impliedPts);
-    var score = 0;
-    var notes = [];
+    const totals = gamesList.map(g => g.total).filter(Boolean);
+    const impliedPts = gamesList.flatMap(g => [g.homeImpl, g.awayImpl]).filter(Boolean);
+    const avgTotal = totals.reduce((a, b) => a + b, 0) / totals.length;
+    const highTotalGames = gamesList.filter(g => g.total >= 228).length;
+    const eliteGames = gamesList.filter(g => g.total >= 233).length;
+    const maxImpl = Math.max(...impliedPts);
+    let score = 0;
+    let notes = [];
     // Game count (8 games = perfect)
     if (gamesList.length >= 8) {
         score += 25;
-        notes.push("? Full 8-game slate");
+        notes.push("&#x2705; Full 8-game slate");
     }
     else if (gamesList.length >= 6) {
         score += 15;
-        notes.push("?? " + gamesList.length + " games ? smaller slate");
+        notes.push("&#x26A0; " + gamesList.length + " games &#x2014; smaller slate");
     }
     else {
         score += 5;
-        notes.push("? Only " + gamesList.length + " games ? thin slate");
+        notes.push("&#x1F6AB; Only " + gamesList.length + " games &#x2014; thin slate");
     }
     // Average total
     if (avgTotal >= 228) {
         score += 25;
-        notes.push("? Avg O/U " + avgTotal.toFixed(1) + " ? high scoring");
+        notes.push("&#x2705; Avg O/U " + avgTotal.toFixed(1) + " &#x2014; high scoring");
     }
     else if (avgTotal >= 222) {
         score += 15;
-        notes.push("?? Avg O/U " + avgTotal.toFixed(1) + " ? moderate");
+        notes.push("&#x26A0; Avg O/U " + avgTotal.toFixed(1) + " &#x2014; moderate");
     }
     else {
         score += 5;
-        notes.push("? Avg O/U " + avgTotal.toFixed(1) + " ? low scoring slate");
+        notes.push("&#x1F6AB; Avg O/U " + avgTotal.toFixed(1) + " &#x2014; low scoring slate");
     }
     // High total games
     if (highTotalGames >= 3) {
         score += 25;
-        notes.push("? " + highTotalGames + " games O/U 228+ ? stacking gold");
+        notes.push("&#x2705; " + highTotalGames + " games O/U 228+ &#x2014; stacking gold");
     }
     else if (highTotalGames >= 1) {
         score += 15;
-        notes.push("?? " + highTotalGames + " game(s) O/U 228+");
+        notes.push("&#x26A0; " + highTotalGames + " game(s) O/U 228+");
     }
     else {
         score += 5;
-        notes.push("? No games over 228 ? tough to stack");
+        notes.push("&#x1F6AB; No games over 228 &#x2014; tough to stack");
     }
     // Elite implied team
     if (maxImpl >= 122) {
         score += 25;
-        notes.push("? " + maxImpl + " implied pts ? elite pace-up spot");
+        notes.push("&#x2705; " + maxImpl + " implied pts &#x2014; elite pace-up spot");
     }
     else if (maxImpl >= 116) {
         score += 15;
-        notes.push("?? " + maxImpl + " max implied ? decent spot");
+        notes.push("&#x26A0; " + maxImpl + " max implied &#x2014; decent spot");
     }
     else {
         score += 5;
-        notes.push("? Max implied only " + maxImpl + " ? no elite pace-up");
+        notes.push("&#x1F6AB; Max implied only " + maxImpl + " &#x2014; no elite pace-up");
     }
-    var grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
-    var playIt = score >= 55;
-    var recommendation = score >= 85 ? "? MUST PLAY ? elite slate" :
-        score >= 70 ? "? PLAY ? solid slate" :
-            score >= 55 ? "?? PLAY SMALL ? average slate" :
-                score >= 40 ? "? SKIP OR MIN ENTRY ? bad slate" :
-                    "? SKIP ? terrible slate";
-    return { score: score, grade: grade, notes: notes, recommendation: recommendation, playIt: playIt, highTotalGames: highTotalGames, avgTotal: avgTotal, maxImpl: maxImpl };
+    const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
+    const playIt = score >= 55;
+    const recommendation = score >= 85 ? "&#x1F525; MUST PLAY &#x2014; elite slate" :
+        score >= 70 ? "&#x2705; PLAY &#x2014; solid slate" :
+            score >= 55 ? "&#x26A0; PLAY SMALL &#x2014; average slate" :
+                score >= 40 ? "&#x1F6AB; SKIP OR MIN ENTRY &#x2014; bad slate" :
+                    "&#x1F6AB; SKIP &#x2014; terrible slate";
+    return { score, grade, notes, recommendation, playIt, highTotalGames, avgTotal, maxImpl };
 }
-// ?? STACK ENGINE ??????????????????????????????????????????????????????????
+// &#x2500;&#x2500; STACK ENGINE &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
 // Find the best game to stack based on Vegas totals
 function getBestStackGame(gamesList, players) {
     if (!gamesList || gamesList.length === 0)
         return null;
-    var scored = gamesList.map(function (g) {
-        var gamePlayers = players.filter(function (p) {
-            return p.team === g.home || p.team === g.away;
-        });
-        var topPlayers = gamePlayers.sort(function (a, b) { return b.fppg - a.fppg; }).slice(0, 6);
-        return __assign(__assign({}, g), { stackScore: (g.total || 220) * 0.5 + topPlayers.reduce(function (s, p) { return s + p.fppg; }, 0) * 0.3, topPlayers: topPlayers });
+    const scored = gamesList.map(g => {
+        const gamePlayers = players.filter(p => p.team === g.home || p.team === g.away);
+        const topPlayers = gamePlayers.sort((a, b) => b.fppg - a.fppg).slice(0, 6);
+        return Object.assign(Object.assign({}, g), { stackScore: (g.total || 220) * 0.5 + topPlayers.reduce((s, p) => s + p.fppg, 0) * 0.3, topPlayers });
     });
-    return scored.sort(function (a, b) { return b.stackScore - a.stackScore; })[0];
+    return scored.sort((a, b) => b.stackScore - a.stackScore)[0];
 }
 // Generate lineups with stack awareness
 function generateLineupsWithStrategy(players, count, lockedNames, excludedNames, gamesList, strategy) {
     // strategy: "chalk" | "leverage" | "tournament" | "mixed"
-    var allLineups = [];
-    var used = new Set();
-    var bestGame = getBestStackGame(gamesList, players);
-    var stackTeams = bestGame ? [bestGame.home, bestGame.away] : [];
+    const allLineups = [];
+    const used = new Set();
+    const bestGame = getBestStackGame(gamesList, players);
+    const stackTeams = bestGame ? [bestGame.home, bestGame.away] : [];
     // Split count by strategy
-    var chalkCount, leverageCount, tournCount;
+    let chalkCount, leverageCount, tournCount;
     if (strategy === "chalk") {
         chalkCount = count;
         leverageCount = 0;
@@ -422,82 +374,83 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         leverageCount = 0;
         tournCount = count;
     }
-    else { // mixed ? the millionaire way
+    else { // mixed &#x2014; the millionaire way
         chalkCount = Math.max(1, Math.round(count * 0.3));
         leverageCount = Math.max(1, Math.round(count * 0.4));
         tournCount = count - chalkCount - leverageCount;
     }
-    var buildBatch = function (batchCount, type) {
-        var _loop_3 = function (attempt) {
-            var pool = __spreadArray([], players, true);
+    const buildBatch = (batchCount, type) => {
+        for (let attempt = 0; attempt < batchCount * 50 && allLineups.filter(l => l._type === type).length < batchCount; attempt++) {
+            let pool = [...players];
             if (type === "chalk") {
-                // Sort by score, minimal noise ? maximize chalk high-ownership players
-                pool.sort(function (a, b) { return (b.score - a.score) + (Math.random() - 0.5) * 4; });
+                // Sort by score, minimal noise &#x2014; maximize chalk high-ownership players
+                pool.sort((a, b) => (b.score - a.score) + (Math.random() - 0.5) * 4);
             }
             else if (type === "leverage") {
                 // Stack bias: boost players from best game to top of pool
-                pool.sort(function (a, b) {
-                    var aBoost = stackTeams.includes(a.team) ? 8 : 0;
-                    var bBoost = stackTeams.includes(b.team) ? 8 : 0;
+                pool.sort((a, b) => {
+                    const aBoost = stackTeams.includes(a.team) ? 8 : 0;
+                    const bBoost = stackTeams.includes(b.team) ? 8 : 0;
                     return (b.score + bBoost) - (a.score + aBoost) + (Math.random() - 0.5) * 10;
                 });
             }
             else {
                 // Tournament: more randomness + occasionally force a mid-ownership pivot
-                pool.sort(function (a, b) { return (b.score - a.score) + (Math.random() - 0.5) * 20; });
+                pool.sort((a, b) => (b.score - a.score) + (Math.random() - 0.5) * 20);
                 // Bump up 1-2 mid-ownership (10-20%) players
-                var midPlayers = pool.filter(function (p) { return p.ownership >= 10 && p.ownership < 22; });
+                const midPlayers = pool.filter(p => p.ownership >= 10 && p.ownership < 22);
                 if (midPlayers.length > 0) {
-                    var pivot_1 = midPlayers[Math.floor(Math.random() * Math.min(midPlayers.length, 5))];
-                    pool = __spreadArray([pivot_1], pool.filter(function (p) { return p.name !== pivot_1.name; }), true);
+                    const pivot = midPlayers[Math.floor(Math.random() * Math.min(midPlayers.length, 5))];
+                    pool = [pivot, ...pool.filter(p => p.name !== pivot.name)];
                 }
             }
-            var lu = buildLineup(pool, lockedNames, excludedNames);
+            const lu = buildLineup(pool, lockedNames, excludedNames);
             if (!lu)
-                return "continue";
-            var key = lu.map(function (p) { return p.name; }).sort().join("|");
+                continue;
+            const key = lu.map(p => p.name).sort().join("|");
             if (used.has(key))
-                return "continue";
+                continue;
             used.add(key);
             // Check if this lineup has a stack (2+ players same game/team)
-            var gameCounts = {};
-            lu.forEach(function (p) { gameCounts[p.team] = (gameCounts[p.team] || 0) + 1; });
-            var hasStack = Object.values(gameCounts).some(function (c) { return c >= 2; });
+            const gameCounts = {};
+            lu.forEach(p => { gameCounts[p.team] = (gameCounts[p.team] || 0) + 1; });
+            const hasStack = Object.values(gameCounts).some(c => c >= 2);
             lu._type = type;
             lu._hasStack = hasStack;
             lu._stackGame = bestGame ? bestGame.gameStr : null;
             allLineups.push(lu);
-        };
-        for (var attempt = 0; attempt < batchCount * 50 && allLineups.filter(function (l) { return l._type === type; }).length < batchCount; attempt++) {
-            _loop_3(attempt);
         }
     };
     buildBatch(chalkCount, "chalk");
     buildBatch(leverageCount, "leverage");
     buildBatch(tournCount, "tournament");
-    // Flatten ? chalk first, then leverage, then tournament
-    return __spreadArray(__spreadArray(__spreadArray([], allLineups.filter(function (l) { return l._type === "chalk"; }), true), allLineups.filter(function (l) { return l._type === "leverage"; }), true), allLineups.filter(function (l) { return l._type === "tournament"; }), true);
+    // Flatten &#x2014; chalk first, then leverage, then tournament
+    return [
+        ...allLineups.filter(l => l._type === "chalk"),
+        ...allLineups.filter(l => l._type === "leverage"),
+        ...allLineups.filter(l => l._type === "tournament"),
+    ];
 }
 // Bankroll entry strategy
 function getEntryStrategy(bankroll, slateGrade) {
     if (!bankroll || bankroll <= 0)
         return null;
-    var playPct = slateGrade >= 70 ? 0.15 : slateGrade >= 55 ? 0.08 : 0.03;
-    var budget = +(bankroll * playPct).toFixed(2);
+    const playPct = slateGrade >= 70 ? 0.15 : slateGrade >= 55 ? 0.08 : 0.03;
+    const budget = +(bankroll * playPct).toFixed(2);
     return {
-        budget: budget,
+        budget,
         breakdown: [
             { type: "Mid-stakes ($3-5)", entries: Math.floor(budget * 0.70 / 4), stake: 4, pct: "70%" },
             { type: "Large field ($1)", entries: Math.floor(budget * 0.20 / 1), stake: 1, pct: "20%" },
             { type: "Big tournament ($25)", entries: Math.floor(budget * 0.10 / 25), stake: 25, pct: "10%" },
         ],
-        note: slateGrade >= 70 ? "Full send ? good slate" : slateGrade >= 55 ? "Half size ? average slate" : "Min entries only",
+        note: slateGrade >= 70 ? "Full send &#x2014; good slate" : slateGrade >= 55 ? "Half size &#x2014; average slate" : "Min entries only",
     };
 }
-// ?? INJURY PANEL ?????????????????????????????????????????????????????????
-var TONIGHT_INJURIES = [
-    // ?? OUTS ??
-    { name: "Jarrett Allen", team: "CLE", status: "OUT", reason: "Knee tendonitis", dfsImpact: "Mitchell/Mobley usage ?" },
+// &#x2500;&#x2500; INJURY PANEL &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+const TONIGHT_INJURIES = [
+    // &#x2500;&#x2500; OUTS &#x2500;&#x2500;
+    { name: "Jarrett Allen", team: "CLE", status: "OUT", reason: "Knee tendonitis", dfsImpact: "Mitchell/Mobley usage &#x2191;" },
     { name: "Max Strus", team: "CLE", status: "OUT", reason: "Foot surgery", dfsImpact: "Minor" },
     { name: "Tyrese Proctor", team: "CLE", status: "OUT", reason: "Quad strain", dfsImpact: "Minor" },
     { name: "Kyrie Irving", team: "DAL", status: "OUT", reason: "Knee surgery", dfsImpact: "Luka anchor role grows" },
@@ -505,29 +458,29 @@ var TONIGHT_INJURIES = [
     { name: "Dereck Lively II", team: "DAL", status: "OUT", reason: "Foot surgery", dfsImpact: "Minor" },
     { name: "Ja Morant", team: "MEM", status: "OUT", reason: "Elbow UCL sprain", dfsImpact: "MEM stack unplayable" },
     { name: "Santi Aldama", team: "MEM", status: "OUT", reason: "Knee mgmt", dfsImpact: "MEM stack unplayable" },
-    { name: "Tyrese Haliburton", team: "IND", status: "OUT", reason: "Achilles tear", dfsImpact: "? NYK stack ? IND depleted" },
-    { name: "Pascal Siakam", team: "IND", status: "OUT", reason: "Knee sprain", dfsImpact: "? NYK stack ? IND depleted" },
-    { name: "T.J. McConnell", team: "IND", status: "OUT", reason: "Hamstring", dfsImpact: "? NYK stack ? IND depleted" },
+    { name: "Tyrese Haliburton", team: "IND", status: "OUT", reason: "Achilles tear", dfsImpact: "&#x1F525; NYK stack &#x2014; IND depleted" },
+    { name: "Pascal Siakam", team: "IND", status: "OUT", reason: "Knee sprain", dfsImpact: "&#x1F525; NYK stack &#x2014; IND depleted" },
+    { name: "T.J. McConnell", team: "IND", status: "OUT", reason: "Hamstring", dfsImpact: "&#x1F525; NYK stack &#x2014; IND depleted" },
     { name: "Aaron Nesmith", team: "IND", status: "OUT", reason: "Ankle mgmt", dfsImpact: "Minor" },
     { name: "Obi Toppin", team: "IND", status: "OUT", reason: "Foot mgmt", dfsImpact: "Minor" },
-    { name: "Ausar Thompson", team: "DET", status: "OUT", reason: "Ankle sprain", dfsImpact: "Minor ? DET still huge fav" },
+    { name: "Ausar Thompson", team: "DET", status: "OUT", reason: "Ankle sprain", dfsImpact: "Minor &#x2014; DET still huge fav" },
     { name: "Caris LeVert", team: "DET", status: "OUT", reason: "Wrist sprain", dfsImpact: "Minor" },
     { name: "Scottie Barnes", team: "TOR", status: "OUT", reason: "Injury report", dfsImpact: "TOR value plays open up" },
     { name: "Trey Murphy III", team: "NOP", status: "OUT", reason: "Check FD CSV", dfsImpact: "NOP already unplayable" },
-    // ?? QUESTIONABLE ??
-    { name: "Josh Hart", team: "NYK", status: "Q", reason: "Knee soreness", dfsImpact: "Monitor ? NYK still plays well without" },
-    { name: "Karl-Anthony Towns", team: "NYK", status: "Q", reason: "On report", dfsImpact: "? If out ? Brunson/OG usage massive" },
-    { name: "Andrew Nembhard", team: "IND", status: "Q", reason: "Back/neck soreness", dfsImpact: "Likely starts ? IND has no one else" },
-    { name: "Ivica Zubac", team: "IND", status: "Q", reason: "Ankle sprain", dfsImpact: "If out ? IND completely exposed" },
-    // ?? USAGE BOOSTERS (players who benefit) ??
-    { name: "Donovan Mitchell", team: "CLE", status: "UP", reason: "Allen out ? usage ?", dfsImpact: "? Top anchor candidate" },
-    { name: "Evan Mobley", team: "CLE", status: "UP", reason: "Allen out ? rebounds/pts", dfsImpact: "Value play" },
-    { name: "Jalen Brunson", team: "NYK", status: "UP", reason: "IND decimated", dfsImpact: "? Lock candidate" },
-    { name: "Deni Avdija", team: "POR", status: "UP", reason: "UTA 6 players out", dfsImpact: "? POR 126.5 implied ? must play" },
-    { name: "Cade Cunningham", team: "DET", status: "UP", reason: "MEM missing Morant+", dfsImpact: "? DET 119.5 implied" },
+    // &#x2500;&#x2500; QUESTIONABLE &#x2500;&#x2500;
+    { name: "Josh Hart", team: "NYK", status: "Q", reason: "Knee soreness", dfsImpact: "Monitor &#x2014; NYK still plays well without" },
+    { name: "Karl-Anthony Towns", team: "NYK", status: "Q", reason: "On report", dfsImpact: "&#x1F6A8; If out &#x2192; Brunson/OG usage massive" },
+    { name: "Andrew Nembhard", team: "IND", status: "Q", reason: "Back/neck soreness", dfsImpact: "Likely starts &#x2014; IND has no one else" },
+    { name: "Ivica Zubac", team: "IND", status: "Q", reason: "Ankle sprain", dfsImpact: "If out &#x2192; IND completely exposed" },
+    // &#x2500;&#x2500; USAGE BOOSTERS (players who benefit) &#x2500;&#x2500;
+    { name: "Donovan Mitchell", team: "CLE", status: "UP", reason: "Allen out &#x2014; usage &#x2191;", dfsImpact: "&#x1F525; Top anchor candidate" },
+    { name: "Evan Mobley", team: "CLE", status: "UP", reason: "Allen out &#x2014; rebounds/pts", dfsImpact: "Value play" },
+    { name: "Jalen Brunson", team: "NYK", status: "UP", reason: "IND decimated", dfsImpact: "&#x1F525; Lock candidate" },
+    { name: "Deni Avdija", team: "POR", status: "UP", reason: "UTA 6 players out", dfsImpact: "&#x1F525; POR 126.5 implied &#x2014; must play" },
+    { name: "Cade Cunningham", team: "DET", status: "UP", reason: "MEM missing Morant+", dfsImpact: "&#x1F525; DET 119.5 implied" },
 ];
-// ?? CASCADE RULES ENGINE ??????????????????????????????????????????????????
-var CASCADE_RULES = [
+// &#x2500;&#x2500; CASCADE RULES ENGINE &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+const CASCADE_RULES = [
     { trigger: "Jarrett Allen", team: "CLE", beneficiaries: [
             { name: "Evan Mobley", ownBoost: 1.35, projBoost: 1.12, note: "Rebounds+pts fill" },
             { name: "Donovan Mitchell", ownBoost: 1.15, projBoost: 1.08, note: "Usage fills" },
@@ -570,64 +523,54 @@ var CASCADE_RULES = [
 ];
 function applyCascades(outPlayers, ownershipMap) {
     var _a;
-    var newMap = __assign({}, ownershipMap);
-    var log = [];
-    var _loop_4 = function (outName) {
-        var rules = CASCADE_RULES.filter(function (r) { return r.trigger.toLowerCase() === outName.toLowerCase(); });
-        for (var _b = 0, rules_1 = rules; _b < rules_1.length; _b++) {
-            var rule = rules_1[_b];
-            for (var _c = 0, _d = rule.beneficiaries; _c < _d.length; _c++) {
-                var b = _d[_c];
-                var key = b.name.toLowerCase();
-                var current = (_a = newMap[key]) !== null && _a !== void 0 ? _a : 15;
-                var boosted = Math.min(65, +(current * b.ownBoost).toFixed(1));
+    const newMap = Object.assign({}, ownershipMap);
+    const log = [];
+    for (const outName of outPlayers) {
+        const rules = CASCADE_RULES.filter(r => r.trigger.toLowerCase() === outName.toLowerCase());
+        for (const rule of rules) {
+            for (const b of rule.beneficiaries) {
+                const key = b.name.toLowerCase();
+                const current = (_a = newMap[key]) !== null && _a !== void 0 ? _a : 15;
+                const boosted = Math.min(65, +(current * b.ownBoost).toFixed(1));
                 newMap[key] = boosted;
                 log.push({ out: outName, player: b.name, from: current, to: boosted, note: b.note });
             }
         }
-    };
-    for (var _i = 0, outPlayers_1 = outPlayers; _i < outPlayers_1.length; _i++) {
-        var outName = outPlayers_1[_i];
-        _loop_4(outName);
     }
-    return { newMap: newMap, log: log };
+    return { newMap, log };
 }
-var statusColor = { OUT: "#ef4444", Q: "#f59e0b", UP: "#22c55e" };
-var statusBg = { OUT: "#1a0a0a", Q: "#1a1200", UP: "#0a1a0a" };
-function InjuryPanel(_a) {
-    var onExclude = _a.onExclude, excludedNames = _a.excludedNames;
-    var _b = useState("ALL"), filter = _b[0], setFilter = _b[1];
-    var filtered = filter === "ALL" ? TONIGHT_INJURIES : TONIGHT_INJURIES.filter(function (p) { return p.status === filter; });
+const statusColor = { OUT: "#ef4444", Q: "#f59e0b", UP: "#22c55e" };
+const statusBg = { OUT: "#1a0a0a", Q: "#1a1200", UP: "#0a1a0a" };
+function InjuryPanel({ onExclude, excludedNames }) {
+    const [filter, setFilter] = useState("ALL");
+    const filtered = filter === "ALL" ? TONIGHT_INJURIES : TONIGHT_INJURIES.filter(p => p.status === filter);
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } },
-                "Mar 13 official report ? ",
-                TONIGHT_INJURIES.filter(function (p) { return p.status === "OUT"; }).length,
-                " OUT ? ",
-                TONIGHT_INJURIES.filter(function (p) { return p.status === "Q"; }).length,
-                " Q ? ",
-                TONIGHT_INJURIES.filter(function (p) { return p.status === "UP"; }).length,
+                "Mar 13 official report \u00B7 ",
+                TONIGHT_INJURIES.filter(p => p.status === "OUT").length,
+                " OUT \u00B7 ",
+                TONIGHT_INJURIES.filter(p => p.status === "Q").length,
+                " Q \u00B7 ",
+                TONIGHT_INJURIES.filter(p => p.status === "UP").length,
                 " boosters"),
-            React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(function (f) { return (React.createElement("button", { key: f, onClick: function () { return setFilter(f); }, style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: "1px solid ".concat(filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"), background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "? BOOST" : f)); }))),
-        React.createElement("div", { style: { maxHeight: 360, overflowY: "auto" } }, filtered.map(function (p, i) { return (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: "1px solid ".concat(statusColor[p.status], "22") } },
-            React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 28, textAlign: "center", border: "1px solid ".concat(statusColor[p.status], "44") } }, p.status),
+            React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(f => (React.createElement("button", { key: f, onClick: () => setFilter(f), style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"}`, background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "&#x1F525; BOOST" : f))))),
+        React.createElement("div", { style: { maxHeight: 360, overflowY: "auto" } }, filtered.map((p, i) => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` } },
+            React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 28, textAlign: "center", border: `1px solid ${statusColor[p.status]}44` } }, p.status),
             React.createElement("span", { style: { fontSize: 10, color: "#3b82f6", minWidth: 28 } }, p.team),
             React.createElement("span", { style: { flex: 1, fontSize: 11, color: p.status === "OUT" ? "#94a3b8" : "#e2e8f0", fontWeight: p.status === "UP" ? 600 : 400, textDecoration: p.status === "OUT" ? "line-through" : "none" } }, p.name),
             React.createElement("span", { style: { fontSize: 9, color: "#4a6a80", flex: 1 } }, p.reason),
             React.createElement("span", { style: { fontSize: 9, color: p.status === "UP" ? "#22c55e" : p.status === "Q" ? "#f59e0b" : "#4a6a80", flex: 1 } }, p.dfsImpact),
-            p.status === "OUT" && (React.createElement("button", { onClick: function () { return onExclude(p.name); }, disabled: excludedNames.includes(p.name), style: { fontSize: 9, padding: "2px 7px", borderRadius: 4, border: "1px solid ".concat(excludedNames.includes(p.name) ? "#16a34a" : "#ef444466"), background: excludedNames.includes(p.name) ? "#16a34a22" : "#1a0a0a", color: excludedNames.includes(p.name) ? "#22c55e" : "#ef4444", cursor: "pointer", whiteSpace: "nowrap" } }, excludedNames.includes(p.name) ? "? OUT" : "EXCLUDE")))); }))));
+            p.status === "OUT" && (React.createElement("button", { onClick: () => onExclude(p.name), disabled: excludedNames.includes(p.name), style: { fontSize: 9, padding: "2px 7px", borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#16a34a" : "#ef444466"}`, background: excludedNames.includes(p.name) ? "#16a34a22" : "#1a0a0a", color: excludedNames.includes(p.name) ? "#22c55e" : "#ef4444", cursor: "pointer", whiteSpace: "nowrap" } }, excludedNames.includes(p.name) ? "&#x2713; OUT" : "EXCLUDE"))))))));
 }
-// ?? STATMUSE PANEL ???????????????????????????????????????????????????????
-function StatMusePanel(_a) {
-    var players = _a.players, statMuseMap = _a.statMuseMap, onManualUpdate = _a.onManualUpdate;
-    var _b = useState(""), search = _b[0], setSearch = _b[1];
-    var _c = useState(""), manualName = _c[0], setManualName = _c[1];
-    var _d = useState(""), manualFD = _d[0], setManualFD = _d[1];
-    var filtered = players.filter(function (p) {
-        return !search || p.name.toLowerCase().includes(search.toLowerCase());
-    }).slice(0, 40);
-    var trendIcon = function (t) { return t === "hot" ? "?" : t === "cold" ? "??" : "??"; };
-    var trendColor = function (t) { return t === "hot" ? "#22c55e" : t === "cold" ? "#60a5fa" : "#94a3b8"; };
+// &#x2500;&#x2500; STATMUSE PANEL &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
+    const [search, setSearch] = useState("");
+    const [manualName, setManualName] = useState("");
+    const [manualFD, setManualFD] = useState("");
+    const filtered = players.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())).slice(0, 40);
+    const trendIcon = (t) => t === "hot" ? "&#x1F525;" : t === "cold" ? "&#x2744;&#xFE0F;" : "&#x27A1;&#xFE0F;";
+    const trendColor = (t) => t === "hot" ? "#22c55e" : t === "cold" ? "#60a5fa" : "#94a3b8";
     return (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
         React.createElement("div", { style: { background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 } },
             React.createElement("div", { style: { fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 } }, "MANUAL FD AVG OVERRIDE"),
@@ -636,12 +579,12 @@ function StatMusePanel(_a) {
                 " ",
                 React.createElement("a", { href: "https://www.statmuse.com/nba", target: "_blank", rel: "noreferrer", style: { color: "#60a5fa" } }, "statmuse.com/nba"),
                 " ",
-                "? search player ? \"fanduel stat log\" ? enter their FD avg below."),
+                "\u2192 search player \u2192 \"fanduel stat log\" \u2192 enter their FD avg below."),
             React.createElement("div", { style: { display: "flex", gap: 8 } },
-                React.createElement("input", { list: "player-names", placeholder: "Player name...", value: manualName, onChange: function (e) { return setManualName(e.target.value); }, style: { flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12 } }),
-                React.createElement("datalist", { id: "player-names" }, players.map(function (p) { return React.createElement("option", { key: p.name, value: p.name }); })),
-                React.createElement("input", { type: "number", placeholder: "FD avg", value: manualFD, onChange: function (e) { return setManualFD(e.target.value); }, style: { width: 80, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#60a5fa", padding: "6px 10px", fontSize: 12 } }),
-                React.createElement("button", { onClick: function () {
+                React.createElement("input", { list: "player-names", placeholder: "Player name...", value: manualName, onChange: e => setManualName(e.target.value), style: { flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12 } }),
+                React.createElement("datalist", { id: "player-names" }, players.map(p => React.createElement("option", { key: p.name, value: p.name }))),
+                React.createElement("input", { type: "number", placeholder: "FD avg", value: manualFD, onChange: e => setManualFD(e.target.value), style: { width: 80, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#60a5fa", padding: "6px 10px", fontSize: 12 } }),
+                React.createElement("button", { onClick: () => {
                         if (manualName && manualFD) {
                             onManualUpdate(manualName, parseFloat(manualFD));
                             setManualName("");
@@ -650,9 +593,9 @@ function StatMusePanel(_a) {
                     }, style: { background: "#1d4ed8", border: "none", borderRadius: 6, color: "#fff", padding: "6px 14px", fontSize: 12, cursor: "pointer" } }, "SET"))),
         React.createElement("div", { style: { background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 } },
             React.createElement("div", { style: { fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 } }, "QUICK STATMUSE LOOKUP"),
-            React.createElement("input", { placeholder: "Filter players...", value: search, onChange: function (e) { return setSearch(e.target.value); }, style: { width: "100%", background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12, marginBottom: 8, boxSizing: "border-box" } }),
-            React.createElement("div", { style: { maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 } }, filtered.map(function (p) {
-                var sm = statMuseMap[p.name.toLowerCase()];
+            React.createElement("input", { placeholder: "Filter players...", value: search, onChange: e => setSearch(e.target.value), style: { width: "100%", background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12, marginBottom: 8, boxSizing: "border-box" } }),
+            React.createElement("div", { style: { maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 } }, filtered.map(p => {
+                const sm = statMuseMap[p.name.toLowerCase()];
                 return (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid #0d1e2e", fontSize: 11 } },
                     React.createElement("span", { style: { flex: 1, color: sm ? "#22c55e" : "#94a3b8" } }, p.name),
                     sm ? (React.createElement("span", { style: { color: trendColor(sm.trend), fontSize: 10 } },
@@ -662,7 +605,7 @@ function StatMusePanel(_a) {
                         " FD")) : (React.createElement("span", { style: { color: "#3b6280", fontSize: 10 } },
                         "CSV: ",
                         p.csvFppg.toFixed(1))),
-                    React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { color: "#3b82f6", fontSize: 10, textDecoration: "none", background: "#0d2235", border: "1px solid #1e3040", borderRadius: 4, padding: "2px 6px" } }, "? LOOKUP")));
+                    React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { color: "#3b82f6", fontSize: 10, textDecoration: "none", background: "#0d2235", border: "1px solid #1e3040", borderRadius: 4, padding: "2px 6px" } }, "\u2197 LOOKUP")));
             }))),
         React.createElement("div", { style: { background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 } },
             React.createElement("div", { style: { fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 } }, "DATA COVERAGE"),
@@ -677,14 +620,13 @@ function StatMusePanel(_a) {
                     React.createElement("div", { style: { fontSize: 22, fontWeight: 700, color: "#60a5fa" } }, players.length),
                     React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } }, "total"))))));
 }
-// ?? OWNERSHIP EDITOR ?????????????????????????????????????????????????????
-function OwnershipEditor(_a) {
-    var players = _a.players, ownershipMap = _a.ownershipMap, onUpdate = _a.onUpdate;
+// &#x2500;&#x2500; OWNERSHIP EDITOR &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+function OwnershipEditor({ players, ownershipMap, onUpdate }) {
     return (React.createElement("div", { style: { maxHeight: 380, overflowY: "auto" } },
         React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
             React.createElement("thead", null,
-                React.createElement("tr", { style: { position: "sticky", top: 0, background: "#0f1923", zIndex: 1 } }, ["Player", "Pos", "Salary", "FD Avg", "Src", "Proj Own%"].map(function (h) { return (React.createElement("th", { key: h, style: { padding: "6px 8px", textAlign: "left", color: "#7aa2c0", fontWeight: 500, borderBottom: "1px solid #1e3040", fontSize: 10 } }, h)); }))),
-            React.createElement("tbody", null, players.slice(0, 60).map(function (p, i) {
+                React.createElement("tr", { style: { position: "sticky", top: 0, background: "#0f1923", zIndex: 1 } }, ["Player", "Pos", "Salary", "FD Avg", "Src", "Proj Own%"].map(h => (React.createElement("th", { key: h, style: { padding: "6px 8px", textAlign: "left", color: "#7aa2c0", fontWeight: 500, borderBottom: "1px solid #1e3040", fontSize: 10 } }, h))))),
+            React.createElement("tbody", null, players.slice(0, 60).map((p, i) => {
                 var _a;
                 return (React.createElement("tr", { key: p.name, style: { background: i % 2 === 0 ? "transparent" : "#0a1520" } },
                     React.createElement("td", { style: { padding: "4px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0" } }, p.name),
@@ -697,21 +639,20 @@ function OwnershipEditor(_a) {
                         React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3,
                                 background: p.statMuseFD ? "#16a34a33" : "#1e3040",
                                 color: p.statMuseFD ? "#22c55e" : "#4a6a80",
-                                border: "1px solid ".concat(p.statMuseFD ? "#16a34a55" : "#1e3040")
+                                border: `1px solid ${p.statMuseFD ? "#16a34a55" : "#1e3040"}`
                             } }, p.statMuseFD ? "SM" : "CSV")),
                     React.createElement("td", { style: { padding: "4px 8px" } },
-                        React.createElement("input", { type: "number", min: "0", max: "100", step: "0.5", value: (_a = ownershipMap[p.name.toLowerCase()]) !== null && _a !== void 0 ? _a : 15, onChange: function (e) { return onUpdate(p.name, parseFloat(e.target.value) || 0); }, style: { width: 60, background: "#1a2e40", border: "1px solid #2a4560", color: "#e2e8f0", borderRadius: 4, padding: "2px 6px", fontSize: 12 } }))));
+                        React.createElement("input", { type: "number", min: "0", max: "100", step: "0.5", value: (_a = ownershipMap[p.name.toLowerCase()]) !== null && _a !== void 0 ? _a : 15, onChange: e => onUpdate(p.name, parseFloat(e.target.value) || 0), style: { width: 60, background: "#1a2e40", border: "1px solid #2a4560", color: "#e2e8f0", borderRadius: 4, padding: "2px 6px", fontSize: 12 } }))));
             })))));
 }
-// ?? LINEUP CARD ??????????????????????????????????????????????????????????
-function LineupCard(_a) {
-    var lineup = _a.lineup, index = _a.index, isSelected = _a.isSelected, onSelect = _a.onSelect;
-    var stats = lineupStats(lineup);
-    var sorted = __spreadArray([], lineup, true).sort(function (a, b) { return POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot); });
-    var ownColor = function (o) { return o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171"; };
-    return (React.createElement("div", { onClick: function () { return onSelect(index); }, style: {
+// &#x2500;&#x2500; LINEUP CARD &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
+function LineupCard({ lineup, index, isSelected, onSelect }) {
+    const stats = lineupStats(lineup);
+    const sorted = [...lineup].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
+    const ownColor = (o) => o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171";
+    return (React.createElement("div", { onClick: () => onSelect(index), style: {
             background: isSelected ? "#0d2235" : "#091520",
-            border: "1px solid ".concat(isSelected ? "#3b82f6" : "#1e3040"),
+            border: `1px solid ${isSelected ? "#3b82f6" : "#1e3040"}`,
             borderRadius: 10, padding: "12px 14px", cursor: "pointer", marginBottom: 8, transition: "all 0.15s"
         } },
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
@@ -723,8 +664,8 @@ function LineupCard(_a) {
                         fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 700, letterSpacing: 1,
                         background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : "#a78bfa22",
                         color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : "#a78bfa",
-                        border: "1px solid ".concat(lineup._type === "chalk" ? "#f59e0b44" : lineup._type === "leverage" ? "#22c55e44" : "#a78bfa44"),
-                    } }, lineup._type === "chalk" ? "? CHALK" : lineup._type === "leverage" ? "? LEVERAGE" : "? TOURN")),
+                        border: `1px solid ${lineup._type === "chalk" ? "#f59e0b44" : lineup._type === "leverage" ? "#22c55e44" : "#a78bfa44"}`,
+                    } }, lineup._type === "chalk" ? "&#x1F4CC; CHALK" : lineup._type === "leverage" ? "&#x1F517; LEVERAGE" : "&#x1F680; TOURN")),
                 lineup._hasStack && (React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e", border: "1px solid #22c55e44" } }, "STACKED")),
                 React.createElement("span", { style: { color: "#64b587", fontWeight: 600 } }, stats.proj.toFixed(1)),
                 React.createElement("span", { style: { color: "#94a3b8" } },
@@ -738,46 +679,46 @@ function LineupCard(_a) {
                     "M",
                     stats.mid),
                 React.createElement("span", { style: { background: "#94a3b822", color: "#94a3b8", border: "1px solid #94a3b844", borderRadius: 4, padding: "1px 5px" } },
-                    "?",
+                    "\u00D8",
                     stats.avgOwn.toFixed(0),
                     "%"))),
         React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
-            React.createElement("tbody", null, sorted.map(function (p, i) { return (React.createElement("tr", { key: i, style: { borderTop: "1px solid #0f2030" } },
+            React.createElement("tbody", null, sorted.map((p, i) => (React.createElement("tr", { key: i, style: { borderTop: "1px solid #0f2030" } },
                 React.createElement("td", { style: { padding: "2px 0", color: "#3b82f6", width: 24, fontWeight: 700, fontSize: 10 } }, p.slot),
                 React.createElement("td", { style: { padding: "2px 4px", color: "#e2e8f0", fontWeight: p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD ? 700 : 400 } },
                     p.name,
-                    p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "?"),
-                    p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD && React.createElement("span", { style: { color: "#f59e0b", fontSize: 10, marginLeft: 2 } }, "?")),
+                    p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\u25CF"),
+                    p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD && React.createElement("span", { style: { color: "#f59e0b", fontSize: 10, marginLeft: 2 } }, "\u26A1")),
                 React.createElement("td", { style: { padding: "2px 4px", color: "#64b587", textAlign: "right" } }, p.fppg.toFixed(1)),
                 React.createElement("td", { style: { padding: "2px 4px", textAlign: "right" } },
                     React.createElement("span", { style: { color: ownColor(p.ownership), fontSize: 10 } },
                         p.ownership.toFixed(0),
-                        "%")))); })))));
+                        "%")))))))));
 }
-// ?? MAIN APP ?????????????????????????????????????????????????????????????
+// &#x2500;&#x2500; MAIN APP &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;
 function App() {
-    var _a = useState({}), vegasMap = _a[0], setVegasMap = _a[1];
-    var _b = useState([]), vegasGames = _b[0], setVegasGames = _b[1];
-    var _c = useState("idle"), vegasStatus = _c[0], setVegasStatus = _c[1];
-    var _d = useState(""), vegasMsg = _d[0], setVegasMsg = _d[1];
-    var _e = useState("upload"), step = _e[0], setStep = _e[1];
-    var _f = useState(""), csvText = _f[0], setCsvText = _f[1];
-    var _g = useState([]), players = _g[0], setPlayers = _g[1];
-    var _h = useState({}), ownershipMap = _h[0], setOwnershipMap = _h[1];
-    var _j = useState({}), statMuseMap = _j[0], setStatMuseMap = _j[1];
-    var _k = useState([]), lineups = _k[0], setLineups = _k[1];
-    var _l = useState(0), selectedLineup = _l[0], setSelectedLineup = _l[1];
-    var _m = useState([]), lockedNames = _m[0], setLockedNames = _m[1];
-    var _o = useState([]), excludedNames = _o[0], setExcludedNames = _o[1];
-    var _p = useState([]), cascadeLog = _p[0], setCascadeLog = _p[1];
-    var _q = useState(null), lastGenTime = _q[0], setLastGenTime = _q[1];
-    var _r = useState(10), lineupCount = _r[0], setLineupCount = _r[1];
-    var _s = useState(false), generating = _s[0], setGenerating = _s[1];
-    var _t = useState("lineups"), activeTab = _t[0], setActiveTab = _t[1];
-    var _u = useState("ownership"), rightTab = _u[0], setRightTab = _u[1];
-    var _v = useState("mixed"), lineupStrategy = _v[0], setLineupStrategy = _v[1];
-    var _w = useState(""), bankroll = _w[0], setBankroll = _w[1];
-    var _x = useState([
+    const [vegasMap, setVegasMap] = useState({});
+    const [vegasGames, setVegasGames] = useState([]);
+    const [vegasStatus, setVegasStatus] = useState("idle");
+    const [vegasMsg, setVegasMsg] = useState("");
+    const [step, setStep] = useState("upload");
+    const [csvText, setCsvText] = useState("");
+    const [players, setPlayers] = useState([]);
+    const [ownershipMap, setOwnershipMap] = useState({});
+    const [statMuseMap, setStatMuseMap] = useState({});
+    const [lineups, setLineups] = useState([]);
+    const [selectedLineup, setSelectedLineup] = useState(0);
+    const [lockedNames, setLockedNames] = useState([]);
+    const [excludedNames, setExcludedNames] = useState([]);
+    const [cascadeLog, setCascadeLog] = useState([]);
+    const [lastGenTime, setLastGenTime] = useState(null);
+    const [lineupCount, setLineupCount] = useState(10);
+    const [generating, setGenerating] = useState(false);
+    const [activeTab, setActiveTab] = useState("lineups");
+    const [rightTab, setRightTab] = useState("ownership");
+    const [lineupStrategy, setLineupStrategy] = useState("mixed");
+    const [bankroll, setBankroll] = useState("");
+    const [lineMovement, setLineMovement] = useState([
         { gameStr: "CLE@DAL", openSpread: -8.0, currentSpread: -12.5, openTotal: 224.0, currentTotal: 218.5 },
         { gameStr: "MEM@DET", openSpread: -6.5, currentSpread: -14.5, openTotal: 228.0, currentTotal: 224.5 },
         { gameStr: "NYK@IND", openSpread: 1.5, currentSpread: 13.5, openTotal: 230.0, currentTotal: 226.5 },
@@ -786,19 +727,19 @@ function App() {
         { gameStr: "UTA@POR", openSpread: -11.5, currentSpread: -17.5, openTotal: 239.0, currentTotal: 235.5 },
         { gameStr: "MIN@GSW", openSpread: 5.5, currentSpread: 5.5, openTotal: 228.5, currentTotal: 228.5 },
         { gameStr: "CHI@LAC", openSpread: -14.5, currentSpread: -14.5, openTotal: 226.0, currentTotal: 226.0 },
-    ]), lineMovement = _x[0], setLineMovement = _x[1];
-    var fileRef = useRef();
-    var rebuildPlayers = useCallback(function (csv, ownMap, smMap) {
-        var parsed = parsePlayers(csv, ownMap, smMap);
+    ]);
+    const fileRef = useRef();
+    const rebuildPlayers = useCallback((csv, ownMap, smMap) => {
+        const parsed = parsePlayers(csv, ownMap, smMap);
         setPlayers(parsed);
         return parsed;
     }, []);
-    var handleCSV = useCallback(function (text) {
+    const handleCSV = useCallback((text) => {
         setCsvText(text);
-        var defaultOwn = {};
-        text.trim().split("\n").slice(1).forEach(function (line) {
-            var cols = line.split(",");
-            var name = (cols[2] || "").trim().toLowerCase();
+        const defaultOwn = {};
+        text.trim().split("\n").slice(1).forEach(line => {
+            const cols = line.split(",");
+            const name = (cols[2] || "").trim().toLowerCase();
             if (name)
                 defaultOwn[name] = 15;
         });
@@ -807,71 +748,69 @@ function App() {
         setStatMuseMap({});
         setStep("build");
     }, [rebuildPlayers]);
-    var handleFile = function (e) {
-        var file = e.target.files[0];
+    const handleFile = (e) => {
+        const file = e.target.files[0];
         if (!file)
             return;
-        var reader = new FileReader();
-        reader.onload = function (ev) { return handleCSV(ev.target.result); };
+        const reader = new FileReader();
+        reader.onload = (ev) => handleCSV(ev.target.result);
         reader.readAsText(file);
     };
-    var updateOwnership = function (name, val) {
-        var _a;
-        var key = name.toLowerCase();
-        var newMap = __assign(__assign({}, ownershipMap), (_a = {}, _a[key] = val, _a));
+    const updateOwnership = (name, val) => {
+        const key = name.toLowerCase();
+        const newMap = Object.assign(Object.assign({}, ownershipMap), { [key]: val });
         setOwnershipMap(newMap);
         rebuildPlayers(csvText, newMap, statMuseMap);
     };
     // Manual StatMuse override: user enters player name + FD avg from StatMuse
-    var handleStatMuseManual = function (name, fdAvg) {
-        var _a;
-        var key = name.toLowerCase();
-        // Estimate trend from single point ? if they enter it, assume it's intentional
-        var newSM = __assign(__assign({}, statMuseMap), (_a = {}, _a[key] = { fdAvg: fdAvg, lastGame: null, trend: "neutral" }, _a));
+    const handleStatMuseManual = (name, fdAvg) => {
+        const key = name.toLowerCase();
+        // Estimate trend from single point &#x2014; if they enter it, assume it's intentional
+        const newSM = Object.assign(Object.assign({}, statMuseMap), { [key]: { fdAvg, lastGame: null, trend: "neutral" } });
         setStatMuseMap(newSM);
         rebuildPlayers(csvText, ownershipMap, newSM);
     };
-    var handleFetchVegas = function (currentPlayers) {
+    const handleFetchVegas = (currentPlayers) => {
         setVegasStatus("loading");
         setVegasMsg("Loading tonight\'s slate...");
         try {
-            var _a = getHardcodedVegasData(), teamMap_1 = _a.teamMap, gamesList = _a.gamesList, gamesCount = _a.gamesCount;
-            setVegasMap(teamMap_1);
+            const { teamMap, gamesList, gamesCount } = getHardcodedVegasData();
+            setVegasMap(teamMap);
             setVegasGames(gamesList);
-            var pool = currentPlayers || players;
-            var newOwnMap_1 = __assign({}, ownershipMap);
-            pool.forEach(function (p) {
-                var est = estimateOwnership(p, teamMap_1);
-                newOwnMap_1[p.name.toLowerCase()] = est;
+            const pool = currentPlayers || players;
+            const newOwnMap = Object.assign({}, ownershipMap);
+            pool.forEach(p => {
+                const est = estimateOwnership(p, teamMap);
+                newOwnMap[p.name.toLowerCase()] = est;
             });
-            setOwnershipMap(newOwnMap_1);
-            rebuildPlayers(csvText, newOwnMap_1, statMuseMap);
+            setOwnershipMap(newOwnMap);
+            rebuildPlayers(csvText, newOwnMap, statMuseMap);
             setVegasStatus("done");
-            setVegasMsg("? ".concat(gamesCount, " games loaded ? Mar 13 slate ? ownership estimated"));
+            setVegasMsg(`&#x2705; ${gamesCount} games loaded &#xB7; Mar 13 slate &#xB7; ownership estimated`);
         }
         catch (e) {
             setVegasStatus("error");
-            setVegasMsg("? ".concat(e.message));
+            setVegasMsg(`&#x274C; ${e.message}`);
         }
     };
-    var applyLineMovement = function () {
-        var newOwnMap = __assign({}, ownershipMap);
-        lineMovement.forEach(function (g) {
-            var spreadDelta = +(g.currentSpread - g.openSpread).toFixed(1);
-            var totalDelta = +(g.currentTotal - g.openTotal).toFixed(1);
-            var parts = g.gameStr.split("@");
-            var away = parts[0], home = parts[1];
-            players.forEach(function (p) {
+    const applyLineMovement = () => {
+        const newOwnMap = Object.assign({}, ownershipMap);
+        lineMovement.forEach(g => {
+            const spreadDelta = +(g.currentSpread - g.openSpread).toFixed(1);
+            const totalDelta = +(g.currentTotal - g.openTotal).toFixed(1);
+            const parts = g.gameStr.split("@");
+            const away = parts[0], home = parts[1];
+            players.forEach(p => {
                 var _a;
-                var key = p.name.toLowerCase();
-                var onHome = p.team === home;
-                var onAway = p.team === away;
+                const key = p.name.toLowerCase();
+                const onHome = p.team === home;
+                const onAway = p.team === away;
                 if (!onHome && !onAway)
                     return;
-                var factor = 1.0;
+                let factor = 1.0;
                 if (Math.abs(spreadDelta) >= 2) {
-                    var favoredIsHome = g.currentSpread < 0;
-                    var onFavored = favoredIsHome ? onHome : onAway;
+                    const favoredIsHome = g.currentSpread < 0;
+                    const onFavored = favoredIsHome ? onHome : onAway;
                     factor *= onFavored ? 1.12 : 0.88;
                 }
                 if (totalDelta >= 2)
@@ -886,10 +825,10 @@ function App() {
         setOwnershipMap(newOwnMap);
         rebuildPlayers(csvText, newOwnMap, statMuseMap);
     };
-    var handleGenerate = function () {
+    const handleGenerate = () => {
         setGenerating(true);
-        setTimeout(function () {
-            var lus = generateLineupsWithStrategy(players, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
+        setTimeout(() => {
+            const lus = generateLineupsWithStrategy(players, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
             setLineups(lus);
             setSelectedLineup(0);
             setStep("results");
@@ -898,49 +837,43 @@ function App() {
             setGenerating(false);
         }, 80);
     };
-    var toggleLock = function (name) {
-        setLockedNames(function (p) { return p.includes(name) ? p.filter(function (n) { return n !== name; }) : __spreadArray(__spreadArray([], p, true), [name], false); });
-        setExcludedNames(function (p) { return p.filter(function (n) { return n !== name; }); });
+    const toggleLock = (name) => {
+        setLockedNames(p => p.includes(name) ? p.filter(n => n !== name) : [...p, name]);
+        setExcludedNames(p => p.filter(n => n !== name));
     };
-    var toggleExclude = function (name) {
-        setExcludedNames(function (prev) {
-            var next = prev.includes(name) ? prev.filter(function (n) { return n !== name; }) : __spreadArray(__spreadArray([], prev, true), [name], false);
+    const toggleExclude = (name) => {
+        setExcludedNames(prev => {
+            const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
             // Apply cascades whenever exclusion list changes
-            var outList = next.filter(function (n) { return TONIGHT_INJURIES.some(function (i) { return i.name === n && i.status === "OUT"; }); });
-            var _a = applyCascades(outList, ownershipMap), newMap = _a.newMap, log = _a.log;
+            const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
+            const { newMap, log } = applyCascades(outList, ownershipMap);
             setCascadeLog(log);
             setOwnershipMap(newMap);
             rebuildPlayers(csvText, newMap, statMuseMap);
             return next;
         });
-        setLockedNames(function (p) { return p.filter(function (n) { return n !== name; }); });
+        setLockedNames(p => p.filter(n => n !== name));
     };
-    var S = {
+    const S = {
         app: { minHeight: "100vh", background: "#060e18", color: "#e2e8f0", fontFamily: "'IBM Plex Mono', monospace", paddingBottom: 40 },
         hdr: { background: "linear-gradient(180deg,#0a1f35 0%,#060e18 100%)", borderBottom: "1px solid #1e3040", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" },
-        pill: function (a) { return ({ padding: "4px 12px", borderRadius: 20, border: "1px solid ".concat(a ? "#3b82f6" : "#1e3040"), background: a ? "#1a3550" : "transparent", color: a ? "#60a5fa" : "#4a6a80", fontSize: 11, cursor: "pointer", letterSpacing: 1 }); },
+        pill: (a) => ({ padding: "4px 12px", borderRadius: 20, border: `1px solid ${a ? "#3b82f6" : "#1e3040"}`, background: a ? "#1a3550" : "transparent", color: a ? "#60a5fa" : "#4a6a80", fontSize: 11, cursor: "pointer", letterSpacing: 1 }),
         card: { background: "#091520", border: "1px solid #1e3040", borderRadius: 12, padding: 20 },
-        btn: function (v) {
-            if (v === void 0) { v = "primary"; }
-            return ({ padding: "9px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 12, letterSpacing: 1, background: v === "primary" ? "#2563eb" : v === "success" ? "#16a34a" : "#1e3040", color: v === "ghost" ? "#94a3b8" : "#fff", transition: "all 0.15s" });
-        },
+        btn: (v = "primary") => ({ padding: "9px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 12, letterSpacing: 1, background: v === "primary" ? "#2563eb" : v === "success" ? "#16a34a" : "#1e3040", color: v === "ghost" ? "#94a3b8" : "#fff", transition: "all 0.15s" }),
         sec: { padding: "20px 24px" },
     };
     return (React.createElement("div", { style: S.app },
         React.createElement("div", { style: S.hdr },
             React.createElement("div", null,
                 React.createElement("div", { style: { fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" } }, "COURT EDGE"),
-                React.createElement("div", { style: { fontSize: 9, color: "#3b82f6", letterSpacing: 3 } }, "NBA DFS OPTIMIZER v4 ? STACK + SLATE GRADE + BANKROLL")),
-            React.createElement("div", { style: { display: "flex", gap: 6 } }, [["upload", "1.UPLOAD"], ["build", "2.BUILD"], ["results", "3.RESULTS"]].map(function (_a) {
-                var st = _a[0], label = _a[1];
-                return (React.createElement("button", { key: st, style: S.pill(step === st), onClick: function () { return players.length > 0 && setStep(st); } }, label));
-            }))),
+                React.createElement("div", { style: { fontSize: 9, color: "#3b82f6", letterSpacing: 3 } }, "NBA DFS OPTIMIZER v4 \u00B7 STACK + SLATE GRADE + BANKROLL")),
+            React.createElement("div", { style: { display: "flex", gap: 6 } }, [["upload", "1.UPLOAD"], ["build", "2.BUILD"], ["results", "3.RESULTS"]].map(([st, label]) => (React.createElement("button", { key: st, style: S.pill(step === st), onClick: () => players.length > 0 && setStep(st) }, label))))),
         step === "upload" && (React.createElement("div", { style: { maxWidth: 620, margin: "40px auto", padding: "0 24px" } },
-            (function () {
-                var gamesList = getHardcodedVegasData().gamesList;
-                var g = gradeSlate(gamesList);
-                var gradeColor = g.grade === "A" ? "#22c55e" : g.grade === "B" ? "#60a5fa" : g.grade === "C" ? "#f59e0b" : "#ef4444";
-                return (React.createElement("div", { style: { marginBottom: 16, background: "#091520", border: "1px solid ".concat(gradeColor, "44"), borderRadius: 12, padding: 18 } },
+            (() => {
+                const { gamesList } = getHardcodedVegasData();
+                const g = gradeSlate(gamesList);
+                const gradeColor = g.grade === "A" ? "#22c55e" : g.grade === "B" ? "#60a5fa" : g.grade === "C" ? "#f59e0b" : "#ef4444";
+                return (React.createElement("div", { style: { marginBottom: 16, background: "#091520", border: `1px solid ${gradeColor}44`, borderRadius: 12, padding: 18 } },
                     React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 12 } },
                         React.createElement("div", { style: { textAlign: "center", minWidth: 56 } },
                             React.createElement("div", { style: { fontSize: 42, fontWeight: 900, color: gradeColor, lineHeight: 1 } }, g.grade),
@@ -949,86 +882,83 @@ function App() {
                             React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: gradeColor, marginBottom: 3 } }, g.recommendation),
                             React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } },
                                 gamesList.length,
-                                " games ? Avg O/U ",
+                                " games \u00B7 Avg O/U ",
                                 g.avgTotal.toFixed(1),
-                                " ? ",
+                                " \u00B7 ",
                                 g.highTotalGames,
-                                " game(s) 228+ ? Max implied ",
+                                " game(s) 228+ \u00B7 Max implied ",
                                 g.maxImpl)),
                         React.createElement("div", { style: { textAlign: "right" } },
                             React.createElement("div", { style: { fontSize: 22, fontWeight: 700, color: gradeColor } },
                                 g.score,
                                 "/100"),
                             React.createElement("div", { style: { fontSize: 9, color: "#4a6a80" } }, "SCORE"))),
-                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } }, g.notes.map(function (n, i) { return (React.createElement("div", { key: i, style: { fontSize: 10, color: n.startsWith("?") ? "#22c55e" : n.startsWith("??") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" } }, n)); }))));
+                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } }, g.notes.map((n, i) => (React.createElement("div", { key: i, style: { fontSize: 10, color: n.startsWith("&#x2705;") ? "#22c55e" : n.startsWith("&#x26A0;") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" } }, n))))));
             })(),
             React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { textAlign: "center", marginBottom: 28 } },
-                    React.createElement("div", { style: { fontSize: 36, marginBottom: 10 } }, "?"),
+                    React.createElement("div", { style: { fontSize: 36, marginBottom: 10 } }, "\uD83C\uDFC0"),
                     React.createElement("div", { style: { fontSize: 18, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 } }, "UPLOAD FANDUEL CSV"),
                     React.createElement("div", { style: { fontSize: 11, color: "#4a6a80", lineHeight: 1.8 } },
                         "Export player list from FanDuel contest lobby.",
                         React.createElement("br", null),
                         "Then enrich with StatMuse live FD averages in step 2.")),
-                React.createElement("div", { onClick: function () { return fileRef.current.click(); }, style: { border: "2px dashed #1e3040", borderRadius: 10, padding: "36px 20px", textAlign: "center", cursor: "pointer" }, onMouseOver: function (e) { return e.currentTarget.style.borderColor = "#3b82f6"; }, onMouseOut: function (e) { return e.currentTarget.style.borderColor = "#1e3040"; } },
+                React.createElement("div", { onClick: () => fileRef.current.click(), style: { border: "2px dashed #1e3040", borderRadius: 10, padding: "36px 20px", textAlign: "center", cursor: "pointer" }, onMouseOver: e => e.currentTarget.style.borderColor = "#3b82f6", onMouseOut: e => e.currentTarget.style.borderColor = "#1e3040" },
                     React.createElement("div", { style: { fontSize: 13, color: "#60a5fa", marginBottom: 4 } }, "Click to select CSV"),
                     React.createElement("div", { style: { fontSize: 11, color: "#4a6a80" } }, "FanDuel-NBA-*.csv")),
                 React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } }),
                 React.createElement("div", { style: { marginTop: 18, padding: "12px 14px", background: "#0a1a2a", borderRadius: 8, border: "1px solid #1e3040" } },
                     React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 } }, "WHAT'S NEW IN V4"),
-                    ["? Slate Grader ? A/B/C/D/F before you enter", "? Game stacking engine ? correlate high-total games", "? MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "? Bankroll advisor ? how many entries at what stakes"].map(function (r) { return (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r)); }))))),
+                    ["&#x1F3AF; Slate Grader &#x2014; A/B/C/D/F before you enter", "&#x1F517; Game stacking engine &#x2014; correlate high-total games", "&#x1F4CA; MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "&#x1F4B0; Bankroll advisor &#x2014; how many entries at what stakes"].map(r => (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r))))))),
         step === "build" && (React.createElement("div", { style: S.sec },
             React.createElement("div", { style: { marginBottom: 14, background: "#091520", border: "1px solid #1e3040", borderRadius: 10, overflow: "hidden" } },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: vegasStatus === "done" ? "1px solid #1e3040" : "none" } },
-                    React.createElement("button", { onClick: function () { return handleFetchVegas(players); }, disabled: vegasStatus === "loading" || players.length === 0, style: __assign(__assign({}, S.btn("primary")), { padding: "7px 18px", fontSize: 11, letterSpacing: 1, background: vegasStatus === "done" ? "#16a34a" : "#2563eb", whiteSpace: "nowrap" }) }, vegasStatus === "loading" ? "? FETCHING..." : vegasStatus === "done" ? "? VEGAS LIVE" : "? FETCH VEGAS INTEL"),
+                    React.createElement("button", { onClick: () => handleFetchVegas(players), disabled: vegasStatus === "loading" || players.length === 0, style: Object.assign(Object.assign({}, S.btn("primary")), { padding: "7px 18px", fontSize: 11, letterSpacing: 1, background: vegasStatus === "done" ? "#16a34a" : "#2563eb", whiteSpace: "nowrap" }) }, vegasStatus === "loading" ? "&#x23F3; FETCHING..." : vegasStatus === "done" ? "&#x2705; VEGAS LIVE" : "&#x26A1; FETCH VEGAS INTEL"),
                     vegasMsg && (React.createElement("span", { style: { fontSize: 11, color: vegasStatus === "error" ? "#f87171" : vegasStatus === "done" ? "#22c55e" : "#94a3b8" } }, vegasMsg)),
-                    vegasStatus === "done" && (React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" } }, Object.entries(vegasMap).slice(0, 8).map(function (_a) {
-                        var team = _a[0], v = _a[1];
-                        return (React.createElement("span", { key: team, style: { color: v.impliedPts >= 115 ? "#f59e0b" : "#60a5fa" } },
-                            React.createElement("span", { style: { color: "#4a6a80" } },
-                                team,
-                                " "),
-                            v.impliedPts));
-                    }))),
+                    vegasStatus === "done" && (React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" } }, Object.entries(vegasMap).slice(0, 8).map(([team, v]) => (React.createElement("span", { key: team, style: { color: v.impliedPts >= 115 ? "#f59e0b" : "#60a5fa" } },
+                        React.createElement("span", { style: { color: "#4a6a80" } },
+                            team,
+                            " "),
+                        v.impliedPts))))),
                     vegasStatus === "idle" && (React.createElement("span", { style: { fontSize: 11, color: "#4a6a80" } },
                         "Pulls live game totals and sets ownership estimates for all ",
                         players.length,
                         " players"))),
                 vegasStatus === "done" && (React.createElement("div", { style: { padding: "12px 16px" } },
                     React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
-                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b", letterSpacing: 2, fontWeight: 700 } }, "? LINE MOVEMENT TRACKER"),
-                        React.createElement("div", { style: { fontSize: 9, color: "#3b6280" } }, "Opening vs current ? delta = market-priced injury impact. Edit any field to update.")),
-                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 } }, lineMovement.map(function (g, i) {
-                        var spreadDelta = +(g.currentSpread - g.openSpread).toFixed(1);
-                        var totalDelta = +(g.currentTotal - g.openTotal).toFixed(1);
-                        var bigSpread = Math.abs(spreadDelta) >= 2;
-                        var bigTotal = Math.abs(totalDelta) >= 2;
-                        var spreadColor = bigSpread ? (spreadDelta > 0 ? "#f87171" : "#22c55e") : "#4a6a80";
-                        var totalColor = bigTotal ? (totalDelta > 0 ? "#22c55e" : "#f87171") : "#4a6a80";
-                        var signal = bigSpread || bigTotal
-                            ? spreadDelta > 2 ? "STAR OUT ? fade"
-                                : spreadDelta < -2 ? "PACE-UP ? stack"
-                                    : totalDelta > 2 ? "Total up ? more pts"
-                                        : "Total down ? less pts"
+                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b", letterSpacing: 2, fontWeight: 700 } }, "\uD83D\uDCC8 LINE MOVEMENT TRACKER"),
+                        React.createElement("div", { style: { fontSize: 9, color: "#3b6280" } }, "Opening vs current \u2014 delta = market-priced injury impact. Edit any field to update.")),
+                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 } }, lineMovement.map((g, i) => {
+                        const spreadDelta = +(g.currentSpread - g.openSpread).toFixed(1);
+                        const totalDelta = +(g.currentTotal - g.openTotal).toFixed(1);
+                        const bigSpread = Math.abs(spreadDelta) >= 2;
+                        const bigTotal = Math.abs(totalDelta) >= 2;
+                        const spreadColor = bigSpread ? (spreadDelta > 0 ? "#f87171" : "#22c55e") : "#4a6a80";
+                        const totalColor = bigTotal ? (totalDelta > 0 ? "#22c55e" : "#f87171") : "#4a6a80";
+                        const signal = bigSpread || bigTotal
+                            ? spreadDelta > 2 ? "STAR OUT &#x2014; fade"
+                                : spreadDelta < -2 ? "PACE-UP &#x2014; stack"
+                                    : totalDelta > 2 ? "Total up &#x2014; more pts"
+                                        : "Total down &#x2014; less pts"
                             : null;
-                        var signalColor = spreadDelta < -2 || totalDelta > 2 ? "#22c55e" : "#f87171";
+                        const signalColor = spreadDelta < -2 || totalDelta > 2 ? "#22c55e" : "#f87171";
                         return (React.createElement("div", { key: i, style: { background: "#060e18", border: "1px solid " + (bigSpread || bigTotal ? "#f59e0b44" : "#1e3040"), borderRadius: 8, padding: "9px 11px" } },
                             React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#e2e8f0", marginBottom: 6 } }, g.gameStr),
                             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 } },
                                 React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "SPREAD"),
                                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
-                                    React.createElement("input", { type: "number", step: "0.5", value: g.currentSpread, onChange: function (e) { return setLineMovement(function (prev) { return prev.map(function (x, j) { return j === i ? __assign(__assign({}, x), { currentSpread: +e.target.value }) : x; }); }); }, style: { width: 46, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "2px 5px", fontSize: 11, fontFamily: "inherit", textAlign: "center" } }),
-                                    React.createElement("span", { style: { fontSize: 10, color: spreadColor, fontWeight: bigSpread ? 700 : 400, minWidth: 30, textAlign: "right" } }, spreadDelta !== 0 ? (spreadDelta > 0 ? "+" : "") + spreadDelta : "?"))),
+                                    React.createElement("input", { type: "number", step: "0.5", value: g.currentSpread, onChange: e => setLineMovement(prev => prev.map((x, j) => j === i ? Object.assign(Object.assign({}, x), { currentSpread: +e.target.value }) : x)), style: { width: 46, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "2px 5px", fontSize: 11, fontFamily: "inherit", textAlign: "center" } }),
+                                    React.createElement("span", { style: { fontSize: 10, color: spreadColor, fontWeight: bigSpread ? 700 : 400, minWidth: 30, textAlign: "right" } }, spreadDelta !== 0 ? (spreadDelta > 0 ? "+" : "") + spreadDelta : "&#x2014;"))),
                             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
                                 React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "TOTAL"),
                                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
-                                    React.createElement("input", { type: "number", step: "0.5", value: g.currentTotal, onChange: function (e) { return setLineMovement(function (prev) { return prev.map(function (x, j) { return j === i ? __assign(__assign({}, x), { currentTotal: +e.target.value }) : x; }); }); }, style: { width: 46, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "2px 5px", fontSize: 11, fontFamily: "inherit", textAlign: "center" } }),
-                                    React.createElement("span", { style: { fontSize: 10, color: totalColor, fontWeight: bigTotal ? 700 : 400, minWidth: 30, textAlign: "right" } }, totalDelta !== 0 ? (totalDelta > 0 ? "+" : "") + totalDelta : "?"))),
+                                    React.createElement("input", { type: "number", step: "0.5", value: g.currentTotal, onChange: e => setLineMovement(prev => prev.map((x, j) => j === i ? Object.assign(Object.assign({}, x), { currentTotal: +e.target.value }) : x)), style: { width: 46, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "2px 5px", fontSize: 11, fontFamily: "inherit", textAlign: "center" } }),
+                                    React.createElement("span", { style: { fontSize: 10, color: totalColor, fontWeight: bigTotal ? 700 : 400, minWidth: 30, textAlign: "right" } }, totalDelta !== 0 ? (totalDelta > 0 ? "+" : "") + totalDelta : "&#x2014;"))),
                             signal && (React.createElement("div", { style: { fontSize: 9, color: signalColor, marginTop: 5, paddingTop: 4, borderTop: "1px solid #1e3040" } }, signal))));
                     })),
-                    lineMovement.some(function (g) { return Math.abs(g.currentSpread - g.openSpread) >= 2 || Math.abs(g.currentTotal - g.openTotal) >= 2; }) && (React.createElement("div", { style: { marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#0a1a0a", border: "1px solid #f59e0b44", borderRadius: 7 } },
-                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b" } }, "Significant line movement detected ? ownership estimates may need recalibration"),
-                        React.createElement("button", { onClick: applyLineMovement, style: __assign(__assign({}, S.btn("primary")), { fontSize: 10, padding: "5px 14px", whiteSpace: "nowrap", marginLeft: 12 }) }, "APPLY MOVEMENT")))))),
+                    lineMovement.some(g => Math.abs(g.currentSpread - g.openSpread) >= 2 || Math.abs(g.currentTotal - g.openTotal) >= 2) && (React.createElement("div", { style: { marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#0a1a0a", border: "1px solid #f59e0b44", borderRadius: 7 } },
+                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b" } }, "Significant line movement detected \u2014 ownership estimates may need recalibration"),
+                        React.createElement("button", { onClick: applyLineMovement, style: Object.assign(Object.assign({}, S.btn("primary")), { fontSize: 10, padding: "5px 14px", whiteSpace: "nowrap", marginLeft: 12 }) }, "APPLY MOVEMENT")))))),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 } },
                 React.createElement("div", { style: S.card },
                     React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
@@ -1038,21 +968,21 @@ function App() {
                                 players.length,
                                 " eligible players loaded")),
                         React.createElement("div", { style: { display: "flex", gap: 6 } },
-                            React.createElement("button", { style: S.pill(rightTab === "ownership"), onClick: function () { return setRightTab("ownership"); } }, "OWNERSHIP"),
-                            React.createElement("button", { style: S.pill(rightTab === "statmuse"), onClick: function () { return setRightTab("statmuse"); } },
+                            React.createElement("button", { style: S.pill(rightTab === "ownership"), onClick: () => setRightTab("ownership") }, "OWNERSHIP"),
+                            React.createElement("button", { style: S.pill(rightTab === "statmuse"), onClick: () => setRightTab("statmuse") },
                                 "STATMUSE ",
-                                Object.keys(statMuseMap).length > 0 && "(".concat(Object.keys(statMuseMap).length, ")")),
-                            React.createElement("button", { style: S.pill(rightTab === "injuries"), onClick: function () { return setRightTab("injuries"); } }, "? INJURIES"),
-                            React.createElement("button", { style: S.btn("ghost"), onClick: function () { return fileRef.current.click(); } }, "? CSV"))),
+                                Object.keys(statMuseMap).length > 0 && `(${Object.keys(statMuseMap).length})`),
+                            React.createElement("button", { style: S.pill(rightTab === "injuries"), onClick: () => setRightTab("injuries") }, "\uD83C\uDFE5 INJURIES"),
+                            React.createElement("button", { style: S.btn("ghost"), onClick: () => fileRef.current.click() }, "\u2191 CSV"))),
                     rightTab === "ownership"
                         ? React.createElement(OwnershipEditor, { players: players, ownershipMap: ownershipMap, onUpdate: updateOwnership })
                         : rightTab === "statmuse"
                             ? React.createElement(StatMusePanel, { players: players, statMuseMap: statMuseMap, onManualUpdate: handleStatMuseManual })
-                            : React.createElement(InjuryPanel, { onExclude: function (name) {
-                                    setExcludedNames(function (prev) {
-                                        var next = __spreadArray([], new Set(__spreadArray(__spreadArray([], prev, true), [name], false)), true);
-                                        var outList = next.filter(function (n) { return TONIGHT_INJURIES.some(function (i) { return i.name === n && i.status === "OUT"; }); });
-                                        var _a = applyCascades(outList, ownershipMap), newMap = _a.newMap, log = _a.log;
+                            : React.createElement(InjuryPanel, { onExclude: (name) => {
+                                    setExcludedNames(prev => {
+                                        const next = [...new Set([...prev, name])];
+                                        const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
+                                        const { newMap, log } = applyCascades(outList, ownershipMap);
                                         setCascadeLog(log);
                                         setOwnershipMap(newMap);
                                         rebuildPlayers(csvText, newMap, statMuseMap);
@@ -1063,37 +993,34 @@ function App() {
                 React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
                     React.createElement("div", { style: S.card },
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "LOCK / EXCLUDE"),
-                        React.createElement("div", { style: { maxHeight: 220, overflowY: "auto" } }, players.slice(0, 35).map(function (p) { return (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 5, marginBottom: 5, fontSize: 11 } },
-                            React.createElement("button", { onClick: function () { return toggleLock(p.name); }, style: { width: 20, height: 20, borderRadius: 4, border: "1px solid ".concat(lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"), background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "?"),
-                            React.createElement("button", { onClick: function () { return toggleExclude(p.name); }, style: { width: 20, height: 20, borderRadius: 4, border: "1px solid ".concat(excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"), background: excludedNames.includes(p.name) ? "#991b1b" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "?"),
+                        React.createElement("div", { style: { maxHeight: 220, overflowY: "auto" } }, players.slice(0, 35).map(p => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 5, marginBottom: 5, fontSize: 11 } },
+                            React.createElement("button", { onClick: () => toggleLock(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "\uD83D\uDD12"),
+                            React.createElement("button", { onClick: () => toggleExclude(p.name), style: { width: 20, height: 20, borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#991b1b" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 } }, "\u2715"),
                             React.createElement("span", { style: { flex: 1, color: excludedNames.includes(p.name) ? "#4a6a80" : "#e2e8f0", textDecoration: excludedNames.includes(p.name) ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, p.name),
-                            p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9 } }, "?"))); }))),
+                            p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9 } }, "\u25CF")))))),
                     React.createElement("div", { style: S.card },
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "GENERATE"),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 6, letterSpacing: 1 } }, "LINEUP STRATEGY"),
                         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 14 } }, [
-                            ["mixed", "? MIXED", "30% chalk ? 40% leverage ? 30% tourn"],
-                            ["chalk", "? CHALK", "Safe, high-ownership ? cash games"],
-                            ["leverage", "? LEVERAGE", "Game-stacked, correlated builds"],
-                            ["tournament", "? TOURNAMENT", "Contrarian pivots ? GPP only"],
-                        ].map(function (_a) {
-                            var val = _a[0], label = _a[1], desc = _a[2];
-                            return (React.createElement("button", { key: val, onClick: function () { return setLineupStrategy(val); }, style: {
-                                    padding: "8px 10px", borderRadius: 7, border: "1px solid ".concat(lineupStrategy === val ? "#3b82f6" : "#1e3040"),
-                                    background: lineupStrategy === val ? "#1a3550" : "#0a1520",
-                                    color: lineupStrategy === val ? "#60a5fa" : "#4a6a80",
-                                    cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-                                } },
-                                React.createElement("div", { style: { fontSize: 10, fontWeight: 700, marginBottom: 2 } }, label),
-                                React.createElement("div", { style: { fontSize: 9, color: lineupStrategy === val ? "#4a8aaa" : "#3b6280" } }, desc)));
-                        })),
-                        vegasGames.length > 0 && (function () {
-                            var best = getBestStackGame(vegasGames, players);
+                            ["mixed", "&#x1F3AF; MIXED", "30% chalk &#xB7; 40% leverage &#xB7; 30% tourn"],
+                            ["chalk", "&#x1F4CC; CHALK", "Safe, high-ownership &#x2014; cash games"],
+                            ["leverage", "&#x1F517; LEVERAGE", "Game-stacked, correlated builds"],
+                            ["tournament", "&#x1F680; TOURNAMENT", "Contrarian pivots &#x2014; GPP only"],
+                        ].map(([val, label, desc]) => (React.createElement("button", { key: val, onClick: () => setLineupStrategy(val), style: {
+                                padding: "8px 10px", borderRadius: 7, border: `1px solid ${lineupStrategy === val ? "#3b82f6" : "#1e3040"}`,
+                                background: lineupStrategy === val ? "#1a3550" : "#0a1520",
+                                color: lineupStrategy === val ? "#60a5fa" : "#4a6a80",
+                                cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                            } },
+                            React.createElement("div", { style: { fontSize: 10, fontWeight: 700, marginBottom: 2 } }, label),
+                            React.createElement("div", { style: { fontSize: 9, color: lineupStrategy === val ? "#4a8aaa" : "#3b6280" } }, desc))))),
+                        vegasGames.length > 0 && (() => {
+                            const best = getBestStackGame(vegasGames, players);
                             return best ? (React.createElement("div", { style: { marginBottom: 12, padding: "7px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 } },
-                                React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 3 } }, "? STACK TARGET"),
+                                React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 3 } }, "\uD83D\uDD17 STACK TARGET"),
                                 React.createElement("div", { style: { fontSize: 11, color: "#e2e8f0" } },
                                     best.gameStr,
-                                    " ? O/U ",
+                                    " \u00B7 O/U ",
                                     best.total),
                                 React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } },
                                     "LEVERAGE lineups will stack ",
@@ -1103,93 +1030,93 @@ function App() {
                                     " players"))) : null;
                         })(),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 4, letterSpacing: 1 } }, "LINEUP COUNT"),
-                        React.createElement("input", { type: "range", min: "1", max: "20", value: lineupCount, onChange: function (e) { return setLineupCount(+e.target.value); }, style: { width: "100%", marginBottom: 4 } }),
+                        React.createElement("input", { type: "range", min: "1", max: "20", value: lineupCount, onChange: e => setLineupCount(+e.target.value), style: { width: "100%", marginBottom: 4 } }),
                         React.createElement("div", { style: { textAlign: "center", color: "#60a5fa", fontWeight: 700, fontSize: 18, marginBottom: 12 } }, lineupCount),
                         React.createElement("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8 } },
-                            React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 7 } }, "? BANKROLL ADVISOR"),
+                            React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 7 } }, "\uD83D\uDCB0 BANKROLL ADVISOR"),
                             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
                                 React.createElement("span", { style: { fontSize: 10, color: "#4a6a80" } }, "$"),
-                                React.createElement("input", { type: "number", min: "0", placeholder: "Your bankroll", value: bankroll, onChange: function (e) { return setBankroll(e.target.value); }, style: { flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 5, color: "#e2e8f0", padding: "5px 8px", fontSize: 11, fontFamily: "inherit" } })),
-                            bankroll > 0 && (function () {
-                                var gamesList = getHardcodedVegasData().gamesList;
-                                var grade = gradeSlate(gamesList);
-                                var strat = getEntryStrategy(+bankroll, grade.score);
+                                React.createElement("input", { type: "number", min: "0", placeholder: "Your bankroll", value: bankroll, onChange: e => setBankroll(e.target.value), style: { flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 5, color: "#e2e8f0", padding: "5px 8px", fontSize: 11, fontFamily: "inherit" } })),
+                            bankroll > 0 && (() => {
+                                const { gamesList } = getHardcodedVegasData();
+                                const grade = gradeSlate(gamesList);
+                                const strat = getEntryStrategy(+bankroll, grade.score);
                                 return strat ? (React.createElement("div", null,
                                     React.createElement("div", { style: { fontSize: 10, color: "#f59e0b", marginBottom: 6 } },
                                         "Tonight's budget: ",
                                         React.createElement("strong", { style: { color: "#22c55e" } },
                                             "$",
                                             strat.budget),
-                                        " ? ",
+                                        " \u00B7 ",
                                         strat.note),
-                                    strat.breakdown.map(function (b) { return (React.createElement("div", { key: b.type, style: { display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 3 } },
+                                    strat.breakdown.map(b => (React.createElement("div", { key: b.type, style: { display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 3 } },
                                         React.createElement("span", { style: { color: "#4a6a80" } }, b.type),
                                         React.createElement("span", { style: { color: "#60a5fa" } },
                                             b.entries,
                                             " entries (",
                                             b.pct,
-                                            ")"))); }))) : null;
+                                            ")")))))) : null;
                             })()),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 8 } },
-                            lockedNames.length > 0 && "? ".concat(lockedNames.length, " locked  "),
-                            excludedNames.length > 0 && "? ".concat(excludedNames.length, " excluded  "),
-                            Object.keys(statMuseMap).length > 0 && "? ".concat(Object.keys(statMuseMap).length, " SM")),
+                            lockedNames.length > 0 && `&#x1F512; ${lockedNames.length} locked  `,
+                            excludedNames.length > 0 && `&#x2715; ${excludedNames.length} excluded  `,
+                            Object.keys(statMuseMap).length > 0 && `&#x1F4CA; ${Object.keys(statMuseMap).length} SM`),
                         cascadeLog.length > 0 && (React.createElement("div", { style: { marginBottom: 10, padding: "8px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 } },
-                            React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 } }, "? CASCADE BOOSTS APPLIED"),
-                            cascadeLog.map(function (c, i) { return (React.createElement("div", { key: i, style: { fontSize: 9, color: "#4a6a80", marginBottom: 2 } },
+                            React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 } }, "\uD83D\uDD17 CASCADE BOOSTS APPLIED"),
+                            cascadeLog.map((c, i) => (React.createElement("div", { key: i, style: { fontSize: 9, color: "#4a6a80", marginBottom: 2 } },
                                 React.createElement("span", { style: { color: "#ef4444" } },
                                     c.out.split(" ").pop(),
                                     " OUT"),
-                                " ? ",
+                                " &#x2192; ",
                                 React.createElement("span", { style: { color: "#22c55e" } }, c.player.split(" ").pop()),
                                 " ",
                                 React.createElement("span", { style: { color: "#94a3b8" } },
                                     c.from,
-                                    "%?",
+                                    "%\u2192",
                                     c.to,
                                     "%"),
                                 " ",
-                                React.createElement("span", { style: { color: "#3b6280" } }, c.note))); }))),
-                        React.createElement("button", { style: __assign(__assign({}, S.btn("primary")), { width: "100%", fontSize: 13, padding: "12px 0" }), onClick: handleGenerate, disabled: generating }, generating ? "BUILDING..." : "? GENERATE LINEUPS"),
+                                React.createElement("span", { style: { color: "#3b6280" } }, c.note)))))),
+                        React.createElement("button", { style: Object.assign(Object.assign({}, S.btn("primary")), { width: "100%", fontSize: 13, padding: "12px 0" }), onClick: handleGenerate, disabled: generating }, generating ? "BUILDING..." : "&#x26A1; GENERATE LINEUPS"),
                         lastGenTime && (React.createElement("div", { style: { marginTop: 8, padding: "6px 10px", background: "#0a1520", borderRadius: 6, border: "1px solid #1e3040" } },
                             React.createElement("div", { style: { fontSize: 9, color: "#3b6280" } },
                                 "Last generated: ",
                                 lastGenTime.toLocaleTimeString()),
-                            React.createElement("div", { style: { fontSize: 9, color: "#f59e0b", marginTop: 2 } }, "?? Re-upload CSV + re-run 60min before tip for late scratches"),
-                            React.createElement("button", { onClick: handleGenerate, style: __assign(__assign({}, S.btn("warning")), { width: "100%", marginTop: 6, fontSize: 10, padding: "6px 0" }) }, "? LATE SCRATCH RE-RUN")))))))),
+                            React.createElement("div", { style: { fontSize: 9, color: "#f59e0b", marginTop: 2 } }, "\u26A0 Re-upload CSV + re-run 60min before tip for late scratches"),
+                            React.createElement("button", { onClick: handleGenerate, style: Object.assign(Object.assign({}, S.btn("warning")), { width: "100%", marginTop: 6, fontSize: 10, padding: "6px 0" }) }, "\uD83D\uDD04 LATE SCRATCH RE-RUN")))))))),
         step === "results" && (React.createElement("div", { style: S.sec },
             lineups.length === 0 && (React.createElement("div", { style: { background: "#1a0a0a", border: "1px solid #ef444444", borderRadius: 10, padding: 24, textAlign: "center", marginBottom: 16 } },
-                React.createElement("div", { style: { fontSize: 14, color: "#ef4444", marginBottom: 8 } }, "?? No lineups generated"),
+                React.createElement("div", { style: { fontSize: 14, color: "#ef4444", marginBottom: 8 } }, "\u26A0 No lineups generated"),
                 React.createElement("div", { style: { fontSize: 11, color: "#4a6a80", lineHeight: 1.8 } },
                     "Possible causes:",
                     React.createElement("br", null),
-                    "? Not enough eligible players (need 9 across PG?2, SG?2, SF?2, PF?2, C?1)",
+                    "\u2022 Not enough eligible players (need 9 across PG\u00D72, SG\u00D72, SF\u00D72, PF\u00D72, C\u00D71)",
                     React.createElement("br", null),
-                    "? Too many players excluded",
+                    "\u2022 Too many players excluded",
                     React.createElement("br", null),
-                    "? Salary cap too tight with current pool",
+                    "\u2022 Salary cap too tight with current pool",
                     React.createElement("br", null),
-                    "? FPPG floor (15) filtering too many players"),
-                React.createElement("button", { onClick: function () { return setStep("build"); }, style: __assign(__assign({}, S.btn("primary")), { marginTop: 12 }) }, "? BACK TO BUILD"))),
+                    "\u2022 FPPG floor (15) filtering too many players"),
+                React.createElement("button", { onClick: () => setStep("build"), style: Object.assign(Object.assign({}, S.btn("primary")), { marginTop: 12 }) }, "\u2190 BACK TO BUILD"))),
             React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 16 } },
-                ["lineups", "players", "exposure"].map(function (t) { return (React.createElement("button", { key: t, style: S.pill(activeTab === t), onClick: function () { return setActiveTab(t); } }, t.toUpperCase())); }),
+                ["lineups", "players", "exposure"].map(t => (React.createElement("button", { key: t, style: S.pill(activeTab === t), onClick: () => setActiveTab(t) }, t.toUpperCase()))),
                 React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: 8 } },
-                    React.createElement("button", { style: S.btn("ghost"), onClick: function () { return setStep("build"); } }, "? EDIT"),
-                    React.createElement("button", { style: S.btn("success"), onClick: handleGenerate }, "? REGEN"))),
+                    React.createElement("button", { style: S.btn("ghost"), onClick: () => setStep("build") }, "\u2190 EDIT"),
+                    React.createElement("button", { style: S.btn("success"), onClick: handleGenerate }, "\u21BB REGEN"))),
             activeTab === "lineups" && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 } },
-                React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } }, lineups.map(function (lu, i) { return React.createElement(LineupCard, { key: i, lineup: lu, index: i, isSelected: selectedLineup === i, onSelect: setSelectedLineup }); })),
-                (function () {
-                    var lu = lineups[selectedLineup];
-                    var stats = lineupStats(lu);
-                    var sorted = __spreadArray([], lu, true).sort(function (a, b) { return POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot); });
-                    var ownColor = function (o) { return o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171"; };
+                React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } }, lineups.map((lu, i) => React.createElement(LineupCard, { key: i, lineup: lu, index: i, isSelected: selectedLineup === i, onSelect: setSelectedLineup }))),
+                (() => {
+                    const lu = lineups[selectedLineup];
+                    const stats = lineupStats(lu);
+                    const sorted = [...lu].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
+                    const ownColor = o => o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171";
                     return (React.createElement("div", { style: S.card },
                         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 } },
                             React.createElement("div", null,
                                 React.createElement("div", { style: { fontSize: 15, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 } },
                                     "LINEUP #",
                                     selectedLineup + 1),
-                                React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginTop: 2 } }, "? = StatMuse confirmed  ? = anchor")),
+                                React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginTop: 2 } }, "\u25CF = StatMuse confirmed  \u26A1 = anchor")),
                             React.createElement("div", { style: { display: "flex", gap: 18, fontSize: 12 } },
                                 React.createElement("div", null,
                                     React.createElement("span", { style: { color: "#4a6a80" } }, "PROJ "),
@@ -1204,30 +1131,27 @@ function App() {
                                     React.createElement("span", { style: { color: "#f59e0b", fontWeight: 700 } },
                                         stats.avgOwn.toFixed(1),
                                         "%")))),
-                        React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16 } }, [["CHALK 30%+", stats.chalk, "#f59e0b"], ["MID 10-29%", stats.mid, "#60a5fa"], ["PUNT <5%", stats.punt, "#f87171"], [stats.anchor.name.split(" ").pop() + " ?", stats.anchor.fppg.toFixed(1), "#22c55e"]].map(function (_a) {
-                            var l = _a[0], v = _a[1], c = _a[2];
-                            return (React.createElement("div", { key: l, style: { flex: 1, background: "#0a1a2a", borderRadius: 8, padding: "8px 12px", border: "1px solid ".concat(c, "33"), textAlign: "center" } },
-                                React.createElement("div", { style: { color: c, fontWeight: 700, fontSize: 18 } }, v),
-                                React.createElement("div", { style: { color: "#4a6a80", fontSize: 9, marginTop: 2 } }, l)));
-                        })),
+                        React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16 } }, [["CHALK 30%+", stats.chalk, "#f59e0b"], ["MID 10-29%", stats.mid, "#60a5fa"], ["PUNT <5%", stats.punt, "#f87171"], [stats.anchor.name.split(" ").pop() + " &#x26A1;", stats.anchor.fppg.toFixed(1), "#22c55e"]].map(([l, v, c]) => (React.createElement("div", { key: l, style: { flex: 1, background: "#0a1a2a", borderRadius: 8, padding: "8px 12px", border: `1px solid ${c}33`, textAlign: "center" } },
+                            React.createElement("div", { style: { color: c, fontWeight: 700, fontSize: 18 } }, v),
+                            React.createElement("div", { style: { color: "#4a6a80", fontSize: 9, marginTop: 2 } }, l))))),
                         React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
                             React.createElement("thead", null,
-                                React.createElement("tr", null, ["SLOT", "PLAYER", "TEAM", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "INJ"].map(function (h) { return (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h)); }))),
-                            React.createElement("tbody", null, sorted.map(function (p, i) {
-                                var isAnchor = p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD;
+                                React.createElement("tr", null, ["SLOT", "PLAYER", "TEAM", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "INJ"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                            React.createElement("tbody", null, sorted.map((p, i) => {
+                                const isAnchor = p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD;
                                 return (React.createElement("tr", { key: i, style: { borderBottom: "1px solid #0d1e2e", background: isAnchor ? "#0d2235" : "transparent" } },
                                     React.createElement("td", { style: { padding: "9px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11 } }, p.slot),
                                     React.createElement("td", { style: { padding: "9px 8px", color: "#e2e8f0", fontWeight: isAnchor ? 700 : 400 } },
                                         p.name,
-                                        p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 4 } }, "?"),
-                                        isAnchor && React.createElement("span", { style: { color: "#f59e0b", marginLeft: 2 } }, "?")),
+                                        p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 4 } }, "\u25CF"),
+                                        isAnchor && React.createElement("span", { style: { color: "#f59e0b", marginLeft: 2 } }, "\u26A1")),
                                     React.createElement("td", { style: { padding: "9px 8px", color: "#4a6a80", fontSize: 10 } }, p.team),
                                     React.createElement("td", { style: { padding: "9px 8px", color: "#64b587" } },
                                         "$",
                                         p.salary.toLocaleString()),
                                     React.createElement("td", { style: { padding: "9px 8px", fontWeight: 600, color: p.statMuseFD ? "#22c55e" : "#e2e8f0" } }, p.fppg.toFixed(1)),
                                     React.createElement("td", { style: { padding: "9px 8px" } },
-                                        React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: "1px solid ".concat(p.statMuseFD ? "#16a34a44" : "#1e3040") } }, p.statMuseFD ? "SM" : "CSV")),
+                                        React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: `1px solid ${p.statMuseFD ? "#16a34a44" : "#1e3040"}` } }, p.statMuseFD ? "SM" : "CSV")),
                                     React.createElement("td", { style: { padding: "9px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" } },
                                         p.value.toFixed(2),
                                         "x"),
@@ -1235,42 +1159,39 @@ function App() {
                                         React.createElement("span", { style: { color: ownColor(p.ownership), fontWeight: 600 } },
                                             p.ownership.toFixed(1),
                                             "%")),
-                                    React.createElement("td", { style: { padding: "9px 8px" } }, p.injury ? React.createElement("span", { style: { color: p.injury === "Q" ? "#f59e0b" : "#ef4444", fontSize: 11 } }, p.injury) : React.createElement("span", { style: { color: "#22c55e", fontSize: 11 } }, "?"))));
+                                    React.createElement("td", { style: { padding: "9px 8px" } }, p.injury ? React.createElement("span", { style: { color: p.injury === "Q" ? "#f59e0b" : "#ef4444", fontSize: 11 } }, p.injury) : React.createElement("span", { style: { color: "#22c55e", fontSize: 11 } }, "\u2713"))));
                             }))),
                         React.createElement("div", { style: { marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 } }, [
-                            ["Anchor present", lu.some(function (p) { return p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD; })],
-                            ["No <3% punts", !lu.some(function (p) { return p.ownership < RULES.NEVER_PLAY_OWN_THRESHOLD; })],
+                            ["Anchor present", lu.some(p => p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD)],
+                            ["No <3% punts", !lu.some(p => p.ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)],
                             ["Ownership OK", stats.avgOwn >= 15 && stats.avgOwn <= 35],
                             ["Salary used", stats.total >= RULES.MIN_SALARY_USED],
-                            ["Floor clear", lu.every(function (p) { return p.fppg >= RULES.FLOOR_FPPG_MIN; })],
-                            ["SM data", lu.filter(function (p) { return p.statMuseFD; }).length >= 3],
-                        ].map(function (_a) {
-                            var l = _a[0], pass = _a[1];
-                            return (React.createElement("div", { key: l, style: { background: "#0a1520", borderRadius: 6, padding: "7px 10px", border: "1px solid ".concat(pass ? "#16a34a" : "#991b1b", "33"), display: "flex", alignItems: "center", gap: 6 } },
-                                React.createElement("span", null, pass ? "?" : "??"),
-                                React.createElement("span", { style: { fontSize: 10, color: pass ? "#22c55e" : "#f87171" } }, l)));
-                        }))));
+                            ["Floor clear", lu.every(p => p.fppg >= RULES.FLOOR_FPPG_MIN)],
+                            ["SM data", lu.filter(p => p.statMuseFD).length >= 3],
+                        ].map(([l, pass]) => (React.createElement("div", { key: l, style: { background: "#0a1520", borderRadius: 6, padding: "7px 10px", border: `1px solid ${pass ? "#16a34a" : "#991b1b"}33`, display: "flex", alignItems: "center", gap: 6 } },
+                            React.createElement("span", null, pass ? "&#x2705;" : "&#x26A0;"),
+                            React.createElement("span", { style: { fontSize: 10, color: pass ? "#22c55e" : "#f87171" } }, l)))))));
                 })())),
             activeTab === "players" && (React.createElement("div", { style: S.card },
-                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL ? MODEL SCORE RANKED"),
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \u2014 MODEL SCORE RANKED"),
                 React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                     React.createElement("thead", null,
-                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "BUCKET", "SCORE", "ACTIONS"].map(function (h) { return (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h)); }))),
-                    React.createElement("tbody", null, players.slice(0, 55).map(function (p, i) {
-                        var b = ownershipBucket(p.ownership);
-                        var bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
+                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "BUCKET", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                    React.createElement("tbody", null, players.slice(0, 55).map((p, i) => {
+                        const b = ownershipBucket(p.ownership);
+                        const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
                         return (React.createElement("tr", { key: p.name, style: { borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" } },
                             React.createElement("td", { style: { padding: "6px 8px", color: "#3b6280" } }, i + 1),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#e2e8f0" } },
                                 p.name,
-                                p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "?")),
+                                p.statMuseFD && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\u25CF")),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#3b82f6" } }, p.positions[0]),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#64b587" } },
                                 "$",
                                 p.salary.toLocaleString()),
                             React.createElement("td", { style: { padding: "6px 8px", fontWeight: p.fppg >= 40 ? 700 : 400, color: p.fppg >= 40 ? "#f59e0b" : p.statMuseFD ? "#22c55e" : "#e2e8f0" } }, p.fppg.toFixed(1)),
                             React.createElement("td", { style: { padding: "6px 8px" } },
-                                React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: "1px solid ".concat(p.statMuseFD ? "#16a34a44" : "#1e3040") } }, p.statMuseFD ? "SM" : "CSV")),
+                                React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: `1px solid ${p.statMuseFD ? "#16a34a44" : "#1e3040"}` } }, p.statMuseFD ? "SM" : "CSV")),
                             React.createElement("td", { style: { padding: "6px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" } },
                                 p.value.toFixed(2),
                                 "x"),
@@ -1278,48 +1199,47 @@ function App() {
                                 p.ownership.toFixed(1),
                                 "%"),
                             React.createElement("td", { style: { padding: "6px 8px" } },
-                                React.createElement("span", { style: { fontSize: 9, background: bc + "22", color: bc, border: "1px solid ".concat(bc, "44"), borderRadius: 4, padding: "1px 5px" } }, b.toUpperCase())),
+                                React.createElement("span", { style: { fontSize: 9, background: bc + "22", color: bc, border: `1px solid ${bc}44`, borderRadius: 4, padding: "1px 5px" } }, b.toUpperCase())),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#60a5fa", fontWeight: 600 } }, p.score.toFixed(2)),
                             React.createElement("td", { style: { padding: "6px 8px" } },
                                 React.createElement("div", { style: { display: "flex", gap: 3 } },
-                                    React.createElement("button", { onClick: function () { return toggleLock(p.name); }, style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid ".concat(lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"), background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" } }, "LOCK"),
-                                    React.createElement("button", { onClick: function () { return toggleExclude(p.name); }, style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid ".concat(excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"), background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" } }, "OUT"),
-                                    React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" } }, "SM?")))));
+                                    React.createElement("button", { onClick: () => toggleLock(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" } }, "LOCK"),
+                                    React.createElement("button", { onClick: () => toggleExclude(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" } }, "OUT"),
+                                    React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" } }, "SM\u2197")))));
                     }))))),
             activeTab === "exposure" && (React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } },
-                    "PLAYER EXPOSURE ? ",
+                    "PLAYER EXPOSURE \u2014 ",
                     lineups.length,
                     " LINEUPS"),
-                (function () {
-                    var exp = {};
-                    lineups.forEach(function (lu) { return lu.forEach(function (p) { exp[p.name] = (exp[p.name] || 0) + 1; }); });
+                (() => {
+                    const exp = {};
+                    lineups.forEach(lu => lu.forEach(p => { exp[p.name] = (exp[p.name] || 0) + 1; }));
                     return (React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                         React.createElement("thead", null,
-                            React.createElement("tr", null, ["PLAYER", "APPEARANCES", "EXPOSURE%", "OWN%", "FD AVG", "SRC", "POS"].map(function (h) { return (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h)); }))),
-                        React.createElement("tbody", null, Object.entries(exp).sort(function (a, b) { return b[1] - a[1]; }).map(function (_a, i) {
-                            var _b, _c, _d;
-                            var name = _a[0], cnt = _a[1];
-                            var p = players.find(function (pl) { return pl.name === name; });
-                            var pct = cnt / lineups.length * 100;
+                            React.createElement("tr", null, ["PLAYER", "APPEARANCES", "EXPOSURE%", "OWN%", "FD AVG", "SRC", "POS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                        React.createElement("tbody", null, Object.entries(exp).sort((a, b) => b[1] - a[1]).map(([name, cnt], i) => {
+                            var _a, _b, _c;
+                            const p = players.find(pl => pl.name === name);
+                            const pct = cnt / lineups.length * 100;
                             return (React.createElement("tr", { key: name, style: { borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" } },
                                 React.createElement("td", { style: { padding: "7px 8px", color: "#e2e8f0" } },
                                     name,
-                                    (p === null || p === void 0 ? void 0 : p.statMuseFD) && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "?")),
+                                    (p === null || p === void 0 ? void 0 : p.statMuseFD) && React.createElement("span", { style: { color: "#22c55e", fontSize: 9, marginLeft: 3 } }, "\u25CF")),
                                 React.createElement("td", { style: { padding: "7px 8px" } },
                                     React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
                                         React.createElement("div", { style: { flex: 1, background: "#0a1520", borderRadius: 3, height: 7 } },
-                                            React.createElement("div", { style: { width: "".concat(pct, "%"), background: pct > 70 ? "#f59e0b" : pct > 40 ? "#3b82f6" : "#22c55e", height: "100%", borderRadius: 3 } })),
+                                            React.createElement("div", { style: { width: `${pct}%`, background: pct > 70 ? "#f59e0b" : pct > 40 ? "#3b82f6" : "#22c55e", height: "100%", borderRadius: 3 } })),
                                         React.createElement("span", { style: { color: "#e2e8f0", minWidth: 18 } }, cnt))),
                                 React.createElement("td", { style: { padding: "7px 8px", color: pct > 70 ? "#f59e0b" : "#94a3b8", fontWeight: pct > 70 ? 700 : 400 } },
                                     pct.toFixed(0),
                                     "%"),
-                                React.createElement("td", { style: { padding: "7px 8px", color: "#60a5fa" } }, (_b = p === null || p === void 0 ? void 0 : p.ownership.toFixed(1)) !== null && _b !== void 0 ? _b : "?",
+                                React.createElement("td", { style: { padding: "7px 8px", color: "#60a5fa" } }, (_a = p === null || p === void 0 ? void 0 : p.ownership.toFixed(1)) !== null && _a !== void 0 ? _a : "&#x2014;",
                                     "%"),
-                                React.createElement("td", { style: { padding: "7px 8px", color: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#22c55e" : "#e2e8f0" } }, (_c = p === null || p === void 0 ? void 0 : p.fppg.toFixed(1)) !== null && _c !== void 0 ? _c : "?"),
+                                React.createElement("td", { style: { padding: "7px 8px", color: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#22c55e" : "#e2e8f0" } }, (_b = p === null || p === void 0 ? void 0 : p.fppg.toFixed(1)) !== null && _b !== void 0 ? _b : "&#x2014;"),
                                 React.createElement("td", { style: { padding: "7px 8px" } },
-                                    React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#16a34a22" : "#1e3040", color: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#22c55e" : "#4a6a80", border: "1px solid ".concat((p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#16a34a44" : "#1e3040") } }, (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "SM" : "CSV")),
-                                React.createElement("td", { style: { padding: "7px 8px", color: "#3b82f6" } }, (_d = p === null || p === void 0 ? void 0 : p.positions[0]) !== null && _d !== void 0 ? _d : "?")));
+                                    React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#16a34a22" : "#1e3040", color: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#22c55e" : "#4a6a80", border: `1px solid ${(p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#16a34a44" : "#1e3040"}` } }, (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "SM" : "CSV")),
+                                React.createElement("td", { style: { padding: "7px 8px", color: "#3b82f6" } }, (_c = p === null || p === void 0 ? void 0 : p.positions[0]) !== null && _c !== void 0 ? _c : "&#x2014;")));
                         }))));
                 })()))))));
 }
