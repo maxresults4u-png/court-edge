@@ -1,47 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Court Edge - NBA DFS Optimizer</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-<script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Court Edge — NBA DFS Optimizer</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #060e18; font-family: "IBM Plex Mono", monospace; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #0a1520; }
-  ::-webkit-scrollbar-thumb { background: #1e3040; border-radius: 3px; }
+  body { background: #060d14; color: #e2e8f0; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: #0a1628; }
+  ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 2px; }
   input[type=range] { accent-color: #3b82f6; }
+  input[type=number], input[type=text] { background: #0d1e2e; border: 1px solid #1e3040; color: #e2e8f0; border-radius: 4px; padding: 4px 8px; }
 </style>
 </head>
 <body>
-<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge...</div></div>
-<script>
-window.onerror = function(msg,src,line,col,err){
-  document.getElementById("root").innerHTML=
-  "<div style='color:#f87171;font-family:monospace;padding:40px;'><b>ERROR: "+msg+"</b><br>Line: "+line+"<pre style='color:#94a3b8;margin-top:10px;white-space:pre-wrap'>"+(err?err.stack:"")+"</pre></div>";
-};
-</script>
+<div id="root"></div>
 <script>
 const { useState, useCallback, useRef, useEffect } = React;
-
 // ── ODDS API CONFIG ───────────────────────────────────────────────────────
 const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
-// Tonight's Vegas data - Mar 13 2026 - hardcoded (no API needed)
+// Tonight's Vegas data - Mar 14 2026 - hardcoded (no API needed)
 function getHardcodedVegasData() {
     const games = [
-        { away: "CLE", home: "DAL", total: 218.5, homeSpread: 12.5, awayML: -600, homeML: 460 },
-        { away: "MEM", home: "DET", total: 224.5, homeSpread: -14.5, awayML: 620, homeML: -900 },
-        { away: "NYK", home: "IND", total: 226.5, homeSpread: 13.5, awayML: -560, homeML: 420 },
-        { away: "PHX", home: "TOR", total: 222.0, homeSpread: -5.5, awayML: 185, homeML: -225 },
-        { away: "NOP", home: "HOU", total: 224.0, homeSpread: -7.5, awayML: 265, homeML: -330 },
-        { away: "UTA", home: "POR", total: 235.5, homeSpread: -17.5, awayML: 780, homeML: -1200 },
-        { away: "MIN", home: "GSW", total: 228.5, homeSpread: 5.5, awayML: -220, homeML: 182 },
-        { away: "CHI", home: "LAC", total: 226.0, homeSpread: -14.5, awayML: 610, homeML: -880 },
+        // 6-game FanDuel slate Mar 14 2026
+        { away: "BKN", home: "PHI", total: 220.5, homeSpread: -11.5, awayML: 420, homeML: -560 }, // PHI still favored without Embiid (BKN even worse)
+        { away: "MIL", home: "ATL", total: 228.0, homeSpread: -8.5, awayML: 310, homeML: -400 }, // Giannis OUT → ATL big fav, total jumps
+        { away: "SAS", home: "CHA", total: 222.0, homeSpread: -4.0, awayML: 160, homeML: -192 }, // Close game
+        { away: "BOS", home: "WAS", total: 224.5, homeSpread: 18.0, awayML: -1400, homeML: 900 }, // BOS demolishes WAS
+        { away: "ORL", home: "MIA", total: 227.0, homeSpread: -3.5, awayML: 148, homeML: -180 }, // Close
+        { away: "DEN", home: "LAL", total: 241.0, homeSpread: 5.0, awayML: -205, homeML: 170 }, // 🔥 GAME OF NIGHT — Jokic vs Luka
+        { away: "SAC", home: "LAC", total: 225.0, homeSpread: -14.0, awayML: 540, homeML: -780 }, // LAC B2B but still heavy fav
     ];
     const teamMap = {};
     const gamesList = [];
@@ -53,17 +46,18 @@ function getHardcodedVegasData() {
         teamMap[g.away] = { total: g.total, impliedPts: awayImpl, spread: -spread, moneyline: g.awayML, opponent: g.home, gameStr: `${g.away}@${g.home}` };
         gamesList.push({ home: g.home, away: g.away, total: g.total, homeImpl, awayImpl, homeSpread: spread, gameStr: `${g.away}@${g.home}` });
     }
-    return { teamMap, gamesList, fetchedAt: "2026-03-13 hardcoded", gamesCount: games.length };
+    return { teamMap, gamesList, fetchedAt: "2026-03-14 hardcoded", gamesCount: games.length };
 }
 // ── REGRESSION RULES ─────────────────────────────────────────────────────
 const RULES = {
     SALARY_CAP: 60000,
     MIN_SALARY_USED: 58000,
-    NEVER_PLAY_OWN_THRESHOLD: 7.0,
+    NEVER_PLAY_OWN_THRESHOLD: 7.0, // Hard floor — no punts under 7%
+    DNP_BLOCK_THRESHOLD: 1.0, // 🚨 NEW: Hard block under 1% — these are likely DNPs (Jordan Poole 0.2%, Slawson 0.5% disaster prevention)
     ANCHOR_FPPG_THRESHOLD: 40,
     FLOOR_FPPG_MIN: 15,
     POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
-    OWN_WEIGHTS: { chalk: 1.15, mid: 1.05, low: 0.88, punt: 0.0 }, // punt = 0 = never used (hard 3% floor)
+    OWN_WEIGHTS: { chalk: 1.15, mid: 1.05, low: 0.88, punt: 0.0 }, // punt = 0 = never used (hard 7% floor)
 };
 const POSITION_ORDER = ["PG", "SG", "SF", "PF", "C"];
 // ── STATMUSE URL BUILDER ─────────────────────────────────────────────────
@@ -149,6 +143,9 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         if (fppg < RULES.FLOOR_FPPG_MIN)
             continue;
         const ownership = (_a = ownershipMap[name.toLowerCase()]) !== null && _a !== void 0 ? _a : 15;
+        // 🚨 DNP block: under 1% = likely inactive
+        if (ownership < RULES.DNP_BLOCK_THRESHOLD)
+            continue;
         if (ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)
             continue;
         const value = fppg / (salary / 1000);
@@ -455,81 +452,63 @@ function getEntryStrategy(bankroll, slateGrade) {
 // ── INJURY PANEL ─────────────────────────────────────────────────────────
 const TONIGHT_INJURIES = [
     // ── OUTS ──
-    { name: "Jarrett Allen", team: "CLE", status: "OUT", reason: "Knee tendonitis", dfsImpact: "Mitchell/Mobley usage ↑" },
-    { name: "Max Strus", team: "CLE", status: "OUT", reason: "Foot surgery", dfsImpact: "Minor" },
-    { name: "Tyrese Proctor", team: "CLE", status: "OUT", reason: "Quad strain", dfsImpact: "Minor" },
-    { name: "Kyrie Irving", team: "DAL", status: "OUT", reason: "Knee surgery", dfsImpact: "Luka anchor role grows" },
-    { name: "Klay Thompson", team: "DAL", status: "OUT", reason: "Rest", dfsImpact: "Minor" },
-    { name: "Dereck Lively II", team: "DAL", status: "OUT", reason: "Foot surgery", dfsImpact: "Minor" },
-    { name: "Ja Morant", team: "MEM", status: "OUT", reason: "Elbow UCL sprain", dfsImpact: "MEM stack unplayable" },
-    { name: "Santi Aldama", team: "MEM", status: "OUT", reason: "Knee mgmt", dfsImpact: "MEM stack unplayable" },
-    { name: "Tyrese Haliburton", team: "IND", status: "OUT", reason: "Achilles tear", dfsImpact: "🔥 NYK stack — IND depleted" },
-    { name: "Pascal Siakam", team: "IND", status: "OUT", reason: "Knee sprain", dfsImpact: "🔥 NYK stack — IND depleted" },
-    { name: "T.J. McConnell", team: "IND", status: "OUT", reason: "Hamstring", dfsImpact: "🔥 NYK stack — IND depleted" },
-    { name: "Aaron Nesmith", team: "IND", status: "OUT", reason: "Ankle mgmt", dfsImpact: "Minor" },
-    { name: "Obi Toppin", team: "IND", status: "OUT", reason: "Foot mgmt", dfsImpact: "Minor" },
-    { name: "Ausar Thompson", team: "DET", status: "OUT", reason: "Ankle sprain", dfsImpact: "Minor — DET still huge fav" },
-    { name: "Caris LeVert", team: "DET", status: "OUT", reason: "Wrist sprain", dfsImpact: "Minor" },
-    { name: "Scottie Barnes", team: "TOR", status: "OUT", reason: "Injury report", dfsImpact: "TOR value plays open up" },
-    { name: "Trey Murphy III", team: "NOP", status: "OUT", reason: "Check FD CSV", dfsImpact: "NOP already unplayable" },
+    { name: "Giannis Antetokounmpo", team: "MIL", status: "OUT", reason: "Rest/load mgmt", dfsImpact: "🔥 ATL stack — MIL unplayable" },
+    { name: "Kevin Porter Jr.", team: "MIL", status: "OUT", reason: "Knee", dfsImpact: "MIL stack unplayable" },
+    { name: "Michael Porter Jr.", team: "BKN", status: "OUT", reason: "Ankle", dfsImpact: "Minor — BKN unplayable anyway" },
+    { name: "Joel Embiid", team: "PHI", status: "OUT", reason: "Oblique (ongoing)", dfsImpact: "Payne/Edgecombe usage ↑" },
+    { name: "Tyrese Maxey", team: "PHI", status: "OUT", reason: "Finger (ongoing)", dfsImpact: "Cameron Payne starts" },
+    { name: "Kelly Oubre Jr.", team: "PHI", status: "OUT", reason: "Elbow", dfsImpact: "PHI thin but unplayable spread" },
+    { name: "Aaron Gordon", team: "DEN", status: "OUT", reason: "Hamstring", dfsImpact: "🔥 Jokic usage maxed — must play" },
+    { name: "Peyton Watson", team: "DEN", status: "OUT", reason: "Hamstring", dfsImpact: "Jokic/Murray min anchor" },
+    { name: "Marcus Smart", team: "LAL", status: "Q", reason: "Hopeful per Redick", dfsImpact: "Monitor — LeBron/Luka primary" },
+    { name: "Maxi Kleber", team: "LAL", status: "OUT", reason: "Back", dfsImpact: "Minor" },
     // ── QUESTIONABLE ──
-    { name: "Josh Hart", team: "NYK", status: "Q", reason: "Knee soreness", dfsImpact: "Monitor — NYK still plays well without" },
-    { name: "Karl-Anthony Towns", team: "NYK", status: "Q", reason: "On report", dfsImpact: "🚨 If out → Brunson/OG usage massive" },
-    { name: "Andrew Nembhard", team: "IND", status: "Q", reason: "Back/neck soreness", dfsImpact: "Likely starts — IND has no one else" },
-    { name: "Ivica Zubac", team: "IND", status: "Q", reason: "Ankle sprain", dfsImpact: "If out → IND completely exposed" },
+    { name: "LeBron James", team: "LAL", status: "Q", reason: "Hip/foot — played Thu", dfsImpact: "🚨 Played vs CHI — monitor to confirm" },
+    { name: "Austin Reaves", team: "LAL", status: "OUT", reason: "Calf", dfsImpact: "LeBron/Luka usage ↑ without Reaves" },
     // ── USAGE BOOSTERS (players who benefit) ──
-    { name: "Donovan Mitchell", team: "CLE", status: "UP", reason: "Allen out — usage ↑", dfsImpact: "🔥 Top anchor candidate" },
-    { name: "Evan Mobley", team: "CLE", status: "UP", reason: "Allen out — rebounds/pts", dfsImpact: "Value play" },
-    { name: "Jalen Brunson", team: "NYK", status: "UP", reason: "IND decimated", dfsImpact: "🔥 Lock candidate" },
-    { name: "Deni Avdija", team: "POR", status: "UP", reason: "UTA 6 players out", dfsImpact: "🔥 POR 126.5 implied — must play" },
-    { name: "Cade Cunningham", team: "DET", status: "UP", reason: "MEM missing Morant+", dfsImpact: "🔥 DET 119.5 implied" },
+    { name: "Nikola Jokic", team: "DEN", status: "UP", reason: "Gordon/Watson OUT — max usage", dfsImpact: "🔥 #1 anchor. O/U 241. Unstoppable" },
+    { name: "Luka Doncic", team: "LAL", status: "UP", reason: "O/U 241 — Luka leads NBA scoring", dfsImpact: "🔥 Must-play. 32.4 ppg leader" },
+    { name: "Jamal Murray", team: "DEN", status: "UP", reason: "Gordon out — usage ↑", dfsImpact: "High ceiling in big game" },
+    { name: "Jalen Johnson", team: "ATL", status: "UP", reason: "Giannis OUT — ATL rolls", dfsImpact: "🔥 22.9 ppg + Giannis gone = massive" },
+    { name: "Trae Young", team: "ATL", status: "UP", reason: "Giannis OUT — pace up", dfsImpact: "ATL favored by 8.5 — stack it" },
+    { name: "Bam Adebayo", team: "MIA", status: "UP", reason: "ORL game — 227 total", dfsImpact: "Safe floor, solid game environment" },
 ];
 // ── CASCADE RULES ENGINE ──────────────────────────────────────────────────
 const CASCADE_RULES = [
-    { trigger: "Jarrett Allen", team: "CLE", beneficiaries: [
-            { name: "Evan Mobley", ownBoost: 1.35, projBoost: 1.12, note: "Rebounds+pts fill" },
-            { name: "Donovan Mitchell", ownBoost: 1.15, projBoost: 1.08, note: "Usage fills" },
-            { name: "Darius Garland", ownBoost: 1.10, projBoost: 1.05, note: "Minor boost" },
+    { trigger: "Giannis Antetokounmpo", team: "MIL", beneficiaries: [
+            { name: "Jalen Johnson", ownBoost: 1.45, projBoost: 1.18, note: "ATL anchor — Giannis gone" },
+            { name: "Trae Young", ownBoost: 1.30, projBoost: 1.12, note: "Usage up, ATL pace ↑" },
+            { name: "Dyson Daniels", ownBoost: 1.20, projBoost: 1.08, note: "ATL stack filler" },
+            { name: "De'Andre Hunter", ownBoost: 1.20, projBoost: 1.08, note: "ATL stack filler" },
+            { name: "Ryan Rollins", ownBoost: 1.35, projBoost: 1.15, note: "MIL lead guard now" },
         ] },
-    { trigger: "Tyrese Haliburton", team: "IND", beneficiaries: [
-            { name: "Kam Jones", ownBoost: 2.8, projBoost: 1.45, note: "Starts PG, 27+ min confirmed" },
-            { name: "Jarace Walker", ownBoost: 2.2, projBoost: 1.40, note: "Starts, 28-31 min recent" },
-            { name: "Ben Sheppard", ownBoost: 1.8, projBoost: 1.25, note: "Off-ball scorer, 29+ min" },
-            { name: "Andrew Nembhard", ownBoost: 1.6, projBoost: 1.20, note: "PG backup if healthy" },
+    { trigger: "Aaron Gordon", team: "DEN", beneficiaries: [
+            { name: "Nikola Jokic", ownBoost: 1.15, projBoost: 1.08, note: "Already max usage — now truly unstoppable" },
+            { name: "Jamal Murray", ownBoost: 1.25, projBoost: 1.12, note: "More creation responsibilities" },
+            { name: "Christian Braun", ownBoost: 1.20, projBoost: 1.10, note: "More minutes with Gordon out" },
+            { name: "Russell Westbrook", ownBoost: 1.20, projBoost: 1.08, note: "Depth guard more minutes" },
         ] },
-    { trigger: "T.J. McConnell", team: "IND", beneficiaries: [
-            { name: "Kam Jones", ownBoost: 1.6, projBoost: 1.20, note: "PG depth" },
-            { name: "Ben Sheppard", ownBoost: 1.3, projBoost: 1.10, note: "Ball-handling" },
+    { trigger: "Peyton Watson", team: "DEN", beneficiaries: [
+            { name: "Christian Braun", ownBoost: 1.15, projBoost: 1.08, note: "Wing minutes fill" },
+            { name: "Nikola Jokic", ownBoost: 1.05, projBoost: 1.03, note: "Minor additional usage" },
         ] },
-    { trigger: "Pascal Siakam", team: "IND", beneficiaries: [
-            { name: "Jarace Walker", ownBoost: 2.0, projBoost: 1.35, note: "Starting PF role" },
-            { name: "Kobe Brown", ownBoost: 1.5, projBoost: 1.20, note: "Frontcourt fill, 20+ min" },
-            { name: "Jay Huff", ownBoost: 1.4, projBoost: 1.15, note: "Center depth" },
+    { trigger: "Austin Reaves", team: "LAL", beneficiaries: [
+            { name: "Luka Doncic", ownBoost: 1.15, projBoost: 1.08, note: "More ball-handling without Reaves" },
+            { name: "LeBron James", ownBoost: 1.20, projBoost: 1.10, note: "Scoring vol up without Reaves" },
+            { name: "D'Angelo Russell", ownBoost: 1.25, projBoost: 1.12, note: "Steps into starting role" },
         ] },
-    { trigger: "Ja Morant", team: "MEM", beneficiaries: [
-            { name: "Desmond Bane", ownBoost: 1.5, projBoost: 1.20, note: "Primary ball handler" },
-            { name: "Jaren Jackson Jr.", ownBoost: 1.3, projBoost: 1.12, note: "Usage fills" },
-            { name: "Marcus Smart", ownBoost: 1.4, projBoost: 1.15, note: "PG duties" },
+    { trigger: "Joel Embiid", team: "PHI", beneficiaries: [
+            { name: "Cameron Payne", ownBoost: 2.0, projBoost: 1.35, note: "Starting PG, heavy usage" },
+            { name: "Justin Edwards", ownBoost: 1.40, projBoost: 1.18, note: "Starts — 12pts/9reb/5ast last game" },
         ] },
-    { trigger: "Kyrie Irving", team: "DAL", beneficiaries: [
-            { name: "Luka Doncic", ownBoost: 1.15, projBoost: 1.08, note: "Already anchor" },
-            { name: "James Harden", ownBoost: 1.25, projBoost: 1.10, note: "More ball-handling" },
-        ] },
-    { trigger: "Karl-Anthony Towns", team: "NYK", beneficiaries: [
-            { name: "Jalen Brunson", ownBoost: 1.25, projBoost: 1.12, note: "Usage spike" },
-            { name: "OG Anunoby", ownBoost: 1.20, projBoost: 1.08, note: "More volume" },
-            { name: "Josh Hart", ownBoost: 1.30, projBoost: 1.15, note: "Rebound+pts fill" },
-            { name: "Mikal Bridges", ownBoost: 1.20, projBoost: 1.08, note: "Fill scorer" },
-        ] },
-    { trigger: "Scottie Barnes", team: "TOR", beneficiaries: [
-            { name: "Brandon Ingram", ownBoost: 1.30, projBoost: 1.15, note: "Lead scorer role" },
-            { name: "RJ Barrett", ownBoost: 1.20, projBoost: 1.10, note: "Usage up" },
+    { trigger: "Tyrese Maxey", team: "PHI", beneficiaries: [
+            { name: "Cameron Payne", ownBoost: 1.50, projBoost: 1.20, note: "PG responsibilities" },
         ] },
 ];
 // Teams to suppress entirely when key player is out
 const TEAM_SUPPRESS = {
-    "Ja Morant": "MEM",
-    "Santi Aldama": "MEM",
+    "Giannis Antetokounmpo": "MIL",
+    "Kevin Porter Jr.": "MIL",
 };
 function applyCascades(outPlayers, ownershipMap) {
     var _a;
@@ -568,7 +547,7 @@ function InjuryPanel({ onExclude, excludedNames }) {
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } },
-                "Mar 13 official report \u00B7 ",
+                "Mar 14 official report \u00B7 ",
                 TONIGHT_INJURIES.filter(p => p.status === "OUT").length,
                 " OUT \u00B7 ",
                 TONIGHT_INJURIES.filter(p => p.status === "Q").length,
@@ -873,13 +852,16 @@ function App() {
             // Enforce ownership floor and excluded list at generation time
             // Also suppress entire teams when their star is excluded
             const suppressedTeams = new Set();
-            const STAR_TEAM_MAP = { "Ja Morant": "MEM", "Santi Aldama": "MEM" };
+            const STAR_TEAM_MAP = { "Giannis Antetokounmpo": "MIL", "Kevin Porter Jr.": "MIL" };
             excludedNames.forEach(n => { if (STAR_TEAM_MAP[n])
                 suppressedTeams.add(STAR_TEAM_MAP[n]); });
             const eligiblePlayers = players.filter(p => {
                 var _a, _b;
                 // Use ownershipMap directly (current) rather than p.ownership (may be stale)
                 const currentOwn = (_b = (_a = ownershipMap[p.name.toLowerCase()]) !== null && _a !== void 0 ? _a : p.ownership) !== null && _b !== void 0 ? _b : 15;
+                // 🚨 DNP block: under 1% ownership = likely inactive/DNP (Jordan Poole 0.2%, Slawson 0.5% = 0 pts disaster)
+                if (currentOwn < RULES.DNP_BLOCK_THRESHOLD)
+                    return false;
                 return currentOwn >= RULES.NEVER_PLAY_OWN_THRESHOLD &&
                     !excludedNames.includes(p.name) &&
                     !suppressedTeams.has(p.team);
@@ -1302,8 +1284,8 @@ function App() {
                 })()))))));
 }
 
-
-ReactDOM.render(React.createElement(App), document.getElementById("root"));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
 </script>
 </body>
 </html>
