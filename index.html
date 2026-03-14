@@ -78,23 +78,133 @@ let POSITION_ORDER = RULES.POSITION_ORDER;
 // ── MAR 14 MATCHUP DATA ───────────────────────────────────────────────────
 // Defensive Rating vs Position (lower = harder matchup, higher = easier/juicier)
 // Scale: A = elite matchup (top 8 defense vs pos), B = good, C = avg, D = tough
-const TEAM_DEF_VS_POS = {
-    // Team: { PG, SG, SF, PF, C } — grade A/B/C/D = matchup quality FOR the offensive player
-    PHI: { PG:"A", SG:"A", SF:"B", PF:"B", C:"B" }, // PHI missing Embiid+Maxey = leaky everywhere
-    BKN: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" }, // BKN worst defense in NBA
-    ATL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" }, // ATL middle tier D
-    MIL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" }, // MIL better D even without Giannis
-    CHA: { PG:"A", SG:"B", SF:"B", PF:"B", C:"B" }, // CHA bad at PG D
-    SAS: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" }, // SAS young, average D
-    WAS: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" }, // WAS worst D in East
-    BOS: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" }, // BOS elite D — tough matchup
-    MIA: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" }, // MIA average D
-    ORL: { PG:"C", SG:"C", SF:"C", PF:"B", C:"D" }, // ORL strong at C D
-    LAL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"C" }, // LAL average D
-    DEN: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" }, // DEN Jokic effect — tough interior
-    LAC: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" }, // LAC average
-    SAC: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" }, // SAC bad D on road
+// DVP data — starts as hardcoded fallback, replaced by live FantasyPros fetch
+// TEAM_DEF_VS_POS: grades A/B/C/D per position (A = easy matchup for offensive player)
+// TEAM_DEF_VS_STAT: multipliers for pts/reb/ast projections (>1 = leaky defense)
+let TEAM_DEF_VS_POS = {
+    PHI: { PG:"A", SG:"A", SF:"B", PF:"B", C:"B" },
+    BKN: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },
+    ATL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
+    MIL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" },
+    CHA: { PG:"A", SG:"B", SF:"B", PF:"B", C:"B" },
+    SAS: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
+    WAS: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },
+    BOS: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" },
+    MIA: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" },
+    ORL: { PG:"C", SG:"C", SF:"C", PF:"B", C:"D" },
+    LAL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"C" },
+    DEN: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" },
+    LAC: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" },
+    SAC: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
 };
+// ── LIVE DVP FETCH (FantasyPros via CORS proxy) ───────────────────────────
+// Full FantasyPros team name → NBA abbreviation map
+const FP_TEAM_MAP = {
+    "atlanta hawks":"ATL","boston celtics":"BOS","brooklyn nets":"BKN",
+    "charlotte hornets":"CHA","chicago bulls":"CHI","cleveland cavaliers":"CLE",
+    "dallas mavericks":"DAL","denver nuggets":"DEN","detroit pistons":"DET",
+    "golden state warriors":"GSW","houston rockets":"HOU","indiana pacers":"IND",
+    "los angeles clippers":"LAC","los angeles lakers":"LAL","memphis grizzlies":"MEM",
+    "miami heat":"MIA","milwaukee bucks":"MIL","minnesota timberwolves":"MIN",
+    "new orleans pelicans":"NOP","new york knicks":"NYK","oklahoma city thunder":"OKC",
+    "orlando magic":"ORL","philadelphia 76ers":"PHI","phoenix suns":"PHX",
+    "portland trail blazers":"POR","sacramento kings":"SAC","san antonio spurs":"SAS",
+    "toronto raptors":"TOR","utah jazz":"UTA","washington wizards":"WAS",
+};
+const POSITIONS_TO_FETCH = ["PG","SG","SF","PF","C"];
+async function fetchDVPForPosition(pos, platform) {
+    const site = platform === "DK" ? "draftkings" : "fanduel";
+    const url = `https://www.fantasypros.com/daily-fantasy/nba/${site}-defense-vs-position.php`;
+    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error("DVP fetch failed");
+    const html = await res.text();
+    // Parse table rows: each row = one team's stats for this view
+    // Table columns: Team | GP | PTS | REB | AST | 3PM | STL | BLK | TO | FD PTS
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    const stripTags = s => s.replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").replace(/&nbsp;/g," ").trim();
+    const results = {};
+    let match;
+    while ((match = rowRegex.exec(html)) !== null) {
+        const row = match[1];
+        const cells = [];
+        let cm;
+        while ((cm = cellRegex.exec(row)) !== null) cells.push(stripTags(cm[1]));
+        if (cells.length < 9) continue;
+        // First cell contains team name (may include abbreviation)
+        const teamRaw = cells[0].toLowerCase()
+            .replace(/\n/g," ").replace(/\s+/g," ").trim()
+            // Remove the abbreviated prefix like "ATL" from "ATLAtlanta Hawks"
+            .replace(/^[a-z]{2,4}(?=[a-z])/,"");
+        const abbr = FP_TEAM_MAP[teamRaw] || Object.entries(FP_TEAM_MAP).find(([k])=>teamRaw.includes(k.split(" ")[0]))?.[1];
+        if (!abbr) continue;
+        const fdPts = parseFloat(cells[cells.length-1]);
+        const pts   = parseFloat(cells[2]);
+        const reb   = parseFloat(cells[3]);
+        const ast   = parseFloat(cells[4]);
+        if (isNaN(fdPts) || fdPts <= 0) continue;
+        results[abbr] = { fdPts, pts, reb, ast };
+    }
+    return results; // { "ATL": { fdPts, pts, reb, ast }, ... }
+}
+// Convert raw FD pts allowed → grade + multipliers
+function buildDVPMaps(dvpByPos) {
+    // dvpByPos = { PG: { ATL:{fdPts,pts,reb,ast}, ... }, SG: {...}, ... }
+    const newPosDef = {};
+    const newStatDef = {};
+    for (const pos of POSITIONS_TO_FETCH) {
+        const posData = dvpByPos[pos];
+        if (!posData || Object.keys(posData).length === 0) continue;
+        const values = Object.values(posData).map(v => v.fdPts).filter(v => !isNaN(v));
+        if (!values.length) continue;
+        const avg   = values.reduce((a,b)=>a+b,0)/values.length;
+        const sorted = [...values].sort((a,b)=>a-b);
+        const p25 = sorted[Math.floor(sorted.length*0.25)];
+        const p75 = sorted[Math.floor(sorted.length*0.75)];
+        for (const [team, data] of Object.entries(posData)) {
+            if (!newPosDef[team]) newPosDef[team] = {};
+            if (!newStatDef[team]) newStatDef[team] = { pts:1.0, reb:1.0, ast:1.0, _count:0 };
+            // Grade: A = top 25% pts allowed (easiest), D = bottom 25% (hardest)
+            const grade = data.fdPts >= p75 ? "A"
+                        : data.fdPts >= avg  ? "B"
+                        : data.fdPts >= p25  ? "C" : "D";
+            newPosDef[team][pos] = grade;
+            // Multiplier: actual/avg (capped 0.80–1.25)
+            const mult = Math.min(1.25, Math.max(0.80, data.fdPts / avg));
+            // Average stat multipliers across all positions for PRA projections
+            const ptsAvg = Object.values(posData).map(v=>v.pts).reduce((a,b)=>a+b,0)/Object.keys(posData).length;
+            const rebAvg = Object.values(posData).map(v=>v.reb).reduce((a,b)=>a+b,0)/Object.keys(posData).length;
+            const astAvg = Object.values(posData).map(v=>v.ast).reduce((a,b)=>a+b,0)/Object.keys(posData).length;
+            newStatDef[team].pts  = +(newStatDef[team].pts + (data.pts/ptsAvg)).toFixed(3);
+            newStatDef[team].reb  = +(newStatDef[team].reb + (data.reb/rebAvg)).toFixed(3);
+            newStatDef[team].ast  = +(newStatDef[team].ast + (data.ast/astAvg)).toFixed(3);
+            newStatDef[team]._count++;
+        }
+    }
+    // Average stat multipliers across all fetched positions
+    for (const team of Object.keys(newStatDef)) {
+        const n = newStatDef[team]._count || 1;
+        newStatDef[team].pts = +((newStatDef[team].pts - 1.0) / n + 1.0).toFixed(3);
+        newStatDef[team].reb = +((newStatDef[team].reb - 1.0) / n + 1.0).toFixed(3);
+        newStatDef[team].ast = +((newStatDef[team].ast - 1.0) / n + 1.0).toFixed(3);
+        delete newStatDef[team]._count;
+    }
+    return { newPosDef, newStatDef };
+}
+async function fetchAllDVP(platform) {
+    // Fetch all 5 positions in parallel
+    const results = await Promise.all(
+        POSITIONS_TO_FETCH.map(pos =>
+            fetchDVPForPosition(pos, platform)
+                .then(data => ({ pos, data }))
+                .catch(() => ({ pos, data: {} }))
+        )
+    );
+    const dvpByPos = {};
+    for (const { pos, data } of results) dvpByPos[pos] = data;
+    return dvpByPos;
+}
 // Pace data — Mar 14 2026 (possessions per 48)
 // Slate avg ~100.2 — above = pace-up game
 const TEAM_PACE = {
@@ -192,23 +302,7 @@ const PLAYER_PRA_BASE = {
 // Defensive rating vs stat category per opponent team
 // Scale: multiplier applied to opposing player's base stat
 // >1.0 = defense leaks that stat (good for DFS), <1.0 = stingy
-const TEAM_DEF_VS_STAT = {
-    //         pts    reb    ast
-    BKN:  { pts:1.18, reb:1.14, ast:1.12 }, // worst D in NBA
-    WAS:  { pts:1.16, reb:1.10, ast:1.14 }, // worst D in East
-    PHI:  { pts:1.14, reb:1.08, ast:1.10 }, // missing Embiid+Maxey = leaky
-    CHA:  { pts:1.10, reb:1.06, ast:1.08 },
-    ATL:  { pts:1.06, reb:1.04, ast:1.06 },
-    MIL:  { pts:1.02, reb:1.02, ast:1.02 },
-    SAC:  { pts:1.06, reb:1.04, ast:1.04 },
-    ORL:  { pts:0.98, reb:0.96, ast:1.00 },
-    MIA:  { pts:0.99, reb:1.00, ast:0.98 },
-    LAL:  { pts:1.02, reb:1.02, ast:1.02 },
-    DEN:  { pts:1.00, reb:0.96, ast:0.98 }, // Jokic anchor = tough interior
-    SAS:  { pts:1.04, reb:1.02, ast:1.04 },
-    LAC:  { pts:0.98, reb:0.98, ast:0.98 },
-    BOS:  { pts:0.88, reb:0.92, ast:0.90 }, // elite D — tough matchup
-};
+let TEAM_DEF_VS_STAT = { BKN:{pts:1.18,reb:1.14,ast:1.12}, WAS:{pts:1.16,reb:1.10,ast:1.14}, PHI:{pts:1.14,reb:1.08,ast:1.10}, CHA:{pts:1.10,reb:1.06,ast:1.08}, ATL:{pts:1.06,reb:1.04,ast:1.06}, MIL:{pts:1.02,reb:1.02,ast:1.02}, SAC:{pts:1.06,reb:1.04,ast:1.04}, ORL:{pts:0.98,reb:0.96,ast:1.00}, MIA:{pts:0.99,reb:1.00,ast:0.98}, LAL:{pts:1.02,reb:1.02,ast:1.02}, DEN:{pts:1.00,reb:0.96,ast:0.98}, SAS:{pts:1.04,reb:1.02,ast:1.04}, LAC:{pts:0.98,reb:0.98,ast:0.98}, BOS:{pts:0.88,reb:0.92,ast:0.90} };
 // Pace multiplier — games above slate avg pace boost all stats slightly
 function getPaceMultiplier(gamePace) {
     const delta = gamePace - SLATE_AVG_PACE;
@@ -230,7 +324,10 @@ function calcPRAProjection(playerName, opponentTeam, gamePace, injuryStatus) {
     //             MED if gp>=35 or opponent missing or Q
     //             LOW otherwise
     const hasOpp = !!TEAM_DEF_VS_STAT[opponentTeam];
-    const conf = (base.gp >= 50 && hasOpp && injuryStatus !== "Q") ? "HIGH"
+    // _dvpLive is set globally when live DVP fetch completes — lifts confidence
+    const dvpLive = typeof _dvpLive !== "undefined" && _dvpLive;
+    const conf = (base.gp >= 50 && hasOpp && injuryStatus !== "Q" && dvpLive) ? "HIGH"
+               : (base.gp >= 50 && hasOpp && injuryStatus !== "Q") ? "MED"
                : (base.gp >= 35 && hasOpp) ? "MED" : "LOW";
     const basePRA = +(base.pts + base.reb + base.ast).toFixed(1);
     const delta   = +(pra - basePRA).toFixed(1);
@@ -937,7 +1034,7 @@ function applyCascades(outPlayers, ownershipMap) {
 }
 const statusColor = { OUT: "#ef4444", Q: "#f59e0b", UP: "#22c55e" };
 const statusBg = { OUT: "#1a0a0a", Q: "#1a1200", UP: "#0a1a0a" };
-function InjuryPanel({ onExclude, excludedNames, injuryData, injuryStatus }) {
+function InjuryPanel({ onExclude, excludedNames, injuryData, injuryStatus, dvpStatus }) {
     const [filter, setFilter] = useState("ALL");
     const data = injuryData || TONIGHT_INJURIES;
     const filtered = filter === "ALL" ? data : data.filter(p => p.status === filter);
@@ -947,6 +1044,13 @@ function InjuryPanel({ onExclude, excludedNames, injuryData, injuryStatus }) {
         ? React.createElement("span", { style: { fontSize: 9, color: "#22c55e", marginLeft: 8 } }, "✅ ESPN live")
         : injuryStatus === "error"
         ? React.createElement("span", { style: { fontSize: 9, color: "#ef4444", marginLeft: 8 } }, "⚠️ ESPN unavailable — using hardcoded")
+        : null;
+    const dvpBadge = dvpStatus === "loading"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#f59e0b", marginLeft: 8 } }, "⏳ DVP fetching...")
+        : dvpStatus === "done"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#22c55e", marginLeft: 8 } }, "📊 DVP live")
+        : dvpStatus === "error"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#ef4444", marginLeft: 8 } }, "⚠️ DVP unavailable — using hardcoded")
         : null;
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
@@ -958,7 +1062,7 @@ function InjuryPanel({ onExclude, excludedNames, injuryData, injuryStatus }) {
                 " Q · ",
                 data.filter(p => p.status === "UP").length,
                 " boosters",
-                statusBadge),
+                statusBadge, dvpBadge),
             React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(f => (React.createElement("button", { key: f, onClick: () => setFilter(f), style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"}`, background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "🔥 BOOST" : f))))),
         React.createElement("div", { style: { maxHeight: 360, overflowY: "auto" } }, filtered.map((p, i) => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` } },
             React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 28, textAlign: "center", border: `1px solid ${statusColor[p.status]}44` } }, p.status),
@@ -1126,6 +1230,7 @@ function App() {
     const [bankroll, setBankroll] = useState("");
     const [injuryData, setInjuryData] = useState(TONIGHT_INJURIES);
     const [injuryStatus, setInjuryStatus] = useState("idle"); // idle | loading | done | error
+    const [dvpStatus, setDvpStatus] = useState("idle"); // idle | loading | done | error
     const [platform, setPlatform] = useState("FD");
     const [outSnapshot, setOutSnapshot] = useState([]);
     const [lateSwaps, setLateSwaps] = useState(null);
@@ -1217,6 +1322,22 @@ function App() {
                 return next;
             });
         });
+        // ── AUTO-FETCH LIVE DVP ────────────────────────────────────────────
+        setDvpStatus("loading");
+        fetchAllDVP(RULES.short).then(dvpByPos => {
+            const { newPosDef, newStatDef } = buildDVPMaps(dvpByPos);
+            const hasData = Object.keys(newPosDef).length >= 20;
+            if (hasData) {
+                TEAM_DEF_VS_POS = newPosDef;
+                TEAM_DEF_VS_STAT = newStatDef;
+                window._dvpLive = true;
+                setDvpStatus("done");
+                // Rebuild players so matchup grades + PRA projections use live data
+                rebuildPlayers(text, finalOwn, statMuseMap);
+            } else {
+                setDvpStatus("error");
+            }
+        }).catch(() => setDvpStatus("error"));
     }, [rebuildPlayers, vegasMap, statMuseMap]);
     const handleFile = (e) => {
         const file = e.target.files[0];
@@ -1780,7 +1901,7 @@ function App() {
                             React.createElement("td", { style: { padding: "6px 8px" } },
                                 React.createElement("span", { style: { fontSize: 9, background: bc + "22", color: bc, border: `1px solid ${bc}44`, borderRadius: 4, padding: "1px 5px" } }, b.toUpperCase())),
                             React.createElement("td", { style: { padding: "6px 8px" } },
-                                React.createElement("span", { title: `vs ${p.opponent||"?"} — ${mg} matchup`, style: { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: MATCHUP_BG[mg], color: mgColor, border: `1px solid ${mgColor}44`, cursor: "default" } }, mg),
+                                React.createElement("span", { title: `vs ${p.opponent||"?"} — ${mg} matchup${window._dvpLive?" (live FantasyPros DVP)":" (hardcoded fallback)"}`, style: { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: MATCHUP_BG[mg], color: mgColor, border: `1px solid ${mgColor}44`, cursor: "default" } }, window._dvpLive ? mg+"★" : mg),
                                 p.opponent && React.createElement("span", { style: { fontSize: 9, color: "#3b6280", marginLeft: 4 } }, `vs ${p.opponent}`)),
                             React.createElement("td", { style: { padding: "6px 8px" } },
                                 p.paceUp
