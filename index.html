@@ -449,6 +449,50 @@ function getEntryStrategy(bankroll, slateGrade) {
         note: slateGrade >= 70 ? "Full send — good slate" : slateGrade >= 55 ? "Half size — average slate" : "Min entries only",
     };
 }
+// ── ESPN INJURY FETCH ─────────────────────────────────────────────────────
+async function fetchESPNInjuries() {
+    try {
+        const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries");
+        const data = await res.json();
+        const results = [];
+        for (const team of (data.injuries || [])) {
+            const teamAbbr = team.team?.abbreviation || "";
+            for (const item of (team.injuries || [])) {
+                const athlete = item.athlete || {};
+                const name = athlete.displayName || "";
+                const statusRaw = (item.status || "").toLowerCase();
+                let status = "Q";
+                if (statusRaw.includes("out") || statusRaw.includes("injured reserve")) status = "OUT";
+                else if (statusRaw.includes("questionable")) status = "Q";
+                else if (statusRaw.includes("doubtful")) status = "Q";
+                else if (statusRaw.includes("probable")) status = "Q";
+                else continue; // skip healthy/day-to-day with no real flag
+                const reason = item.longComment || item.shortComment || item.type?.description || "";
+                if (name) results.push({ name, team: teamAbbr, status, reason, dfsImpact: "", source: "ESPN" });
+            }
+        }
+        return results;
+    } catch(e) {
+        return [];
+    }
+}
+// Merge ESPN live data with hardcoded DFS impact notes
+function mergeInjuryData(espnData, hardcoded) {
+    const merged = [...hardcoded];
+    for (const espn of espnData) {
+        const existing = merged.find(h => h.name.toLowerCase() === espn.name.toLowerCase());
+        if (existing) {
+            // Update status from ESPN but keep our DFS impact notes
+            existing.status = espn.status;
+            existing.reason = espn.reason || existing.reason;
+            existing.source = "ESPN";
+        } else {
+            // New player not in our hardcoded list — add with generic impact note
+            merged.push({ ...espn, dfsImpact: espn.status === "OUT" ? "Check cascade — teammates may benefit" : "Monitor" });
+        }
+    }
+    return merged;
+}
 // ── INJURY PANEL ─────────────────────────────────────────────────────────
 const TONIGHT_INJURIES = [
     // ── OUTS ──
@@ -541,19 +585,28 @@ function applyCascades(outPlayers, ownershipMap) {
 }
 const statusColor = { OUT: "#ef4444", Q: "#f59e0b", UP: "#22c55e" };
 const statusBg = { OUT: "#1a0a0a", Q: "#1a1200", UP: "#0a1a0a" };
-function InjuryPanel({ onExclude, excludedNames }) {
+function InjuryPanel({ onExclude, excludedNames, injuryData, injuryStatus }) {
     const [filter, setFilter] = useState("ALL");
-    const filtered = filter === "ALL" ? TONIGHT_INJURIES : TONIGHT_INJURIES.filter(p => p.status === filter);
+    const data = injuryData || TONIGHT_INJURIES;
+    const filtered = filter === "ALL" ? data : data.filter(p => p.status === filter);
+    const statusBadge = injuryStatus === "loading"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#f59e0b", marginLeft: 8 } }, "⏳ ESPN fetching...")
+        : injuryStatus === "done"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#22c55e", marginLeft: 8 } }, "✅ ESPN live")
+        : injuryStatus === "error"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#ef4444", marginLeft: 8 } }, "⚠️ ESPN unavailable — using hardcoded")
+        : null;
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
-            React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } },
-                "Mar 14 official report \u00B7 ",
-                TONIGHT_INJURIES.filter(p => p.status === "OUT").length,
-                " OUT \u00B7 ",
-                TONIGHT_INJURIES.filter(p => p.status === "Q").length,
-                " Q \u00B7 ",
-                TONIGHT_INJURIES.filter(p => p.status === "UP").length,
-                " boosters"),
+            React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", display: "flex", alignItems: "center" } },
+                "Mar 14 · ",
+                data.filter(p => p.status === "OUT").length,
+                " OUT · ",
+                data.filter(p => p.status === "Q").length,
+                " Q · ",
+                data.filter(p => p.status === "UP").length,
+                " boosters",
+                statusBadge),
             React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(f => (React.createElement("button", { key: f, onClick: () => setFilter(f), style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"}`, background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "🔥 BOOST" : f))))),
         React.createElement("div", { style: { maxHeight: 360, overflowY: "auto" } }, filtered.map((p, i) => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` } },
             React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 28, textAlign: "center", border: `1px solid ${statusColor[p.status]}44` } }, p.status),
@@ -718,6 +771,8 @@ function App() {
     const [rightTab, setRightTab] = useState("ownership");
     const [lineupStrategy, setLineupStrategy] = useState("mixed");
     const [bankroll, setBankroll] = useState("");
+    const [injuryData, setInjuryData] = useState(TONIGHT_INJURIES);
+    const [injuryStatus, setInjuryStatus] = useState("idle"); // idle | loading | done | error
     const [lineMovement, setLineMovement] = useState([
         { gameStr: "BKN@PHI", openSpread: -9.5, currentSpread: -11.5, openTotal: 222.0, currentTotal: 220.5 },
         { gameStr: "MIL@ATL", openSpread: -3.5, currentSpread: -8.5, openTotal: 224.0, currentTotal: 228.0 }, // Giannis OUT → ATL moves to big fav
@@ -767,6 +822,29 @@ function App() {
         setOwnershipMap(finalOwn);
         rebuildPlayers(text, finalOwn, statMuseMap);
         setStep("build");
+        // ── AUTO-FETCH ESPN INJURIES ──────────────────────────────────────
+        setInjuryStatus("loading");
+        fetchESPNInjuries().then(espnData => {
+            if (espnData.length === 0) {
+                setInjuryStatus("error");
+                return;
+            }
+            const merged = mergeInjuryData(espnData, TONIGHT_INJURIES);
+            setInjuryData(merged);
+            setInjuryStatus("done");
+            // Auto-exclude any ESPN-confirmed OUTs that are in our player pool
+            const outNames = merged.filter(p => p.status === "OUT").map(p => p.name);
+            setExcludedNames(prev => {
+                const next = [...new Set([...prev, ...outNames.filter(n =>
+                    text.toLowerCase().includes(n.toLowerCase())
+                )])];
+                const { newMap, log } = applyCascades(next.filter(n => merged.some(i => i.name === n && i.status === "OUT")), finalOwn);
+                setCascadeLog(log);
+                setOwnershipMap(newMap);
+                rebuildPlayers(text, newMap, statMuseMap);
+                return next;
+            });
+        });
     }, [rebuildPlayers, vegasMap, statMuseMap]);
     const handleFile = (e) => {
         const file = e.target.files[0];
@@ -882,7 +960,7 @@ function App() {
         setExcludedNames(prev => {
             const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
             // Apply cascades whenever exclusion list changes
-            const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
+            const outList = next.filter(n => injuryData.some(i => i.name === n && i.status === "OUT"));
             const { newMap, log } = applyCascades(outList, ownershipMap);
             setCascadeLog(log);
             setOwnershipMap(newMap);
@@ -1018,14 +1096,14 @@ function App() {
                             : React.createElement(InjuryPanel, { onExclude: (name) => {
                                     setExcludedNames(prev => {
                                         const next = [...new Set([...prev, name])];
-                                        const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
+                                        const outList = next.filter(n => injuryData.some(i => i.name === n && i.status === "OUT"));
                                         const { newMap, log } = applyCascades(outList, ownershipMap);
                                         setCascadeLog(log);
                                         setOwnershipMap(newMap);
                                         rebuildPlayers(csvText, newMap, statMuseMap);
                                         return next;
                                     });
-                                }, excludedNames: excludedNames }),
+                                }, excludedNames: excludedNames, injuryData: injuryData, injuryStatus: injuryStatus }),
                     React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } })),
                 React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
                     React.createElement("div", { style: S.card },
