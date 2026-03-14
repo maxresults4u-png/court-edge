@@ -558,15 +558,26 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         if (cols.length < 8)
             continue;
         const get = (key) => { var _a, _b; return (_b = (_a = cols[headers.indexOf(key)]) === null || _a === void 0 ? void 0 : _a.trim()) !== null && _b !== void 0 ? _b : ""; };
-        const id = get("id") || get("playerid") || get("player id") || "";
-        const name = get("nickname") || get("firstname") + " " + get("lastname");
-        const csvFppg = parseFloat(get("fppg")) || 0;
+        // ── DK Showdown: skip CPT rows (inflated salary duplicates) ──
+        const rosterPos = get("rosterposition");
+        if (rosterPos === "CPT") continue;
+        const id = get("id") || get("playerid") || "";
+        // FD: Nickname | DK: Name | fallback: FirstName + LastName
+        const name = get("nickname") || get("name") || (get("firstname") + " " + get("lastname")).trim();
+        // FD: FPPG | DK: AvgPointsPerGame
+        const csvFppg = parseFloat(get("fppg") || get("avgpointspergame")) || 0;
         const salary = parseInt(get("salary")) || 0;
         const injury = get("injuryindicator") || "";
         const played = parseInt(get("played")) || 0;
-        const team = get("team");
-        const game = get("game");
-        const posRaw = get("rosterposition") || get("position");
+        // FD: Team | DK: TeamAbbrev
+        const team = get("team") || get("teamabbrev");
+        // FD: Game | DK: Game Info ("SAC@LAC 03/14/2026 10:30PM ET" → strip to "SAC@LAC")
+        const gameRaw = get("game") || get("gameinfo") || get("game info") || "";
+        const game = gameRaw.split(" ")[0]; // strip date/time, keep "AWAY@HOME"
+        // FD: Roster Position | DK: Position column
+        const posRaw = (rosterPos && rosterPos !== "UTIL" && rosterPos !== "FLEX")
+            ? rosterPos
+            : get("position");
         // FD: positions are standard. DK: also add G (PG/SG), F (SF/PF), UTIL (any) flex slots
         const basePositions = posRaw.split("/").map(p => p.trim()).filter(p => ["PG","SG","SF","PF","C"].includes(p));
         const positions = [...basePositions];
@@ -639,7 +650,7 @@ function exportLineupsCSV(lineups, platform) {
             const p = candidates.find(c => !usedNames.has(c.name));
             if (p) {
                 usedNames.add(p.name);
-                // FD uses player IDs; DK accepts names or IDs
+                // FD upload requires player ID; DK upload accepts player Name
                 return (isFD && p.id) ? p.id : p.name;
             }
             return "";
