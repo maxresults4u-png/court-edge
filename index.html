@@ -18,9 +18,7 @@
 </head>
 <body>
 <div id="root"></div>
-<script>
-const { useState, useCallback, useRef, useEffect } = React;
-// ── ODDS API CONFIG ───────────────────────────────────────────────────────
+<script>// ── ODDS API CONFIG ───────────────────────────────────────────────────────
 const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
@@ -719,14 +717,13 @@ function App() {
     const [lineupStrategy, setLineupStrategy] = useState("mixed");
     const [bankroll, setBankroll] = useState("");
     const [lineMovement, setLineMovement] = useState([
-        { gameStr: "CLE@DAL", openSpread: -8.0, currentSpread: -12.5, openTotal: 224.0, currentTotal: 218.5 },
-        { gameStr: "MEM@DET", openSpread: -6.5, currentSpread: -14.5, openTotal: 228.0, currentTotal: 224.5 },
-        { gameStr: "NYK@IND", openSpread: 1.5, currentSpread: 13.5, openTotal: 230.0, currentTotal: 226.5 },
-        { gameStr: "PHX@TOR", openSpread: -5.5, currentSpread: -5.5, openTotal: 222.0, currentTotal: 222.0 },
-        { gameStr: "NOP@HOU", openSpread: -7.5, currentSpread: -7.5, openTotal: 224.0, currentTotal: 224.0 },
-        { gameStr: "UTA@POR", openSpread: -11.5, currentSpread: -17.5, openTotal: 239.0, currentTotal: 235.5 },
-        { gameStr: "MIN@GSW", openSpread: 5.5, currentSpread: 5.5, openTotal: 228.5, currentTotal: 228.5 },
-        { gameStr: "CHI@LAC", openSpread: -14.5, currentSpread: -14.5, openTotal: 226.0, currentTotal: 226.0 },
+        { gameStr: "BKN@PHI", openSpread: -9.5, currentSpread: -11.5, openTotal: 222.0, currentTotal: 220.5 },
+        { gameStr: "MIL@ATL", openSpread: -3.5, currentSpread: -8.5, openTotal: 224.0, currentTotal: 228.0 }, // Giannis OUT → ATL moves to big fav
+        { gameStr: "SAS@CHA", openSpread: -4.0, currentSpread: -4.0, openTotal: 222.0, currentTotal: 222.0 },
+        { gameStr: "BOS@WAS", openSpread: 15.5, currentSpread: 18.0, openTotal: 226.0, currentTotal: 224.5 },
+        { gameStr: "ORL@MIA", openSpread: -3.5, currentSpread: -3.5, openTotal: 227.0, currentTotal: 227.0 },
+        { gameStr: "DEN@LAL", openSpread: 4.5, currentSpread: 5.0, openTotal: 239.0, currentTotal: 241.0 }, // 🔥 Total up — Gordon/Watson OUT
+        { gameStr: "SAC@LAC", openSpread: -12.0, currentSpread: -14.0, openTotal: 225.0, currentTotal: 225.0 },
     ]);
     const fileRef = useRef();
     const rebuildPlayers = useCallback((csv, ownMap, smMap) => {
@@ -807,7 +804,7 @@ function App() {
             setOwnershipMap(newOwnMap);
             rebuildPlayers(csvText, newOwnMap, statMuseMap);
             setVegasStatus("done");
-            setVegasMsg(`✅ ${gamesCount} games loaded · Mar 13 slate · ownership estimated`);
+            setVegasMsg(`✅ ${gamesCount} games loaded · Mar 14 slate · ownership estimated`);
         }
         catch (e) {
             setVegasStatus("error");
@@ -1283,6 +1280,7 @@ function App() {
                         }))));
                 })()))))));
 }
+
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
