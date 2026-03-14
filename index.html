@@ -704,7 +704,8 @@ function buildLineup(players, lockedNames = [], excludedNames = []) {
         }
     }
     // 2. Greedy fill: iterate pool in given order, place each player in first available slot
-    //    Budget guard: always keep enough for remaining slots at min $3500 each
+    //    Budget guard: dynamic — uses actual pool min salary (handles DK Showdown $1K players)
+    const poolMinSal = pool.length ? Math.min(...pool.map(p => p.salary)) : 3500;
     for (const p of pool) {
         if (used.has(p.name))
             continue;
@@ -714,7 +715,7 @@ function buildLineup(players, lockedNames = [], excludedNames = []) {
         for (const pos of p.positions) {
             if ((needed[pos] || 0) > 0) {
                 const budgetAfter = budget - p.salary;
-                const minNeeded = (slotsLeft - 1) * 3500;
+                const minNeeded = (slotsLeft - 1) * poolMinSal;
                 if (budgetAfter >= minNeeded && canPlace(p)) {
                     place(p, pos);
                     break;
