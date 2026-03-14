@@ -558,6 +558,7 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         if (cols.length < 8)
             continue;
         const get = (key) => { var _a, _b; return (_b = (_a = cols[headers.indexOf(key)]) === null || _a === void 0 ? void 0 : _a.trim()) !== null && _b !== void 0 ? _b : ""; };
+        const id = get("id") || get("playerid") || get("player id") || "";
         const name = get("nickname") || get("firstname") + " " + get("lastname");
         const csvFppg = parseFloat(get("fppg")) || 0;
         const salary = parseInt(get("salary")) || 0;
@@ -598,7 +599,7 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         const boomBust = getBoomBust(name);
         const praProj = calcPRAProjection(name, opponent, gamePace, injury);
         const p = {
-            name, fppg, csvFppg, salary, injury, played, team, game,
+            name, id, fppg, csvFppg, salary, injury, played, team, game,
             positions, ownership, value, statMuseFD,
             smLast: smData === null || smData === void 0 ? void 0 : smData.lastGame,
             smAvg: smData === null || smData === void 0 ? void 0 : smData.fdAvg,
@@ -610,6 +611,52 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
     }
     return players.sort((a, b) => b.score - a.score);
 }
+// ── CSV EXPORT ───────────────────────────────────────────────────────────
+function exportLineupsCSV(lineups, platform) {
+    if (!lineups || lineups.length === 0) return;
+    const isFD = platform === "FD";
+
+    // FD slot order: PG,PG,SF,SF,PF,PF,C,SG,SG (9 slots)
+    // DK slot order: PG,SG,SF,PF,C,G,F,UTIL (8 slots)
+    const slotOrder = isFD
+        ? ["PG","PG","SF","SF","PF","PF","C","SG","SG"]
+        : ["PG","SG","SF","PF","C","G","F","UTIL"];
+
+    const header = slotOrder.join(",");
+    const rows = [header];
+
+    for (const lu of lineups) {
+        // Build slot→player map
+        const slotMap = {};
+        for (const p of lu) {
+            if (!slotMap[p.slot]) slotMap[p.slot] = [];
+            slotMap[p.slot].push(p);
+        }
+        // Fill each slot in order — use ID if available, else name
+        const usedNames = new Set();
+        const cells = slotOrder.map(slot => {
+            const candidates = slotMap[slot] || [];
+            const p = candidates.find(c => !usedNames.has(c.name));
+            if (p) {
+                usedNames.add(p.name);
+                // FD uses player IDs; DK accepts names or IDs
+                return (isFD && p.id) ? p.id : p.name;
+            }
+            return "";
+        });
+        rows.push(cells.join(","));
+    }
+
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `court_edge_${platform}_lineups_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 // ── LINEUP ENGINE ────────────────────────────────────────────────────────
 function buildLineup(players, lockedNames = [], excludedNames = []) {
     // Separate locked from pool
@@ -620,16 +667,26 @@ function buildLineup(players, lockedNames = [], excludedNames = []) {
     const lineup = [];
     const used = new Set();
     let budget = RULES.SALARY_CAP;
+    const MAX_PER_TEAM = 4;
+    const teamCount = () => {
+        const counts = {};
+        for (const p of lineup) counts[p.team] = (counts[p.team] || 0) + 1;
+        return counts;
+    };
     const place = (p, pos) => {
         needed[pos]--;
         lineup.push(Object.assign(Object.assign({}, p), { slot: pos }));
         used.add(p.name);
         budget -= p.salary;
     };
+    const canPlace = (p) => {
+        const counts = teamCount();
+        return (counts[p.team] || 0) < MAX_PER_TEAM;
+    };
     // 1. Place locked players
     for (const p of locked) {
         for (const pos of p.positions) {
-            if ((needed[pos] || 0) > 0) {
+            if ((needed[pos] || 0) > 0 && canPlace(p)) {
                 place(p, pos);
                 break;
             }
@@ -647,7 +704,7 @@ function buildLineup(players, lockedNames = [], excludedNames = []) {
             if ((needed[pos] || 0) > 0) {
                 const budgetAfter = budget - p.salary;
                 const minNeeded = (slotsLeft - 1) * 3500;
-                if (budgetAfter >= minNeeded) {
+                if (budgetAfter >= minNeeded && canPlace(p)) {
                     place(p, pos);
                     break;
                 }
@@ -662,7 +719,7 @@ function buildLineup(players, lockedNames = [], excludedNames = []) {
             if (slotsLeft === 0)
                 break;
             for (const pos of p.positions) {
-                if ((needed[pos] || 0) > 0 && budget - p.salary >= 0) {
+                if ((needed[pos] || 0) > 0 && budget - p.salary >= 0 && canPlace(p)) {
                     place(p, pos);
                     break;
                 }
@@ -1737,6 +1794,10 @@ function App() {
                     React.createElement("button", { onClick: checkLateSwaps, style: Object.assign(Object.assign({}, S.btn("ghost")), { border: "1px solid #f59e0b44", color: "#f59e0b", fontSize: 10 }) }, "⚡ LATE SWAP"),
                     React.createElement("button", { onClick: () => resultsRef.current && resultsRef.current.click(), style: Object.assign(Object.assign({}, S.btn("ghost")), { fontSize: 10 }) }, "📊 MY RESULTS"),
                     React.createElement("input", { ref: resultsRef, type: "file", accept: ".csv", style: { display: "none" }, onChange: e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setResultsData(analyzeResults(parseResultsCSV(ev.target.result))); r.readAsText(f); } }),
+                    React.createElement("button", {
+                        onClick: () => exportLineupsCSV(lineups, platform),
+                        style: Object.assign(Object.assign({}, S.btn("ghost")), { border: "1px solid #22c55e44", color: "#22c55e", fontSize: 10, fontWeight: 700 })
+                    }, "⬇ EXPORT CSV"),
                     React.createElement("button", { style: S.btn("ghost"), onClick: () => setStep("build") }, "\u2190 EDIT"),
                     React.createElement("button", { style: S.btn("success"), onClick: handleGenerate }, "\u21BB REGEN"))),
             // ── CONTEST PICKER PANEL ──
@@ -1860,6 +1921,7 @@ function App() {
                             ["Ownership OK", stats.avgOwn >= 15 && stats.avgOwn <= 35],
                             ["Salary used", stats.total >= RULES.MIN_SALARY_USED],
                             ["Floor clear", lu.every(p => p.fppg >= RULES.FLOOR_FPPG_MIN)],
+                            ["Max 4/team", (() => { const c={}; for(const p of lu) c[p.team]=(c[p.team]||0)+1; return Math.max(...Object.values(c))<=4; })()],
                             ["SM data", lu.filter(p => p.statMuseFD).length >= 3],
                         ].map(([l, pass]) => (React.createElement("div", { key: l, style: { background: "#0a1520", borderRadius: 6, padding: "7px 10px", border: `1px solid ${pass ? "#16a34a" : "#991b1b"}33`, display: "flex", alignItems: "center", gap: 6 } },
                             React.createElement("span", null, pass ? "✅" : "⚠️"),
