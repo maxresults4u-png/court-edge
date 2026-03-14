@@ -64,13 +64,13 @@ const PLATFORM_CONFIG = {
     DK: {
         name: "DraftKings", short: "DK", color: "#53d337",
         SALARY_CAP: 50000, MIN_SALARY_USED: 48500,
-        NEVER_PLAY_OWN_THRESHOLD: 5.0, DNP_BLOCK_THRESHOLD: 1.0,
+        NEVER_PLAY_OWN_THRESHOLD: 6.0, DNP_BLOCK_THRESHOLD: 1.0,
         ANCHOR_FPPG_THRESHOLD: 38, FLOOR_FPPG_MIN: 14,
         POSITIONS: { PG: 1, SG: 1, SF: 1, PF: 1, C: 1, G: 1, F: 1, UTIL: 1 },
         POSITION_ORDER: ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
         LINEUP_SIZE: 8,
         OWN_WEIGHTS: { chalk: 1.12, mid: 1.05, low: 0.90, punt: 0.0 },
-        CHALK_THRESHOLD: 25, ownershipNote: "Chalk >=25% · Never-play <5%",
+        CHALK_THRESHOLD: 25, ownershipNote: "Chalk >=25% · Never-play <6%",
     },
 };
 let RULES = PLATFORM_CONFIG.FD;
