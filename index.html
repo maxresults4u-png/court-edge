@@ -1444,7 +1444,6 @@ function App() {
                                     React.createElement("button", { onClick: () => toggleLock(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" } }, "LOCK"),
                                     React.createElement("button", { onClick: () => toggleExclude(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" } }, "OUT"),
                                     React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" } }, "SM\u2197")))));
-                    }))))
                     }))))),
             activeTab === "exposure" && (React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } },
