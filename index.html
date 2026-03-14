@@ -72,6 +72,30 @@ const PLATFORM_CONFIG = {
         OWN_WEIGHTS: { chalk: 1.12, mid: 1.05, low: 0.90, punt: 0.0 },
         CHALK_THRESHOLD: 25, ownershipNote: "Chalk >=25% · Never-play <6%",
     },
+    DK_SD: {
+        name: "DraftKings Showdown", short: "DK", color: "#53d337",
+        SALARY_CAP: 50000, MIN_SALARY_USED: 30000,
+        NEVER_PLAY_OWN_THRESHOLD: 6.0, DNP_BLOCK_THRESHOLD: 1.0,
+        ANCHOR_FPPG_THRESHOLD: 55, FLOOR_FPPG_MIN: 14,
+        POSITIONS: { CPT: 1, FLEX: 5 },
+        POSITION_ORDER: ["CPT", "FLEX"],
+        LINEUP_SIZE: 6,
+        OWN_WEIGHTS: { chalk: 1.12, mid: 1.05, low: 0.90, punt: 0.0 },
+        CHALK_THRESHOLD: 25, ownershipNote: "Showdown · CPT scores 1.5×",
+        isShowdown: true, cptMult: 1.5,
+    },
+    FD_SD: {
+        name: "FanDuel Showdown", short: "FD", color: "#1493ff",
+        SALARY_CAP: 60000, MIN_SALARY_USED: 55000,
+        NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
+        ANCHOR_FPPG_THRESHOLD: 60, FLOOR_FPPG_MIN: 15,
+        POSITIONS: { MVP: 1, STAR: 1, PRO: 1, UTIL: 2 },
+        POSITION_ORDER: ["MVP", "STAR", "PRO", "UTIL"],
+        LINEUP_SIZE: 5,
+        OWN_WEIGHTS: { chalk: 1.15, mid: 1.05, low: 0.88, punt: 0.0 },
+        CHALK_THRESHOLD: 30, ownershipNote: "Showdown · MVP 2×, STAR 1.5×",
+        isShowdown: true, cptMult: 2.0, starMult: 1.5,
+    },
 };
 let RULES = PLATFORM_CONFIG.FD;
 let POSITION_ORDER = RULES.POSITION_ORDER;
@@ -430,7 +454,7 @@ function recommendContests(lineups, platform) {
     const hasStack = lineups.filter(lu => lu._hasStack).length;
     const stackPct = lineups.length ? hasStack/lineups.length : 0;
 
-    const isFD = platform === "FD";
+    const isFD = platform === "FD" || platform === "FD_SD";
     const recs = [];
 
     if (avgOwn <= 20) {
@@ -558,9 +582,12 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         if (cols.length < 8)
             continue;
         const get = (key) => { var _a, _b; return (_b = (_a = cols[headers.indexOf(key)]) === null || _a === void 0 ? void 0 : _a.trim()) !== null && _b !== void 0 ? _b : ""; };
-        // ── DK Showdown: skip CPT rows (inflated salary duplicates) ──
         const rosterPos = get("rosterposition");
-        if (rosterPos === "CPT") continue;
+        // ── Showdown mode: include CPT rows as separate CPT-slot entries ──
+        // ── Classic mode: skip CPT rows (inflated salary) ──
+        const isShowdownMode = RULES.isShowdown;
+        if (rosterPos === "CPT" && !isShowdownMode) continue;
+        const isCPTRow = rosterPos === "CPT";
         const id = get("id") || get("playerid") || "";
         // FD: Nickname | DK: Name | fallback: FirstName + LastName
         const name = get("nickname") || get("name") || (get("firstname") + " " + get("lastname")).trim();
@@ -578,19 +605,37 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         const posRaw = (rosterPos && rosterPos !== "UTIL" && rosterPos !== "FLEX")
             ? rosterPos
             : get("position");
-        // FD: positions are standard. DK: also add G (PG/SG), F (SF/PF), UTIL (any) flex slots
+        // Classic FD/DK positions
         const basePositions = posRaw.split("/").map(p => p.trim()).filter(p => ["PG","SG","SF","PF","C"].includes(p));
-        const positions = [...basePositions];
-        if (RULES.short === "DK") {
-            if (basePositions.includes("PG") || basePositions.includes("SG")) positions.push("G");
-            if (basePositions.includes("SF") || basePositions.includes("PF")) positions.push("F");
-            positions.push("UTIL");
+        let positions;
+        if (RULES.isShowdown) {
+            // Showdown DK: CPT rows → ["CPT"], FLEX rows → ["FLEX"]
+            // Showdown FD: all rows → ["MVP","STAR","PRO","UTIL"] (all can fill any slot)
+            if (RULES.cptMult && RULES.starMult) {
+                // FD Showdown
+                positions = ["MVP","STAR","PRO","UTIL"];
+            } else if (isCPTRow) {
+                positions = ["CPT"];
+            } else {
+                positions = ["FLEX"];
+            }
+        } else {
+            positions = [...basePositions];
+            if (RULES.short === "DK") {
+                if (basePositions.includes("PG") || basePositions.includes("SG")) positions.push("G");
+                if (basePositions.includes("SF") || basePositions.includes("PF")) positions.push("F");
+                positions.push("UTIL");
+            }
         }
         if (!name || !salary || !csvFppg || injury === "O")
             continue;
-        // Use StatMuse FD avg if available, otherwise fall back to CSV FPPG
+        // In showdown mode, CPT rows get 1.5x fppg projection (already have 1.5x salary)
+        // FLEX rows use base fppg. For FD Showdown, we create 3 variants below.
         const smData = statMuseMap[name.toLowerCase()];
-        const fppg = (smData === null || smData === void 0 ? void 0 : smData.fdAvg) || csvFppg;
+        const baseFppg = (smData?.fdAvg) || csvFppg;
+        // CPT multiplier for DK Showdown
+        const slotMult = (RULES.isShowdown && isCPTRow && RULES.cptMult && !RULES.starMult) ? RULES.cptMult : 1.0;
+        const fppg = +(baseFppg * slotMult).toFixed(2);
         const statMuseFD = !!smData;
         if (fppg < RULES.FLOOR_FPPG_MIN)
             continue;
@@ -617,19 +662,36 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
             smTrend: smData === null || smData === void 0 ? void 0 : smData.trend,
             opponent, matchupGrade, gamePace, paceUp, formData, boomBust, praProj,
         };
+        if (RULES.isShowdown) p._baseName = name; // used for unique-player dedup
         p.score = compositeScore(p);
         players.push(p);
+        // FD Showdown: add MVP (2x) and STAR (1.5x) variants for each player
+        if (RULES.isShowdown && RULES.starMult) {
+            const mvpP = { ...p, fppg: +(baseFppg * RULES.cptMult).toFixed(2), salary: Math.round(salary * 1.5), positions: ["MVP"], _baseName: name };
+            mvpP.score = compositeScore(mvpP);
+            players.push(mvpP);
+            const starP = { ...p, fppg: +(baseFppg * RULES.starMult).toFixed(2), salary: Math.round(salary * 1.25), positions: ["STAR"], _baseName: name };
+            starP.score = compositeScore(starP);
+            players.push(starP);
+        }
     }
     return players.sort((a, b) => b.score - a.score);
 }
 // ── CSV EXPORT ───────────────────────────────────────────────────────────
 function exportLineupsCSV(lineups, platform) {
     if (!lineups || lineups.length === 0) return;
-    const isFD = platform === "FD";
+    const isFD = platform === "FD" || platform === "FD_SD";
+    const isSD = platform === "DK_SD" || platform === "FD_SD";
 
-    // FD slot order: PG,PG,SF,SF,PF,PF,C,SG,SG (9 slots)
-    // DK slot order: PG,SG,SF,PF,C,G,F,UTIL (8 slots)
-    const slotOrder = isFD
+    // Classic FD slot order: PG,PG,SF,SF,PF,PF,C,SG,SG (9 slots)
+    // Classic DK slot order: PG,SG,SF,PF,C,G,F,UTIL (8 slots)
+    // DK Showdown: CPT,FLEX,FLEX,FLEX,FLEX,FLEX (6 slots) — exports as player names
+    // FD Showdown: MVP,STAR,PRO,UTIL,UTIL (5 slots)
+    const slotOrder = platform === "FD_SD"
+        ? ["MVP","STAR","PRO","UTIL","UTIL"]
+        : platform === "DK_SD"
+        ? ["CPT","FLEX","FLEX","FLEX","FLEX","FLEX"]
+        : isFD
         ? ["PG","PG","SF","SF","PF","PF","C","SG","SG"]
         : ["PG","SG","SF","PF","C","G","F","UTIL"];
 
@@ -688,11 +750,17 @@ function buildLineup(players, lockedNames = [], excludedNames = []) {
         needed[pos]--;
         lineup.push(Object.assign(Object.assign({}, p), { slot: pos }));
         used.add(p.name);
+        // In showdown mode, also mark the player's base name as used
+        // so the same player can't appear in both CPT and FLEX
+        if (p._baseName) used.add("__base__" + p._baseName);
         budget -= p.salary;
     };
     const canPlace = (p) => {
         const counts = teamCount();
-        return (counts[p.team] || 0) < MAX_PER_TEAM;
+        if ((counts[p.team] || 0) >= MAX_PER_TEAM) return false;
+        // Showdown: prevent same real player in CPT+FLEX slots
+        if (p._baseName && used.has("__base__" + p._baseName)) return false;
+        return true;
     };
     // 1. Place locked players
     for (const p of locked) {
@@ -1226,7 +1294,12 @@ function OwnershipEditor({ players, ownershipMap, onUpdate }) {
 // ── LINEUP CARD ──────────────────────────────────────────────────────────
 function LineupCard({ lineup, index, isSelected, onSelect }) {
     const stats = lineupStats(lineup);
-    const sorted = [...lineup].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
+    // For showdown, FLEX slots all share the same position name
+    const sorted = [...lineup].sort((a, b) => {
+        const ai = POSITION_ORDER.indexOf(a.slot) !== -1 ? POSITION_ORDER.indexOf(a.slot) : 999;
+        const bi = POSITION_ORDER.indexOf(b.slot) !== -1 ? POSITION_ORDER.indexOf(b.slot) : 999;
+        return ai - bi || b.fppg - a.fppg;
+    });
     const ownColor = (o) => o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171";
     return (React.createElement("div", { onClick: () => onSelect(index), style: {
             background: isSelected ? "#0d2235" : "#091520",
@@ -1306,17 +1379,19 @@ function App() {
     const [resultsData, setResultsData] = useState(null);
     const [showResults, setShowResults] = useState(false);
     const resultsRef = useRef();
+    const [gameFilter, setGameFilter] = useState(null); // null = all games; Set of gameStr = filtered
+    const [availableGames, setAvailableGames] = useState([]); // list of gameStr from CSV
     const switchPlatform = (p) => {
         RULES = PLATFORM_CONFIG[p];
         POSITION_ORDER = RULES.POSITION_ORDER;
         setPlatform(p);
-        // Reset lineup/player state on switch
         setPlayers([]);
         setCsvText("");
         setLineups([]);
         setOwnershipMap({});
         setLockedNames([]);
         setExcludedNames([]);
+        setGameFilter(null);
         setStep("upload");
     };
     const [lineMovement, setLineMovement] = useState([
@@ -1366,7 +1441,11 @@ function App() {
         }
         catch (e) { /* silent fail */ }
         setOwnershipMap(finalOwn);
-        rebuildPlayers(text, finalOwn, statMuseMap);
+        const parsed0 = rebuildPlayers(text, finalOwn, statMuseMap);
+        // Extract unique games for game filter
+        const gamesInCSV = [...new Set((parsed0 || []).map(p => p.game).filter(Boolean))];
+        setAvailableGames(gamesInCSV);
+        setGameFilter(null); // reset to "all games"
         setStep("build");
         // ── AUTO-FETCH ESPN INJURIES ──────────────────────────────────────
         setInjuryStatus("loading");
@@ -1488,6 +1567,7 @@ function App() {
     const handleGenerate = () => {
         setGenerating(true);
         setTimeout(() => {
+          try {
             // Enforce ownership floor and excluded list at generation time
             // Also suppress entire teams when their star is excluded
             const suppressedTeams = new Set();
@@ -1496,14 +1576,14 @@ function App() {
                 suppressedTeams.add(STAR_TEAM_MAP[n]); });
             const eligiblePlayers = players.filter(p => {
                 var _a, _b;
-                // Use ownershipMap directly (current) rather than p.ownership (may be stale)
                 const currentOwn = (_b = (_a = ownershipMap[p.name.toLowerCase()]) !== null && _a !== void 0 ? _a : p.ownership) !== null && _b !== void 0 ? _b : 15;
-                // 🚨 DNP block: under 1% ownership = likely inactive/DNP (Jordan Poole 0.2%, Slawson 0.5% = 0 pts disaster)
-                if (currentOwn < RULES.DNP_BLOCK_THRESHOLD)
-                    return false;
-                return currentOwn >= RULES.NEVER_PLAY_OWN_THRESHOLD &&
-                    !excludedNames.includes(p.name) &&
-                    !suppressedTeams.has(p.team);
+                if (currentOwn < RULES.DNP_BLOCK_THRESHOLD) return false;
+                if (currentOwn < RULES.NEVER_PLAY_OWN_THRESHOLD) return false;
+                if (excludedNames.includes(p.name)) return false;
+                if (suppressedTeams.has(p.team)) return false;
+                // Game filter — only include players from selected games
+                if (gameFilter && gameFilter.size > 0 && p.game && !gameFilter.has(p.game)) return false;
+                return true;
             });
             const lus = generateLineupsWithStrategy(eligiblePlayers, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
             setLineups(lus);
@@ -1515,6 +1595,12 @@ function App() {
             setOutSnapshot(injuryData.filter(p => p.status === "OUT").map(p => p.name));
             setLateSwaps(null);
             setGenerating(false);
+          } catch(err) {
+            console.error("Generation error:", err);
+            setGenerating(false);
+            setLineups([]);
+            setStep("results");
+          }
         }, 80);
     };
     const checkLateSwaps = () => {
@@ -1555,20 +1641,21 @@ function App() {
         React.createElement("div", { style: S.hdr },
             React.createElement("div", null,
                 React.createElement("div", { style: { fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" } }, "COURT EDGE"),
-                React.createElement("div", { style: { fontSize: 9, color: PLATFORM_CONFIG[platform].color, letterSpacing: 3 } }, `NBA DFS OPTIMIZER v4 · ${PLATFORM_CONFIG[platform].name.toUpperCase()} · ${PLATFORM_CONFIG[platform].ownershipNote}`)),
+                React.createElement("div", { style: { fontSize: 9, color: PLATFORM_CONFIG[platform].color, letterSpacing: 3 } }, `NBA DFS OPTIMIZER v4 · ${PLATFORM_CONFIG[platform].name.toUpperCase()}${PLATFORM_CONFIG[platform].isShowdown ? " 🏀 SHOWDOWN" : ""} · ${PLATFORM_CONFIG[platform].ownershipNote}`)),
             React.createElement("div", { style: { display: "flex", gap: 10, alignItems: "center" } },
                 React.createElement("div", { style: { display: "flex", gap: 0, borderRadius: 8, overflow: "hidden", border: "1px solid #1e3040" } },
-                    ["FD", "DK"].map(p => React.createElement("button", {
-                        key: p,
-                        onClick: () => switchPlatform(p),
+                    [["FD","FD Classic"],["FD_SD","FD Show"],["DK","DK Classic"],["DK_SD","DK Show"]].map(([key,label]) => React.createElement("button", {
+                        key,
+                        onClick: () => switchPlatform(key),
                         style: {
-                            padding: "5px 16px", border: "none", cursor: "pointer",
-                            fontFamily: "inherit", fontWeight: 700, fontSize: 11, letterSpacing: 1,
-                            background: platform === p ? PLATFORM_CONFIG[p].color : "#0a1520",
-                            color: platform === p ? "#000" : "#4a6a80",
+                            padding: "5px 12px", border: "none", cursor: "pointer",
+                            fontFamily: "inherit", fontWeight: 700, fontSize: 10, letterSpacing: 0.5,
+                            background: platform === key ? PLATFORM_CONFIG[key].color : "#0a1520",
+                            color: platform === key ? "#000" : "#4a6a80",
                             transition: "all 0.15s",
+                            borderRight: "1px solid #1e3040",
                         }
-                    }, p))),
+                    }, label))),
                 React.createElement("div", { style: { display: "flex", gap: 6 } }, [["upload", "1.UPLOAD"], ["build", "2.BUILD"], ["results", "3.RESULTS"]].map(([st, label]) => (React.createElement("button", { key: st, style: S.pill(step === st), onClick: () => players.length > 0 && setStep(st) }, label)))))),
         step === "upload" && (React.createElement("div", { style: { maxWidth: 620, margin: "40px auto", padding: "0 24px" } },
             (() => {
@@ -1607,7 +1694,7 @@ function App() {
                         "Then enrich with StatMuse live FD averages in step 2.")),
                 React.createElement("div", { onClick: () => fileRef.current.click(), style: { border: "2px dashed #1e3040", borderRadius: 10, padding: "36px 20px", textAlign: "center", cursor: "pointer" }, onMouseOver: e => e.currentTarget.style.borderColor = "#3b82f6", onMouseOut: e => e.currentTarget.style.borderColor = "#1e3040" },
                     React.createElement("div", { style: { fontSize: 13, color: "#60a5fa", marginBottom: 4 } }, "Click to select CSV"),
-                    React.createElement("div", { style: { fontSize: 11, color: "#4a6a80" } }, platform === "FD" ? "FanDuel-NBA-*.csv" : "DK_NBA_*.csv")),
+                    React.createElement("div", { style: { fontSize: 11, color: "#4a6a80" } }, platform.startsWith("FD") ? "FanDuel-NBA-*.csv" : "DK_NBA_*.csv")),
                 React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } }),
                 React.createElement("div", { style: { marginTop: 18, padding: "12px 14px", background: "#0a1a2a", borderRadius: 8, border: "1px solid #1e3040" } },
                     React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 } }, "WHAT'S NEW IN V4"),
@@ -1693,6 +1780,40 @@ function App() {
                                 }, excludedNames: excludedNames, injuryData: injuryData, injuryStatus: injuryStatus }),
                     React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } })),
                 React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+                    availableGames.length > 0 && React.createElement("div", { style: { ...S.card, marginBottom: 0 } },
+                        React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 8 } }, "🏀 GAME FILTER"),
+                        React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", marginBottom: 8 } }, "Include players from selected games only"),
+                        React.createElement("div", { style: { display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 } }, [
+                            ...availableGames.map(g => {
+                                const active = !gameFilter || gameFilter.has(g);
+                                return React.createElement("button", {
+                                    key: g,
+                                    onClick: () => {
+                                        setGameFilter(prev => {
+                                            // If no filter set, init with all games selected
+                                            const current = prev ? new Set(prev) : new Set(availableGames);
+                                            if (current.has(g)) {
+                                                current.delete(g);
+                                                if (current.size === 0) return null; // all deselected = all on
+                                            } else {
+                                                current.add(g);
+                                                if (current.size === availableGames.length) return null; // all selected = no filter
+                                            }
+                                            return current;
+                                        });
+                                    },
+                                    style: {
+                                        fontSize: 9, padding: "3px 8px", borderRadius: 5, cursor: "pointer",
+                                        fontFamily: "inherit", fontWeight: active ? 700 : 400,
+                                        border: `1px solid ${active ? "#3b82f644" : "#1e3040"}`,
+                                        background: active ? "#1a3550" : "#0a1520",
+                                        color: active ? "#60a5fa" : "#3b6280",
+                                    }
+                                }, g);
+                            }),
+                        ]),
+                        gameFilter && React.createElement("div", { style: { fontSize: 9, color: "#f59e0b" } }, `⚡ Filtering to ${gameFilter.size} game(s) — ${players.filter(p => gameFilter.has(p.game)).length} players`)
+                    ),
                     React.createElement("div", { style: S.card },
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "LOCK / EXCLUDE"),
                         React.createElement("div", { style: { maxHeight: 220, overflowY: "auto" } }, players.slice(0, 35).map(p => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 5, marginBottom: 5, fontSize: 11 } },
@@ -1792,13 +1913,15 @@ function App() {
                 React.createElement("div", { style: { fontSize: 11, color: "#4a6a80", lineHeight: 1.8 } },
                     "Possible causes:",
                     React.createElement("br", null),
-                    "\u2022 Not enough eligible players (need 9 across PG\u00D72, SG\u00D72, SF\u00D72, PF\u00D72, C\u00D71)",
+                    `\u2022 Not enough eligible players (need ${RULES.LINEUP_SIZE} slots: ${Object.entries(RULES.POSITIONS).map(([p,n])=>n>1?p+"\u00D7"+n:p).join(", ")})`,
                     React.createElement("br", null),
-                    "\u2022 Too many players excluded",
+                    "\u2022 Too many players excluded or auto-excluded by ESPN injuries",
                     React.createElement("br", null),
                     "\u2022 Salary cap too tight with current pool",
                     React.createElement("br", null),
-                    "\u2022 FPPG floor (15) filtering too many players"),
+                    `\u2022 FPPG floor (${RULES.FLOOR_FPPG_MIN}) or ownership floor (${RULES.NEVER_PLAY_OWN_THRESHOLD}%) filtering too many players`,
+                    React.createElement("br", null),
+                    "\u2022 Check: are you in DK mode with a DK CSV?"),
                 React.createElement("button", { onClick: () => setStep("build"), style: Object.assign(Object.assign({}, S.btn("primary")), { marginTop: 12 }) }, "\u2190 BACK TO BUILD"))),
             React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 16 } },
                 ["lineups", "players", "exposure"].map(t => (React.createElement("button", { key: t, style: S.pill(activeTab === t), onClick: () => setActiveTab(t) }, t.toUpperCase()))),
