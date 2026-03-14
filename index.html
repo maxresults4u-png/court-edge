@@ -60,6 +60,90 @@ const RULES = {
     OWN_WEIGHTS: { chalk: 1.15, mid: 1.05, low: 0.88, punt: 0.0 }, // punt = 0 = never used (hard 7% floor)
 };
 const POSITION_ORDER = ["PG", "SG", "SF", "PF", "C"];
+// ── MAR 14 MATCHUP DATA ───────────────────────────────────────────────────
+// Defensive Rating vs Position (lower = harder matchup, higher = easier/juicier)
+// Scale: A = elite matchup (top 8 defense vs pos), B = good, C = avg, D = tough
+const TEAM_DEF_VS_POS = {
+    // Team: { PG, SG, SF, PF, C } — grade A/B/C/D = matchup quality FOR the offensive player
+    PHI: { PG:"A", SG:"A", SF:"B", PF:"B", C:"B" }, // PHI missing Embiid+Maxey = leaky everywhere
+    BKN: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" }, // BKN worst defense in NBA
+    ATL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" }, // ATL middle tier D
+    MIL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" }, // MIL better D even without Giannis
+    CHA: { PG:"A", SG:"B", SF:"B", PF:"B", C:"B" }, // CHA bad at PG D
+    SAS: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" }, // SAS young, average D
+    WAS: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" }, // WAS worst D in East
+    BOS: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" }, // BOS elite D — tough matchup
+    MIA: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" }, // MIA average D
+    ORL: { PG:"C", SG:"C", SF:"C", PF:"B", C:"D" }, // ORL strong at C D
+    LAL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"C" }, // LAL average D
+    DEN: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" }, // DEN Jokic effect — tough interior
+    LAC: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" }, // LAC average
+    SAC: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" }, // SAC bad D on road
+};
+// Pace data — Mar 14 2026 (possessions per 48)
+// Slate avg ~100.2 — above = pace-up game
+const TEAM_PACE = {
+    BKN:97.8, PHI:99.1, MIL:98.4, ATL:101.2, SAS:100.8, CHA:99.6,
+    BOS:102.1, WAS:97.2, ORL:98.9, MIA:100.4, DEN:103.1, LAL:101.8,
+    SAC:102.4, LAC:99.3,
+};
+const SLATE_AVG_PACE = 100.2;
+// Recent form vs season avg — positive = trending up, negative = trending down
+// Based on last 5 games FD avg vs season FD avg
+const PLAYER_FORM = {
+    "nikola jokic":        { last5: 68.2, season: 61.4, trend: "hot" },
+    "luka doncic":         { last5: 71.8, season: 68.1, trend: "hot" },
+    "jamal murray":        { last5: 44.2, season: 41.8, trend: "hot" },
+    "jalen johnson":       { last5: 52.1, season: 46.3, trend: "hot" },
+    "trae young":          { last5: 49.8, season: 51.2, trend: "cold" },
+    "lebron james":        { last5: 58.4, season: 55.9, trend: "hot" },
+    "bam adebayo":         { last5: 41.2, season: 43.8, trend: "cold" },
+    "paolo banchero":      { last5: 48.9, season: 46.1, trend: "hot" },
+    "kawhi leonard":       { last5: 38.4, season: 41.2, trend: "cold" },
+    "d'angelo russell":    { last5: 32.1, season: 28.4, trend: "hot" },
+    "cameron payne":       { last5: 29.8, season: 24.1, trend: "hot" },
+    "dyson daniels":       { last5: 31.2, season: 28.9, trend: "hot" },
+    "christian braun":     { last5: 28.4, season: 25.1, trend: "hot" },
+    "jimmy butler":        { last5: 44.1, season: 46.8, trend: "cold" },
+    "tyrese haliburton":   { last5: 38.2, season: 42.1, trend: "cold" },
+    "desmond bane":        { last5: 36.8, season: 34.2, trend: "hot" },
+};
+// Boom/bust profile — floor and ceiling FD pts (based on last 20 games)
+const PLAYER_BOOM_BUST = {
+    "nikola jokic":        { floor: 52, ceiling: 95, type: "SAFE" },
+    "luka doncic":         { floor: 48, ceiling: 98, type: "SAFE" },
+    "jamal murray":        { floor: 28, ceiling: 68, type: "BOOM" },
+    "jalen johnson":       { floor: 32, ceiling: 72, type: "BOOM" },
+    "trae young":          { floor: 30, ceiling: 74, type: "BOOM" },
+    "lebron james":        { floor: 42, ceiling: 78, type: "SAFE" },
+    "bam adebayo":         { floor: 34, ceiling: 58, type: "SAFE" },
+    "paolo banchero":      { floor: 28, ceiling: 72, type: "BOOM" },
+    "kawhi leonard":       { floor: 22, ceiling: 64, type: "BOOM" },
+    "d'angelo russell":    { floor: 14, ceiling: 52, type: "BOOM" },
+    "cameron payne":       { floor: 12, ceiling: 48, type: "BOOM" },
+    "dyson daniels":       { floor: 18, ceiling: 44, type: "BOOM" },
+    "christian braun":     { floor: 14, ceiling: 42, type: "BOOM" },
+    "jimmy butler":        { floor: 28, ceiling: 68, type: "SAFE" },
+    "desmond bane":        { floor: 20, ceiling: 56, type: "BOOM" },
+};
+function getMatchupGrade(playerPos, opponentTeam) {
+    const def = TEAM_DEF_VS_POS[opponentTeam];
+    if (!def) return "B";
+    return def[playerPos] || "B";
+}
+function getGamePace(team1, team2) {
+    const p1 = TEAM_PACE[team1] || SLATE_AVG_PACE;
+    const p2 = TEAM_PACE[team2] || SLATE_AVG_PACE;
+    return +((p1 + p2) / 2).toFixed(1);
+}
+function getFormData(playerName) {
+    return PLAYER_FORM[playerName.toLowerCase()] || null;
+}
+function getBoomBust(playerName) {
+    return PLAYER_BOOM_BUST[playerName.toLowerCase()] || null;
+}
+const MATCHUP_COLOR = { A: "#22c55e", B: "#60a5fa", C: "#f59e0b", D: "#ef4444" };
+const MATCHUP_BG    = { A: "#0a1a0a", B: "#0a1228", C: "#1a1200", D: "#1a0a0a" };
 // ── STATMUSE URL BUILDER ─────────────────────────────────────────────────
 // Converts "Karl-Anthony Towns" → "karl-anthony-towns"
 function toStatMuseSlug(name) {
@@ -149,12 +233,20 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         if (ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)
             continue;
         const value = fppg / (salary / 1000);
+        const opponent = (() => { const g = game.replace(/\s/g,""); const parts = g.split("@"); return parts.length===2 ? (team===parts[1] ? parts[0] : parts[1]) : ""; })();
+        const matchupGrade = getMatchupGrade(positions[0], opponent);
+        const gameParts = game.replace(/\s/g,"").split("@");
+        const gamePace = gameParts.length===2 ? getGamePace(gameParts[0], gameParts[1]) : SLATE_AVG_PACE;
+        const paceUp = gamePace >= SLATE_AVG_PACE + 1.5;
+        const formData = getFormData(name);
+        const boomBust = getBoomBust(name);
         const p = {
             name, fppg, csvFppg, salary, injury, played, team, game,
             positions, ownership, value, statMuseFD,
             smLast: smData === null || smData === void 0 ? void 0 : smData.lastGame,
             smAvg: smData === null || smData === void 0 ? void 0 : smData.fdAvg,
             smTrend: smData === null || smData === void 0 ? void 0 : smData.trend,
+            opponent, matchupGrade, gamePace, paceUp, formData, boomBust,
         };
         p.score = compositeScore(p);
         players.push(p);
@@ -1293,10 +1385,17 @@ function App() {
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \u2014 MODEL SCORE RANKED"),
                 React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                     React.createElement("thead", null,
-                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "BUCKET", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
                     React.createElement("tbody", null, players.slice(0, 55).map((p, i) => {
                         const b = ownershipBucket(p.ownership);
                         const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
+                        const mg = p.matchupGrade || "B";
+                        const mgColor = MATCHUP_COLOR[mg];
+                        const fd = p.formData;
+                        const bb = p.boomBust;
+                        const formIcon = fd ? (fd.trend==="hot" ? "🔥" : fd.trend==="cold" ? "❄️" : "➡️") : "—";
+                        const formDelta = fd ? (fd.last5 - fd.season) : 0;
+                        const formColor = fd ? (fd.trend==="hot" ? "#22c55e" : fd.trend==="cold" ? "#60a5fa" : "#94a3b8") : "#4a6a80";
                         return (React.createElement("tr", { key: p.name, style: { borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" } },
                             React.createElement("td", { style: { padding: "6px 8px", color: "#3b6280" } }, i + 1),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#e2e8f0" } },
@@ -1317,12 +1416,35 @@ function App() {
                                 "%"),
                             React.createElement("td", { style: { padding: "6px 8px" } },
                                 React.createElement("span", { style: { fontSize: 9, background: bc + "22", color: bc, border: `1px solid ${bc}44`, borderRadius: 4, padding: "1px 5px" } }, b.toUpperCase())),
+                            React.createElement("td", { style: { padding: "6px 8px" } },
+                                React.createElement("span", { title: `vs ${p.opponent||"?"} — ${mg} matchup`, style: { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: MATCHUP_BG[mg], color: mgColor, border: `1px solid ${mgColor}44`, cursor: "default" } }, mg),
+                                p.opponent && React.createElement("span", { style: { fontSize: 9, color: "#3b6280", marginLeft: 4 } }, `vs ${p.opponent}`)),
+                            React.createElement("td", { style: { padding: "6px 8px" } },
+                                p.paceUp
+                                    ? React.createElement("span", { title: `${p.gamePace} pace — above avg`, style: { fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "#16a34a22", color: "#22c55e", border: "1px solid #22c55e44" } }, `⚡${p.gamePace}`)
+                                    : React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, p.gamePace)),
+                            React.createElement("td", { style: { padding: "6px 8px" } },
+                                fd
+                                    ? React.createElement("span", { title: `Last 5: ${fd.last5} vs Season: ${fd.season}`, style: { fontSize: 10, color: formColor, cursor: "default" } },
+                                        formIcon,
+                                        " ",
+                                        React.createElement("span", { style: { fontSize: 9 } }, (formDelta >= 0 ? "+" : "") + formDelta.toFixed(1)))
+                                    : React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—")),
+                            React.createElement("td", { style: { padding: "6px 8px" } },
+                                bb
+                                    ? React.createElement("div", { title: `Floor: ${bb.floor} / Ceiling: ${bb.ceiling}`, style: { display: "flex", alignItems: "center", gap: 4, cursor: "default" } },
+                                        React.createElement("div", { style: { position: "relative", width: 52, height: 7, background: "#0a1520", borderRadius: 3, border: "1px solid #1e3040" } },
+                                            React.createElement("div", { style: { position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100,(bb.floor/100)*100)}%`, background: "#3b82f6", borderRadius: 3 } }),
+                                            React.createElement("div", { style: { position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100,(bb.ceiling/100)*100)}%`, background: bb.type==="SAFE" ? "#22c55e44" : "#f59e0b44", borderRadius: 3 } })),
+                                        React.createElement("span", { style: { fontSize: 9, color: bb.type==="SAFE" ? "#22c55e" : "#f59e0b" } }, bb.type))
+                                    : React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—")),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#60a5fa", fontWeight: 600 } }, p.score.toFixed(2)),
                             React.createElement("td", { style: { padding: "6px 8px" } },
                                 React.createElement("div", { style: { display: "flex", gap: 3 } },
                                     React.createElement("button", { onClick: () => toggleLock(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" } }, "LOCK"),
                                     React.createElement("button", { onClick: () => toggleExclude(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" } }, "OUT"),
                                     React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" } }, "SM\u2197")))));
+                    }))))
                     }))))),
             activeTab === "exposure" && (React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } },
