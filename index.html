@@ -158,6 +158,86 @@ function getBoomBust(playerName) {
     return PLAYER_BOOM_BUST[playerName.toLowerCase()] || null;
 }
 const MATCHUP_COLOR = { A: "#22c55e", B: "#60a5fa", C: "#f59e0b", D: "#ef4444" };
+
+// ── PRA PROJECTIONS ───────────────────────────────────────────────────────
+// Base season averages: { pts, reb, ast, gp } gp = games played (sample size)
+const PLAYER_PRA_BASE = {
+    "nikola jokic":      { pts:26.4, reb:12.6, ast:9.0, gp:58 },
+    "luka doncic":       { pts:32.4, reb:8.6,  ast:7.9, gp:52 },
+    "lebron james":      { pts:23.8, reb:8.0,  ast:8.3, gp:48 },
+    "jamal murray":      { pts:21.4, reb:4.8,  ast:6.2, gp:54 },
+    "jalen johnson":     { pts:22.9, reb:10.2, ast:5.8, gp:56 },
+    "trae young":        { pts:25.6, reb:3.2,  ast:10.8,gp:57 },
+    "bam adebayo":       { pts:19.8, reb:10.4, ast:4.2, gp:55 },
+    "paolo banchero":    { pts:24.6, reb:7.8,  ast:5.4, gp:50 },
+    "kawhi leonard":     { pts:21.2, reb:6.4,  ast:3.8, gp:38 },
+    "d'angelo russell":  { pts:16.8, reb:3.2,  ast:6.4, gp:51 },
+    "cameron payne":     { pts:12.4, reb:2.8,  ast:5.6, gp:42 },
+    "dyson daniels":     { pts:15.8, reb:4.6,  ast:4.2, gp:58 },
+    "christian braun":   { pts:13.2, reb:4.4,  ast:2.8, gp:56 },
+    "jimmy butler":      { pts:18.4, reb:5.6,  ast:4.8, gp:44 },
+    "desmond bane":      { pts:18.6, reb:4.2,  ast:3.4, gp:55 },
+    "ryan rollins":      { pts:11.2, reb:2.4,  ast:3.8, gp:40 },
+    "de'andre hunter":   { pts:14.8, reb:4.2,  ast:2.2, gp:54 },
+    "russell westbrook": { pts:10.4, reb:5.2,  ast:5.8, gp:48 },
+    "jusuf nurkic":      { pts:11.8, reb:9.4,  ast:2.6, gp:46 },
+    "brandon ingram":    { pts:22.4, reb:5.8,  ast:4.6, gp:50 },
+    "franz wagner":      { pts:21.8, reb:5.4,  ast:4.8, gp:56 },
+    "cade cunningham":   { pts:26.2, reb:4.8,  ast:8.4, gp:55 },
+    "tyrese haliburton": { pts:19.8, reb:3.8,  ast:10.2,gp:46 },
+    "darius garland":    { pts:21.4, reb:3.2,  ast:7.8, gp:52 },
+    "evan mobley":       { pts:18.6, reb:9.8,  ast:3.4, gp:57 },
+    "justin edwards":    { pts:12.4, reb:4.8,  ast:3.2, gp:38 },
+};
+// Defensive rating vs stat category per opponent team
+// Scale: multiplier applied to opposing player's base stat
+// >1.0 = defense leaks that stat (good for DFS), <1.0 = stingy
+const TEAM_DEF_VS_STAT = {
+    //         pts    reb    ast
+    BKN:  { pts:1.18, reb:1.14, ast:1.12 }, // worst D in NBA
+    WAS:  { pts:1.16, reb:1.10, ast:1.14 }, // worst D in East
+    PHI:  { pts:1.14, reb:1.08, ast:1.10 }, // missing Embiid+Maxey = leaky
+    CHA:  { pts:1.10, reb:1.06, ast:1.08 },
+    ATL:  { pts:1.06, reb:1.04, ast:1.06 },
+    MIL:  { pts:1.02, reb:1.02, ast:1.02 },
+    SAC:  { pts:1.06, reb:1.04, ast:1.04 },
+    ORL:  { pts:0.98, reb:0.96, ast:1.00 },
+    MIA:  { pts:0.99, reb:1.00, ast:0.98 },
+    LAL:  { pts:1.02, reb:1.02, ast:1.02 },
+    DEN:  { pts:1.00, reb:0.96, ast:0.98 }, // Jokic anchor = tough interior
+    SAS:  { pts:1.04, reb:1.02, ast:1.04 },
+    LAC:  { pts:0.98, reb:0.98, ast:0.98 },
+    BOS:  { pts:0.88, reb:0.92, ast:0.90 }, // elite D — tough matchup
+};
+// Pace multiplier — games above slate avg pace boost all stats slightly
+function getPaceMultiplier(gamePace) {
+    const delta = gamePace - SLATE_AVG_PACE;
+    return 1.0 + (delta * 0.008); // ~0.8% per pace point above avg
+}
+// Calculate tonight's PRA projection for a player
+function calcPRAProjection(playerName, opponentTeam, gamePace, injuryStatus) {
+    const base = PLAYER_PRA_BASE[playerName.toLowerCase()];
+    if (!base) return null;
+    const def = TEAM_DEF_VS_STAT[opponentTeam] || { pts:1.0, reb:1.0, ast:1.0 };
+    const paceM = getPaceMultiplier(gamePace || SLATE_AVG_PACE);
+    // Injury modifier — Q players get slight reduction
+    const injM = injuryStatus === "Q" ? 0.92 : 1.0;
+    const pts  = +(base.pts  * def.pts  * paceM * injM).toFixed(1);
+    const reb  = +(base.reb  * def.reb  * paceM * injM).toFixed(1);
+    const ast  = +(base.ast  * def.ast  * paceM * injM).toFixed(1);
+    const pra  = +(pts + reb + ast).toFixed(1);
+    // Confidence: HIGH if gp>=50 + opponent in our DB + no injury
+    //             MED if gp>=35 or opponent missing or Q
+    //             LOW otherwise
+    const hasOpp = !!TEAM_DEF_VS_STAT[opponentTeam];
+    const conf = (base.gp >= 50 && hasOpp && injuryStatus !== "Q") ? "HIGH"
+               : (base.gp >= 35 && hasOpp) ? "MED" : "LOW";
+    const basePRA = +(base.pts + base.reb + base.ast).toFixed(1);
+    const delta   = +(pra - basePRA).toFixed(1);
+    return { pts, reb, ast, pra, conf, delta, basePRA };
+}
+const CONF_COLOR = { HIGH:"#22c55e", MED:"#f59e0b", LOW:"#ef4444" };
+const CONF_BG    = { HIGH:"#0a1a0a", MED:"#1a1200", LOW:"#1a0a0a" };
 const MATCHUP_BG    = { A: "#0a1a0a", B: "#0a1228", C: "#1a1200", D: "#1a0a0a" };
 // ── STATMUSE URL BUILDER ─────────────────────────────────────────────────
 // Converts "Karl-Anthony Towns" → "karl-anthony-towns"
@@ -259,13 +339,14 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         const paceUp = gamePace >= SLATE_AVG_PACE + 1.5;
         const formData = getFormData(name);
         const boomBust = getBoomBust(name);
+        const praProj = calcPRAProjection(name, opponent, gamePace, injury);
         const p = {
             name, fppg, csvFppg, salary, injury, played, team, game,
             positions, ownership, value, statMuseFD,
             smLast: smData === null || smData === void 0 ? void 0 : smData.lastGame,
             smAvg: smData === null || smData === void 0 ? void 0 : smData.fdAvg,
             smTrend: smData === null || smData === void 0 ? void 0 : smData.trend,
-            opponent, matchupGrade, gamePace, paceUp, formData, boomBust,
+            opponent, matchupGrade, gamePace, paceUp, formData, boomBust, praProj,
         };
         p.score = compositeScore(p);
         players.push(p);
@@ -1431,7 +1512,7 @@ function App() {
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \u2014 MODEL SCORE RANKED"),
                 React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                     React.createElement("thead", null,
-                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "CONF", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
                     React.createElement("tbody", null, players.slice(0, 55).map((p, i) => {
                         const b = ownershipBucket(p.ownership);
                         const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
@@ -1483,6 +1564,21 @@ function App() {
                                             React.createElement("div", { style: { position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100,(bb.floor/100)*100)}%`, background: "#3b82f6", borderRadius: 3 } }),
                                             React.createElement("div", { style: { position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(100,(bb.ceiling/100)*100)}%`, background: bb.type==="SAFE" ? "#22c55e44" : "#f59e0b44", borderRadius: 3 } })),
                                         React.createElement("span", { style: { fontSize: 9, color: bb.type==="SAFE" ? "#22c55e" : "#f59e0b" } }, bb.type))
+                                    : React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—")),
+                            React.createElement("td", { style: { padding: "6px 8px" } },
+                                p.praProj
+                                    ? React.createElement("div", { style: { display: "flex", gap: 3, alignItems: "baseline" } },
+                                        React.createElement("span", { style: { color: "#f59e0b", fontWeight: 700, fontSize: 11 } }, p.praProj.pts),
+                                        React.createElement("span", { style: { color: "#3b6280", fontSize: 9 } }, "/"),
+                                        React.createElement("span", { style: { color: "#60a5fa", fontSize: 11 } }, p.praProj.reb),
+                                        React.createElement("span", { style: { color: "#3b6280", fontSize: 9 } }, "/"),
+                                        React.createElement("span", { style: { color: "#22c55e", fontSize: 11 } }, p.praProj.ast),
+                                        p.praProj.delta !== 0 && React.createElement("span", { style: { fontSize: 9, color: p.praProj.delta > 0 ? "#22c55e" : "#ef4444", marginLeft: 3 } },
+                                            (p.praProj.delta > 0 ? "+" : "") + p.praProj.delta))
+                                    : React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—")),
+                            React.createElement("td", { style: { padding: "6px 8px" } },
+                                p.praProj
+                                    ? React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: CONF_BG[p.praProj.conf], color: CONF_COLOR[p.praProj.conf], border: `1px solid ${CONF_COLOR[p.praProj.conf]}44` } }, p.praProj.conf)
                                     : React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—")),
                             React.createElement("td", { style: { padding: "6px 8px", color: "#60a5fa", fontWeight: 600 } }, p.score.toFixed(2)),
                             React.createElement("td", { style: { padding: "6px 8px" } },
