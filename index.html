@@ -239,6 +239,166 @@ function calcPRAProjection(playerName, opponentTeam, gamePace, injuryStatus) {
 const CONF_COLOR = { HIGH:"#22c55e", MED:"#f59e0b", LOW:"#ef4444" };
 const CONF_BG    = { HIGH:"#0a1a0a", MED:"#1a1200", LOW:"#1a0a0a" };
 const MATCHUP_BG    = { A: "#0a1a0a", B: "#0a1228", C: "#1a1200", D: "#1a0a0a" };
+
+// ── CORRELATION PAIRS ─────────────────────────────────────────────────────
+// Player pairs that historically go off together in the same game
+// score: 0-100 (higher = stronger correlation)
+// type: "stack" (same team), "game" (same game, opp teams), "anti" (negative corr)
+const CORR_PAIRS = [
+    // DEN@LAL — O/U 241 🔥
+    { p1:"Nikola Jokic",    p2:"Jamal Murray",     score:88, type:"stack", note:"Jokic feeds Murray off PnR — both go off together" },
+    { p1:"Nikola Jokic",    p2:"Christian Braun",  score:72, type:"stack", note:"Braun cuts off Jokic — hidden stack" },
+    { p1:"Luka Doncic",     p2:"LeBron James",     score:81, type:"stack", note:"LAL's two primary scorers — pace-up game boosts both" },
+    { p1:"Luka Doncic",     p2:"D'Angelo Russell", score:74, type:"stack", note:"Russell fills scoring void when Luka draws doubles" },
+    { p1:"Nikola Jokic",    p2:"Luka Doncic",      score:76, type:"game",  note:"Game stack — O/U 241, both dominate their teams" },
+    { p1:"Jamal Murray",    p2:"Luka Doncic",      score:68, type:"game",  note:"Secondary game stack — high total game" },
+    // MIL@ATL — Giannis OUT
+    { p1:"Jalen Johnson",   p2:"Trae Young",       score:85, type:"stack", note:"ATL 1-2 punch — Giannis out = both get max usage" },
+    { p1:"Jalen Johnson",   p2:"Dyson Daniels",    score:71, type:"stack", note:"ATL secondary stack — both benefit from Giannis absence" },
+    { p1:"Trae Young",      p2:"De'Andre Hunter",  score:68, type:"stack", note:"Hunter gets open looks off Trae drives" },
+    { p1:"Ryan Rollins",    p2:"Jalen Johnson",    score:62, type:"game",  note:"MIL lead guard vs ATL anchor — game stack" },
+    // ORL@MIA
+    { p1:"Bam Adebayo",     p2:"Jimmy Butler",     score:78, type:"stack", note:"MIA cornerstone duo — both need big games" },
+    { p1:"Franz Wagner",    p2:"Paolo Banchero",   score:82, type:"stack", note:"ORL 1-2 — both hit ceiling when ORL pushes pace" },
+    { p1:"Paolo Banchero",  p2:"Bam Adebayo",      score:65, type:"game",  note:"Game stack — both are their teams' go-to options" },
+    // BOS@WAS
+    { p1:"Jayson Tatum",    p2:"Jaylen Brown",     score:79, type:"stack", note:"BOS core duo — blow out game = both get big numbers" },
+    { p1:"Jordan Poole",    p2:"Kyle Kuzma",       score:66, type:"stack", note:"WAS usage share — both spike when WAS trails" },
+    // PHI games
+    { p1:"Cameron Payne",   p2:"Justin Edwards",   score:74, type:"stack", note:"PHI emergency starters — Embiid+Maxey OUT = both in demand" },
+];
+
+function getCorrScore(name1, name2) {
+    const key1 = name1.toLowerCase();
+    const key2 = name2.toLowerCase();
+    const pair = CORR_PAIRS.find(p =>
+        (p.p1.toLowerCase()===key1 && p.p2.toLowerCase()===key2) ||
+        (p.p1.toLowerCase()===key2 && p.p2.toLowerCase()===key1)
+    );
+    return pair || null;
+}
+
+// Get top correlated partner for a player from current pool
+function getTopCorrPartner(playerName, allPlayers) {
+    const matches = [];
+    for (const other of allPlayers) {
+        if (other.name === playerName) continue;
+        const c = getCorrScore(playerName, other.name);
+        if (c) matches.push({ player: other, corr: c });
+    }
+    return matches.sort((a,b) => b.corr.score - a.corr.score)[0] || null;
+}
+
+// Score a full lineup's correlation strength
+function lineupCorrScore(lu) {
+    if (!lu || lu.length < 2) return { score: 0, pairs: [], grade: "LOW" };
+    const pairs = [];
+    for (let i = 0; i < lu.length; i++) {
+        for (let j = i+1; j < lu.length; j++) {
+            const c = getCorrScore(lu[i].name, lu[j].name);
+            if (c) pairs.push({ p1: lu[i].name, p2: lu[j].name, ...c });
+        }
+    }
+    const topPairs = pairs.sort((a,b) => b.score - a.score).slice(0,3);
+    const total = topPairs.reduce((s,p) => s + p.score, 0);
+    const avg = topPairs.length ? total / topPairs.length : 0;
+    const grade = avg >= 78 ? "ELITE" : avg >= 65 ? "STRONG" : avg >= 50 ? "GOOD" : "WEAK";
+    return { score: Math.round(avg), pairs: topPairs, grade };
+}
+
+const CORR_COLOR = { ELITE:"#22c55e", STRONG:"#60a5fa", GOOD:"#f59e0b", WEAK:"#ef444488" };
+
+// ── LATE SWAP DETECTOR ────────────────────────────────────────────────────
+// Compares current ESPN injury data to saved snapshot at generate time
+function detectLateSwaps(currentInjuries, snapshotOuts, lineups, players) {
+    const newOuts = currentInjuries
+        .filter(p => p.status === "OUT")
+        .map(p => p.name)
+        .filter(n => !snapshotOuts.includes(n));
+
+    const affectedLineups = [];
+    for (let i = 0; i < lineups.length; i++) {
+        const lu = lineups[i];
+        const hits = lu.filter(p => newOuts.includes(p.name));
+        if (hits.length > 0) affectedLineups.push({ idx: i, players: hits });
+    }
+    return { newOuts, affectedLineups };
+}
+
+// ── CONTEST PICKER ────────────────────────────────────────────────────────
+function recommendContests(lineups, platform) {
+    if (!lineups || lineups.length === 0) return null;
+    const avgOwns = lineups.map(lu => lu.reduce((s,p) => s+p.ownership,0)/lu.length);
+    const avgOwn = avgOwns.reduce((a,b)=>a+b,0)/avgOwns.length;
+    const hasStack = lineups.filter(lu => lu._hasStack).length;
+    const stackPct = lineups.length ? hasStack/lineups.length : 0;
+
+    const isFD = platform === "FD";
+    const recs = [];
+
+    if (avgOwn <= 20) {
+        recs.push({ type:"🏆 LARGE GPP", reason:`Low avg ownership (${avgOwn.toFixed(1)}%) = contrarian edge`, stake: isFD?"$1-3":"$1-3", priority:"HIGH" });
+        recs.push({ type:"🎯 SINGLE-ENTRY GPP", reason:"Low ownership + stacks = tournament upside", stake: isFD?"$5-10":"$5-10", priority:"HIGH" });
+    } else if (avgOwn <= 28) {
+        recs.push({ type:"🎯 DOUBLE-UP / 50/50", reason:`Avg ownership ${avgOwn.toFixed(1)}% = solid cash game lineup`, stake: isFD?"$2-5":"$2-5", priority:"HIGH" });
+        recs.push({ type:"🏆 SMALL GPP", reason:"Mid ownership works in smaller fields", stake: isFD?"$3-5":"$3-5", priority:"MED" });
+    } else {
+        recs.push({ type:"💵 CASH / HEAD-TO-HEAD", reason:`High ownership (${avgOwn.toFixed(1)}%) = safe cash game lineup`, stake: isFD?"$2-5":"$2-5", priority:"HIGH" });
+        recs.push({ type:"⚠️ AVOID LARGE GPP", reason:"High ownership won't differentiate in tournaments", stake:"—", priority:"LOW" });
+    }
+
+    if (stackPct >= 0.5) {
+        recs.push({ type:"🔗 STACKED GPP", reason:`${Math.round(stackPct*100)}% of lineups are stacked — GPP gold`, stake: isFD?"$5":"$5", priority:"HIGH" });
+    }
+
+    return { recs, avgOwn: avgOwn.toFixed(1), stackPct: Math.round(stackPct*100) };
+}
+
+// ── RESULTS TRACKER ────────────────────────────────────────────────────────
+function parseResultsCSV(csvText) {
+    const lines = csvText.trim().split("\n");
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g,""));
+    const results = [];
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",");
+        const get = (k) => { const idx = headers.indexOf(k); return idx>=0 ? (cols[idx]||"").trim() : ""; };
+        const entry = {
+            contest: get("contest") || get("contestname") || get("title") || "Unknown",
+            pts: parseFloat(get("pts")||get("points")||get("score")) || 0,
+            rank: parseInt(get("rank")||get("position")||get("finish")) || 0,
+            winnings: parseFloat((get("winnings")||get("payout")||get("prize")||"0").replace(/[$,]/g,"")) || 0,
+            buyin: parseFloat((get("buyin")||get("entry")||get("entryfee")||"0").replace(/[$,]/g,"")) || 0,
+        };
+        if (entry.pts > 0) results.push(entry);
+    }
+    return results;
+}
+
+function analyzeResults(results) {
+    if (!results || results.length === 0) return null;
+    const totalSpent = results.reduce((s,r) => s + r.buyin, 0);
+    const totalWon   = results.reduce((s,r) => s + r.winnings, 0);
+    const roi = totalSpent > 0 ? ((totalWon - totalSpent) / totalSpent * 100) : 0;
+    const cashes = results.filter(r => r.winnings > 0);
+    const cashRate = results.length ? cashes.length/results.length*100 : 0;
+    const avgPts = results.reduce((s,r) => s+r.pts, 0) / results.length;
+    const avgCashPts = cashes.length ? cashes.reduce((s,r) => s+r.pts, 0)/cashes.length : 0;
+    // Group by buy-in tier
+    const tiers = {};
+    for (const r of results) {
+        const tier = r.buyin <= 1 ? "$1" : r.buyin <= 5 ? "$2-5" : r.buyin <= 25 ? "$6-25" : "$25+";
+        if (!tiers[tier]) tiers[tier] = { spent:0, won:0, entries:0 };
+        tiers[tier].spent += r.buyin;
+        tiers[tier].won += r.winnings;
+        tiers[tier].entries++;
+    }
+    const tierAnalysis = Object.entries(tiers).map(([tier, d]) => ({
+        tier, entries: d.entries, spent: d.spent, won: d.won,
+        roi: d.spent > 0 ? ((d.won-d.spent)/d.spent*100).toFixed(1) : "0",
+    }));
+    return { totalSpent, totalWon, roi, cashRate, avgPts, avgCashPts, cashes: cashes.length, total: results.length, tierAnalysis };
+}
+
 // ── STATMUSE URL BUILDER ─────────────────────────────────────────────────
 // Converts "Karl-Anthony Towns" → "karl-anthony-towns"
 function toStatMuseSlug(name) {
@@ -912,6 +1072,7 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
                         border: `1px solid ${lineup._type === "chalk" ? "#f59e0b44" : lineup._type === "leverage" ? "#22c55e44" : "#a78bfa44"}`,
                     } }, lineup._type === "chalk" ? "📌 CHALK" : lineup._type === "leverage" ? "🔗 LEVERAGE" : "🚀 TOURN")),
                 lineup._hasStack && (React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e", border: "1px solid #22c55e44" } }, "STACKED")),
+                (() => { const cs = lineupCorrScore(lineup); return cs.pairs.length > 0 ? React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: CORR_COLOR[cs.grade]+"22", color: CORR_COLOR[cs.grade], border: `1px solid ${CORR_COLOR[cs.grade]}44` } }, `🔗 ${cs.grade}`) : null; })(),
                 React.createElement("span", { style: { color: "#64b587", fontWeight: 600 } }, stats.proj.toFixed(1)),
                 React.createElement("span", { style: { color: "#94a3b8" } },
                     "$",
@@ -966,6 +1127,11 @@ function App() {
     const [injuryData, setInjuryData] = useState(TONIGHT_INJURIES);
     const [injuryStatus, setInjuryStatus] = useState("idle"); // idle | loading | done | error
     const [platform, setPlatform] = useState("FD");
+    const [outSnapshot, setOutSnapshot] = useState([]);
+    const [lateSwaps, setLateSwaps] = useState(null);
+    const [resultsData, setResultsData] = useState(null);
+    const [showResults, setShowResults] = useState(false);
+    const resultsRef = useRef();
     const switchPlatform = (p) => {
         RULES = PLATFORM_CONFIG[p];
         POSITION_ORDER = RULES.POSITION_ORDER;
@@ -1155,8 +1321,20 @@ function App() {
             setStep("results");
             setActiveTab("lineups");
             setLastGenTime(new Date());
+            // Snapshot current OUTs for late swap detection
+            setOutSnapshot(injuryData.filter(p => p.status === "OUT").map(p => p.name));
+            setLateSwaps(null);
             setGenerating(false);
         }, 80);
+    };
+    const checkLateSwaps = () => {
+        fetchESPNInjuries().then(espnData => {
+            if (espnData.length === 0) return;
+            const merged = mergeInjuryData(espnData, TONIGHT_INJURIES);
+            setInjuryData(merged);
+            const result = detectLateSwaps(merged, outSnapshot, lineups, players);
+            setLateSwaps(result);
+        });
     };
     const toggleLock = (name) => {
         setLockedNames(p => p.includes(name) ? p.filter(n => n !== name) : [...p, name]);
@@ -1435,8 +1613,51 @@ function App() {
             React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 16 } },
                 ["lineups", "players", "exposure"].map(t => (React.createElement("button", { key: t, style: S.pill(activeTab === t), onClick: () => setActiveTab(t) }, t.toUpperCase()))),
                 React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: 8 } },
+                    React.createElement("button", { onClick: checkLateSwaps, style: Object.assign(Object.assign({}, S.btn("ghost")), { border: "1px solid #f59e0b44", color: "#f59e0b", fontSize: 10 }) }, "⚡ LATE SWAP"),
+                    React.createElement("button", { onClick: () => resultsRef.current && resultsRef.current.click(), style: Object.assign(Object.assign({}, S.btn("ghost")), { fontSize: 10 }) }, "📊 MY RESULTS"),
+                    React.createElement("input", { ref: resultsRef, type: "file", accept: ".csv", style: { display: "none" }, onChange: e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setResultsData(analyzeResults(parseResultsCSV(ev.target.result))); r.readAsText(f); } }),
                     React.createElement("button", { style: S.btn("ghost"), onClick: () => setStep("build") }, "\u2190 EDIT"),
                     React.createElement("button", { style: S.btn("success"), onClick: handleGenerate }, "\u21BB REGEN"))),
+            // ── CONTEST PICKER PANEL ──
+            lineups.length > 0 && (() => {
+                const cp = recommendContests(lineups, platform);
+                if (!cp) return null;
+                return React.createElement("div", { style: { marginBottom: 14, background: "#091520", border: "1px solid #1e3040", borderRadius: 10, padding: "12px 16px" } },
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
+                        React.createElement("div", { style: { fontSize: 10, color: "#f59e0b", letterSpacing: 2, fontWeight: 700 } }, "🎯 CONTEST SELECTION ENGINE"),
+                        React.createElement("div", { style: { fontSize: 10, color: "#4a6a80" } }, `Avg own: ${cp.avgOwn}% · ${cp.stackPct}% stacked lineups`)),
+                    React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, cp.recs.map((r,i) => React.createElement("div", { key: i, style: { flex: "1 1 200px", background: "#060e18", border: `1px solid ${r.priority==="HIGH"?"#22c55e44":r.priority==="MED"?"#60a5fa44":"#ef444433"}`, borderRadius: 8, padding: "8px 12px" } },
+                        React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: r.priority==="HIGH"?"#22c55e":r.priority==="MED"?"#60a5fa":"#ef4444", marginBottom: 4 } }, r.type),
+                        React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", marginBottom: 4 } }, r.reason),
+                        r.stake !== "—" && React.createElement("div", { style: { fontSize: 10, color: "#f59e0b" } }, `Stake: ${r.stake}`)))));
+            })(),
+            // ── LATE SWAP ALERT PANEL ──
+            lateSwaps && (lateSwaps.newOuts.length > 0
+                ? React.createElement("div", { style: { marginBottom: 14, background: "#1a0a0a", border: "1px solid #ef444466", borderRadius: 10, padding: "12px 16px" } },
+                    React.createElement("div", { style: { fontSize: 10, color: "#ef4444", letterSpacing: 2, fontWeight: 700, marginBottom: 8 } }, `🚨 LATE SCRATCHES DETECTED — ${lateSwaps.newOuts.length} NEW OUT`),
+                    React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 } }, lateSwaps.newOuts.map(n => React.createElement("span", { key: n, style: { fontSize: 10, background: "#ef444422", color: "#ef4444", border: "1px solid #ef444444", borderRadius: 5, padding: "2px 8px" } }, `✕ ${n}`))),
+                    lateSwaps.affectedLineups.length > 0
+                        ? React.createElement("div", { style: { fontSize: 10, color: "#f59e0b" } }, `⚠️ ${lateSwaps.affectedLineups.length} lineup(s) affected: ${lateSwaps.affectedLineups.map(l=>`#${l.idx+1}`).join(", ")} — regenerate before lock`)
+                        : React.createElement("div", { style: { fontSize: 10, color: "#22c55e" } }, "✅ No lineups directly affected — scratched players not in your builds"))
+                : React.createElement("div", { style: { marginBottom: 14, background: "#0a1a0a", border: "1px solid #22c55e44", borderRadius: 10, padding: "10px 16px", fontSize: 10, color: "#22c55e" } },
+                    "✅ No new late scratches since you generated — lineups are clean")),
+            // ── RESULTS TRACKER PANEL ──
+            resultsData && React.createElement("div", { style: { marginBottom: 14, background: "#091520", border: "1px solid #3b82f644", borderRadius: 10, padding: "12px 16px" } },
+                React.createElement("div", { style: { fontSize: 10, color: "#60a5fa", letterSpacing: 2, fontWeight: 700, marginBottom: 10 } }, "📊 YOUR RESULTS ANALYSIS"),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, marginBottom: 12 } },
+                    [["Total Entries", resultsData.total, "#e2e8f0"],
+                     ["Cash Rate", resultsData.cashRate.toFixed(1)+"%", resultsData.cashRate>=20?"#22c55e":"#ef4444"],
+                     ["Total Spent", "$"+resultsData.totalSpent.toFixed(2), "#e2e8f0"],
+                     ["Total Won", "$"+resultsData.totalWon.toFixed(2), resultsData.totalWon>=resultsData.totalSpent?"#22c55e":"#ef4444"],
+                     ["ROI", (resultsData.roi>=0?"+":"")+resultsData.roi.toFixed(1)+"%", resultsData.roi>=0?"#22c55e":"#ef4444"],
+                    ].map(([l,v,c]) => React.createElement("div", { key: l, style: { background: "#060e18", borderRadius: 8, padding: "8px 10px", textAlign: "center", border: "1px solid #1e3040" } },
+                        React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: c } }, v),
+                        React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", marginTop: 2 } }, l)))),
+                React.createElement("div", { style: { fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 6 } }, "ROI BY BUY-IN TIER"),
+                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, resultsData.tierAnalysis.map(t => React.createElement("div", { key: t.tier, style: { background: "#060e18", border: `1px solid ${parseFloat(t.roi)>=0?"#22c55e44":"#ef444444"}`, borderRadius: 7, padding: "6px 12px", textAlign: "center", minWidth: 80 } },
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: parseFloat(t.roi)>=0?"#22c55e":"#ef4444" } }, t.roi+"%"),
+                    React.createElement("div", { style: { fontSize: 10, color: "#60a5fa" } }, t.tier),
+                    React.createElement("div", { style: { fontSize: 9, color: "#4a6a80" } }, t.entries+" entries"))))),
             activeTab === "lineups" && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 } },
                 React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } }, lineups.map((lu, i) => React.createElement(LineupCard, { key: i, lineup: lu, index: i, isSelected: selectedLineup === i, onSelect: setSelectedLineup }))),
                 (() => {
@@ -1470,6 +1691,21 @@ function App() {
                         React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16 } }, [["CHALK 30%+", stats.chalk, "#f59e0b"], ["MID 10-29%", stats.mid, "#60a5fa"], ["PUNT <5%", stats.punt, "#f87171"], [((stats.anchor && stats.anchor.name) ? stats.anchor.name.split(" ").pop() : "—") + " ⚡", (stats.anchor && stats.anchor.fppg) ? stats.anchor.fppg.toFixed(1) : "0", "#22c55e"]].map(([l, v, c]) => (React.createElement("div", { key: l, style: { flex: 1, background: "#0a1a2a", borderRadius: 8, padding: "8px 12px", border: `1px solid ${c}33`, textAlign: "center" } },
                             React.createElement("div", { style: { color: c, fontWeight: 700, fontSize: 18 } }, v),
                             React.createElement("div", { style: { color: "#4a6a80", fontSize: 9, marginTop: 2 } }, l))))),
+                        (() => {
+                            const cs = lineupCorrScore(lu);
+                            return cs.pairs.length > 0 ? React.createElement("div", { style: { marginBottom: 14, padding: "10px 12px", background: "#0a1520", border: `1px solid ${CORR_COLOR[cs.grade]}44`, borderRadius: 8 } },
+                                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
+                                    React.createElement("span", { style: { fontSize: 9, letterSpacing: 2, color: "#3b6280" } }, "🔗 CORRELATION PAIRS"),
+                                    React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: CORR_COLOR[cs.grade], padding: "1px 6px", borderRadius: 4, background: CORR_COLOR[cs.grade]+"22", border: `1px solid ${CORR_COLOR[cs.grade]}44` } }, cs.grade),
+                                    React.createElement("span", { style: { fontSize: 9, color: "#4a6a80" } }, `Score: ${cs.score}/100`)),
+                                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 4 } }, cs.pairs.map((p,i) => React.createElement("div", { key: i, style: { display: "flex", alignItems: "center", gap: 8, fontSize: 10 } },
+                                    React.createElement("span", { style: { color: "#22c55e", minWidth: 16 } }, p.type==="stack"?"🔗":"⚡"),
+                                    React.createElement("span", { style: { color: "#e2e8f0", fontWeight: 600 } }, p.p1),
+                                    React.createElement("span", { style: { color: "#3b6280" } }, "+"),
+                                    React.createElement("span", { style: { color: "#e2e8f0", fontWeight: 600 } }, p.p2),
+                                    React.createElement("span", { style: { color: CORR_COLOR[p.score>=78?"ELITE":p.score>=65?"STRONG":p.score>=50?"GOOD":"WEAK"], fontSize: 9, fontWeight: 700 } }, p.score),
+                                    React.createElement("span", { style: { color: "#4a6a80", fontSize: 9, flex: 1 } }, p.note))))) : null;
+                        })(),
                         React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12 } },
                             React.createElement("thead", null,
                                 React.createElement("tr", null, ["SLOT", "PLAYER", "TEAM", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "INJ"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
