@@ -18,7 +18,9 @@
 </head>
 <body>
 <div id="root"></div>
-<script>// ── ODDS API CONFIG ───────────────────────────────────────────────────────
+<script>
+const { useState, useCallback, useRef, useEffect } = React;
+// ── ODDS API CONFIG ───────────────────────────────────────────────────────
 const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
