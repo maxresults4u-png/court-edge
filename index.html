@@ -55,7 +55,9 @@ const PLATFORM_CONFIG = {
         name: "FanDuel", short: "FD", color: "#1493ff",
         SALARY_CAP: 60000, MIN_SALARY_USED: 58000,
         NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 15,
+        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 18,
+        MIN_PLAYER_SALARY: 4500,  // block bench DNP-risk players
+        MIN_ACTIVE_RATE: 0.30,    // must have played ≥30% of team games (~25/82)
         POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
         POSITION_ORDER: ["PG", "SG", "SF", "PF", "C"],
         LINEUP_SIZE: 9,
@@ -66,7 +68,9 @@ const PLATFORM_CONFIG = {
         name: "DraftKings", short: "DK", color: "#53d337",
         SALARY_CAP: 50000, MIN_SALARY_USED: 48500,
         NEVER_PLAY_OWN_THRESHOLD: 6.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 38, FLOOR_FPPG_MIN: 14,
+        ANCHOR_FPPG_THRESHOLD: 38, FLOOR_FPPG_MIN: 16,
+        MIN_PLAYER_SALARY: 3800,  // DK bench scrub floor
+        MIN_ACTIVE_RATE: 0.30,
         POSITIONS: { PG: 1, SG: 1, SF: 1, PF: 1, C: 1, G: 1, F: 1, UTIL: 1 },
         POSITION_ORDER: ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
         LINEUP_SIZE: 8,
@@ -78,6 +82,7 @@ const PLATFORM_CONFIG = {
         SALARY_CAP: 50000, MIN_SALARY_USED: 30000,
         NEVER_PLAY_OWN_THRESHOLD: 6.0, DNP_BLOCK_THRESHOLD: 1.0,
         ANCHOR_FPPG_THRESHOLD: 55, FLOOR_FPPG_MIN: 14,
+        MIN_PLAYER_SALARY: 3000, MIN_ACTIVE_RATE: 0.20,
         POSITIONS: { CPT: 1, FLEX: 5 },
         POSITION_ORDER: ["CPT", "FLEX"],
         LINEUP_SIZE: 6,
@@ -90,6 +95,7 @@ const PLATFORM_CONFIG = {
         SALARY_CAP: 60000, MIN_SALARY_USED: 55000,
         NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
         ANCHOR_FPPG_THRESHOLD: 60, FLOOR_FPPG_MIN: 15,
+        MIN_PLAYER_SALARY: 3500, MIN_ACTIVE_RATE: 0.20,
         POSITIONS: { MVP: 1, STAR: 1, PRO: 1, UTIL: 3 },
         POSITION_ORDER: ["MVP", "STAR", "PRO", "UTIL"],
         LINEUP_SIZE: 6,
@@ -859,6 +865,20 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         }
         if (!name || !salary || !csvFppg || injury === "O")
             continue;
+        // ── SALARY FLOOR — block bench DNP-risk players ───────────────────
+        const minSal = RULES.MIN_PLAYER_SALARY || 0;
+        if (salary < minSal) continue;
+
+        // ── ACTIVE RATE — must have played ≥ MIN_ACTIVE_RATE of season ────
+        // NBA season ≈ 82 games; we use a rolling estimate of ~65 games played so far
+        // played/65 gives an active rate. Scrubs with 10/65 = 15% get cut.
+        const SEASON_GAMES_EST = 65;
+        const activeRate = played / SEASON_GAMES_EST;
+        const minRate = RULES.MIN_ACTIVE_RATE || 0;
+        // Only apply active rate filter if player has a meaningful sample (played > 5)
+        // AND they're not a known injury return (dnpCheck will handle those separately)
+        if (played > 5 && activeRate < minRate) continue;
+
         // ── DNP LAST 3 GAMES CHECK ────────────────────────────────────────
         // Block players who haven't played recently (hardcoded list + StatMuse signal)
         const smDataForDNP = statMuseMap[name.toLowerCase()];
@@ -2247,7 +2267,7 @@ function App() {
                     React.createElement("br", null),
                     "\u2022 Salary cap too tight with current pool",
                     React.createElement("br", null),
-                    `\u2022 FPPG floor (${RULES.FLOOR_FPPG_MIN}) or ownership floor (${RULES.NEVER_PLAY_OWN_THRESHOLD}%) filtering too many players`,
+                    `\u2022 FPPG floor (${RULES.FLOOR_FPPG_MIN}) or salary floor ($${RULES.MIN_PLAYER_SALARY || 0}) or ownership floor (${RULES.NEVER_PLAY_OWN_THRESHOLD}%) filtering too many players`,
                     React.createElement("br", null),
                     "\u2022 Check: are you in DK mode with a DK CSV?"),
                 React.createElement("button", { onClick: () => setStep("build"), style: Object.assign(Object.assign({}, S.btn("primary")), { marginTop: 12 }) }, "\u2190 BACK TO BUILD"))),
@@ -2384,6 +2404,7 @@ function App() {
                             ["Ownership OK", stats.avgOwn >= 15 && stats.avgOwn <= 35],
                             ["Salary used", stats.total >= RULES.MIN_SALARY_USED],
                             ["Floor clear", lu.every(p => p.fppg >= RULES.FLOOR_FPPG_MIN)],
+                            ["Salary floor", lu.every(p => p.salary >= (RULES.MIN_PLAYER_SALARY||0))],
                             ["Max 4/team", (() => { const c={}; for(const p of lu) c[p.team]=(c[p.team]||0)+1; return Math.max(...Object.values(c))<=4; })()],
                             ["SM data", lu.filter(p => p.statMuseFD).length >= 3],
                         ].map(([l, pass]) => (React.createElement("div", { key: l, style: { background: "#0a1520", borderRadius: 6, padding: "7px 10px", border: `1px solid ${pass ? "#16a34a" : "#991b1b"}33`, display: "flex", alignItems: "center", gap: 6 } },
