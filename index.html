@@ -283,11 +283,11 @@ const PLAYER_FORM = {
     "donovan mitchell":        { last5: 46.5, season: 44.2, trend: "neutral" },
     "dennis schroder":         { last5: 14.0, season: 14.0, trend: "cold" },
     "jaylon tyson":            { last5: 15.0, season: 15.0, trend: "cold" },
-    "evan mobley":             { last5: 41.7, season: 40.2, trend: "neutral" },
+    "evan mobley":             { last5: 52.0, season: 40.2, trend: "neutral" },
     "darius garland":          { last5: 38.4, season: 36.8, trend: "hot" },
     "cooper flagg":            { last5: 36.8, season: 34.2, trend: "hot" },
     "klay thompson":           { last5: 28.2, season: 29.4, trend: "cold" },
-    "james harden":            { last5: 43.4, season: 40.2, trend: "hot" },
+    "james harden":            { last5: 58.0, season: 40.2, trend: "hot" },
     // ── POR@PHI ──
     "deni avdija":             { last5: 36.9, season: 34.2, trend: "neutral" },
     "donovan clingan":         { last5: 42.8, season: 39.6, trend: "hot" },
@@ -1322,7 +1322,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             }
             else {
                 // Tournament: more randomness + occasionally force a mid-ownership pivot
-                pool.sort((a, b) => (b.score - a.score) + (Math.random() - 0.5) * 20);
+                pool.sort((a, b) => (b.score - a.score) + (Math.random() - 0.5) * 12);
                 // Bump up 1-2 mid-ownership (10-20%) players
                 const midPlayers = pool.filter(p => p.ownership >= 10 && p.ownership < 22);
                 if (midPlayers.length > 0) {
