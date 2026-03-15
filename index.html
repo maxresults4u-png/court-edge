@@ -1072,14 +1072,16 @@ function exportLineupsCSV(lineups, platform) {
 }
 
 // ── LINEUP ENGINE ────────────────────────────────────────────────────────
-function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams = []) {
+function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams = [], gamesCount = 8) {
     const locked = players.filter(p => lockedNames.includes(p.name));
     const pool   = players.filter(p => !excludedNames.includes(p.name) && !lockedNames.includes(p.name));
     const needed = Object.assign({}, RULES.POSITIONS);
     const lineup = [];
     const used   = new Set();
     let budget   = RULES.SALARY_CAP;
-    const MAX_PER_TEAM = 4;
+    // On 4-game slates, cap to 3 per team — prevents cheap CLE filler (Schroder/Tyson)
+    // from crowding out better players from other games (Grimes/Flagg/Edgecombe)
+    const MAX_PER_TEAM = gamesCount <= 4 ? 3 : 4;
     const teamCount = () => {
         const counts = {};
         for (const p of lineup) counts[p.team] = (counts[p.team] || 0) + 1;
@@ -1099,7 +1101,9 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
         return true;
     };
     // Static pool min salary — computed once so it never drifts upward as pool shrinks
-    const poolMinSal = pool.length ? Math.min(...pool.map(p => p.salary)) : 3500;
+    // Use $4,000 as budget floor — FD min is $4,800 but $4,000 gives breathing room
+    // so Mobley ($8,300) isn't blocked when only $4,800 min players remain
+    const poolMinSal = 4000;
 
     // 1. Place locked players
     for (const p of locked) {
@@ -1114,9 +1118,9 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
         if (slotsLeft === 0) break;
         // Position order: for PG/SG dual players, prefer whichever slot has MORE remaining
         // This keeps scarce PG slots open for PG-only stars (Harden, SGA, etc.)
-        const posOrder = (p.positions.includes('PG') && p.positions.includes('SG'))
-            ? [...p.positions].sort((a, b) => (needed[b] || 0) - (needed[a] || 0))
-            : p.positions;
+        // Scarcity-first: try rarest position slot first (C=1 beats PF=2)
+        // Ensures Mobley fills C before taking a PF slot and stranding C empty
+        const posOrder = [...p.positions].sort((a, b) => (needed[a] || 0) - (needed[b] || 0));
         for (const pos of posOrder) {
             if ((needed[pos] || 0) > 0) {
                 const budgetAfter = budget - p.salary;
@@ -1326,7 +1330,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                     pool = [pivot, ...pool.filter(p => p.name !== pivot.name)];
                 }
             }
-            const lu = buildLineup(pool, lockedNames, excludedNames, stackTeams);
+            const lu = buildLineup(pool, lockedNames, excludedNames, stackTeams, gamesList.length);
             if (!lu)
                 continue;
             const key = lu.map(p => p.name).sort().join("|");
