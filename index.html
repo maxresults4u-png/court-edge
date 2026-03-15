@@ -24,7 +24,7 @@ const { useState, useCallback, useRef, useEffect } = React;
 const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
-// Tonight's Vegas data - Mar 14 2026 - hardcoded (no API needed)
+// Tonight's Vegas data - Mar 15 2026 - hardcoded (no API needed)
 function getHardcodedVegasData() {
     const games = [
         // 8-game FanDuel main slate Mar 15 2026
@@ -100,27 +100,38 @@ const PLATFORM_CONFIG = {
 };
 let RULES = PLATFORM_CONFIG.FD;
 let POSITION_ORDER = RULES.POSITION_ORDER;
-// ── MAR 14 MATCHUP DATA ───────────────────────────────────────────────────
+// ── MAR 15 MATCHUP DATA ───────────────────────────────────────────────────
 // Defensive Rating vs Position (lower = harder matchup, higher = easier/juicier)
 // Scale: A = elite matchup (top 8 defense vs pos), B = good, C = avg, D = tough
 // DVP data — starts as hardcoded fallback, replaced by live FantasyPros fetch
 // TEAM_DEF_VS_POS: grades A/B/C/D per position (A = easy matchup for offensive player)
 // TEAM_DEF_VS_STAT: multipliers for pts/reb/ast projections (>1 = leaky defense)
 let TEAM_DEF_VS_POS = {
-    PHI: { PG:"A", SG:"A", SF:"B", PF:"B", C:"B" },
-    BKN: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },
-    ATL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
-    MIL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" },
-    CHA: { PG:"A", SG:"B", SF:"B", PF:"B", C:"B" },
-    SAS: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
-    WAS: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },
-    BOS: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" },
-    MIA: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" },
-    ORL: { PG:"C", SG:"C", SF:"C", PF:"B", C:"D" },
+    // ── Mar 15 2026 slate teams ──
+    // A = elite matchup (score freely), D = tough matchup
+    OKC: { PG:"C", SG:"C", SF:"C", PF:"D", C:"C" }, // top-5 defense overall
+    MIN: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" }, // Gobert anchor
+    NYK: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" }, // solid but not elite
+    GSW: { PG:"B", SG:"C", SF:"C", PF:"B", C:"B" }, // avg defense
+    CLE: { PG:"B", SG:"B", SF:"B", PF:"C", C:"C" }, // Mitchell carries D too
+    DAL: { PG:"B", SG:"B", SF:"C", PF:"C", C:"B" }, // avg perimeter D
+    POR: { PG:"B", SG:"B", SF:"B", PF:"B", C:"C" }, // slightly leaky
+    PHI: { PG:"A", SG:"A", SF:"B", PF:"B", C:"B" }, // depleted roster
+    MEM: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" }, // avg
+    DET: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" }, // Duren anchors inside
+    NOP: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" }, // avg
+    HOU: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" }, // Sengun clogs paint
+    MIL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" }, // post-Giannis = weaker
+    IND: { PG:"A", SG:"A", SF:"A", PF:"B", C:"B" }, // leaky perimeter D
+    PHX: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" }, // avg
+    TOR: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" }, // avg
+    // ── Holdovers ──
     LAL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"C" },
     DEN: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" },
-    LAC: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" },
-    SAC: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
+    ATL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
+    MIA: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" },
+    BOS: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" },
+    WAS: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },
 };
 // ── LIVE DVP FETCH (FantasyPros via CORS proxy) ───────────────────────────
 // Full FantasyPros team name → NBA abbreviation map
@@ -230,14 +241,18 @@ async function fetchAllDVP(platform) {
     for (const { pos, data } of results) dvpByPos[pos] = data;
     return dvpByPos;
 }
-// Pace data — Mar 14 2026 (possessions per 48)
+// Pace data — Mar 15 2026 (possessions per 48)
 // Slate avg ~100.2 — above = pace-up game
 const TEAM_PACE = {
-    BKN:97.8, PHI:99.1, MIL:98.4, ATL:101.2, SAS:100.8, CHA:99.6,
-    BOS:102.1, WAS:97.2, ORL:98.9, MIA:100.4, DEN:103.1, LAL:101.8,
-    SAC:102.4, LAC:99.3,
+    // Mar 15 2026 slate
+    OKC:102.4, MIN:101.8, NYK:100.2, GSW:103.1,
+    CLE:100.8, DAL:101.2, POR:101.6, PHI:99.1,
+    MEM:101.4, DET:100.6, NOP:100.8, HOU:101.8,
+    MIL:98.4,  IND:102.2, PHX:101.6, TOR:100.4,
+    LAL:101.8, DEN:103.1, ATL:101.2, MIA:100.4,
+    BOS:102.1, WAS:97.2,  LAC:99.3,  SAC:102.4,
 };
-const SLATE_AVG_PACE = 100.2;
+const SLATE_AVG_PACE = 100.8;
 // Recent form vs season avg — positive = trending up, negative = trending down
 // Based on last 5 games FD avg vs season FD avg
 const PLAYER_FORM = {
@@ -1498,7 +1513,7 @@ function InjuryPanel({ onExclude, excludedNames, injuryData, injuryStatus, dvpSt
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", display: "flex", alignItems: "center" } },
-                "Mar 14 · ",
+                "Mar 15 · ",
                 data.filter(p => p.status === "OUT").length,
                 " OUT · ",
                 data.filter(p => p.status === "Q").length,
@@ -1838,7 +1853,7 @@ function App() {
             setOwnershipMap(newOwnMap);
             rebuildPlayers(csvText, newOwnMap, statMuseMap);
             setVegasStatus("done");
-            setVegasMsg(`✅ ${gamesCount} games loaded · Mar 14 slate · ownership estimated`);
+            setVegasMsg(`✅ ${gamesCount} games loaded · Mar 15 slate · ownership estimated`);
         }
         catch (e) {
             setVegasStatus("error");
