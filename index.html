@@ -54,8 +54,8 @@ const PLATFORM_CONFIG = {
         ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 18,
         MIN_PLAYER_SALARY: 4800,  // block bench DNP-risk players
         MIN_ACTIVE_RATE: 0.30,    // must have played ≥30% of team games (~25/82)
-        MIN_SLOT_BUDGET: 5200,    // remaining budget / remaining slots must stay above this
-        MIN_VALUE_CHEAP: 4.2,     // players under $6500 must have ≥4.2x value (fppg per $1K)
+        MIN_SLOT_BUDGET: 4800,    // remaining budget / remaining slots must stay above this
+        MIN_VALUE_CHEAP: 3.8,     // players under $6500 must have ≥3.8x value (fppg per $1K)
         POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
         POSITION_ORDER: ["PG", "SG", "SF", "PF", "C"],
         LINEUP_SIZE: 9,
@@ -1101,16 +1101,17 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
         return avail.length ? Math.min(...avail.map(p => p.salary)) : 4500;
     };
 
-    // Budget guard: can we afford this player AND still fill remaining slots
-    // with at least MIN_SLOT_BUDGET per remaining slot?
+    // Budget guard: can we afford this player AND still fill remaining slots?
+    // Uses actual pool minimum salary — allows stars to coexist without artificial block
     const budgetOK = (p) => {
         const sl = slotsLeft();
         const afterSal = budget - p.salary;
         const remaining = sl - 1;
         if (remaining <= 0) return afterSal >= 0;
-        // Must be able to fill remaining slots at MIN_SLOT_BUD each
-        const minRemaining = remaining * Math.max(poolMinSal(), MIN_SLOT_BUD);
-        return afterSal >= minRemaining;
+        // Use actual cheapest available player salary as the floor
+        // This lets Mitchell+Harden+Mobley+Cade all fit — no artificial $5200 block
+        const actualMin = poolMinSal();
+        return afterSal >= remaining * actualMin;
     };
 
     // Value floor: cheap players must earn their spot
@@ -1130,9 +1131,11 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
     // ── 2. Pre-seed stack: force 2 players from stackTeams into lineup ───
     // This ensures every lineup has a real game stack, not just by accident
     if (stackTeams.length >= 2 && !RULES.isShowdown) {
-        const stackNeeded = 2; // minimum stack size
+        // On small slates (≤4 games), only pre-seed 1 stack player
+        // Greedy fill naturally picks the best remaining players from the same game
+        // This prevents the DAL "anchor" from consuming budget needed for CLE stars
+        const stackNeeded = (gamesList && gamesList.length <= 4) ? 1 : 2;
         let stackPlaced = 0;
-        // Try to get 2 players from the same game (stackTeams[0] or [1])
         for (const team of stackTeams) {
             if (stackPlaced >= stackNeeded) break;
             const teamPlayers = pool
@@ -1140,7 +1143,12 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
                 .sort((a, b) => b.score - a.score);
             for (const p of teamPlayers) {
                 if (stackPlaced >= stackNeeded) break;
-                for (const pos of p.positions) {
+                // ── POSITION PRIORITY: prefer placing dual-pos players in non-PG slot ──
+                // Keeps PG slots open for PG-only stars like Harden/SGA
+                const posOrder = p.positions.includes('SG') && p.positions.includes('PG')
+                    ? ['SG', ...p.positions.filter(x => x !== 'SG')]  // try SG first
+                    : p.positions;
+                for (const pos of posOrder) {
                     if ((needed[pos] || 0) > 0 && budgetOK(p) && passesValueFloor(p)) {
                         place(p, pos);
                         stackPlaced++;
