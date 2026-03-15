@@ -27,16 +27,12 @@ const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Tonight's Vegas data - Mar 15 2026 - hardcoded (no API needed)
 function getHardcodedVegasData() {
     const games = [
-        // 8-game FanDuel main slate Mar 15 2026
-        { away: "MIL", home: "IND", total: 220.0, homeSpread: -3.5, awayML: 148, homeML: -178 }, // Both bad teams; Siakam doubtful, Zubac Q
-        { away: "CLE", home: "DAL", total: 228.0, homeSpread: 4.5, awayML: -175, homeML: 148 }, // Mitchell leads CLE; Flagg emerging for DAL; P.J. Washington OUT
-        { away: "POR", home: "PHI", total: 222.0, homeSpread: -3.0, awayML: 128, homeML: -152 }, // Avdija 24ppg for POR; Edgecombe/Drummond anchor PHI
-        { away: "MEM", home: "DET", total: 224.0, homeSpread: -4.5, awayML: 158, homeML: -192 }, // Duren Q, Ausar Thompson doubtful; Cade leads DET
-        { away: "MIN", home: "OKC", total: 230.0, homeSpread: -5.5, awayML: 190, homeML: -235 }, // 🔥 SGA vs Edwards — elite game environment; Edwards Q
-        { away: "PHX", home: "TOR", total: 226.0, homeSpread: -2.0, awayML: 112, homeML: -134 }, // Booker vs Barnes Q
-        { away: "NOP", home: "HOU", total: 228.0, homeSpread: -5.0, awayML: 172, homeML: -210 }, // Rockets 22-8 at home; high implied total
-        { away: "GSW", home: "NYK", total: 229.0, homeSpread: -3.5, awayML: 148, homeML: -178 }, // Brunson leads NYK; KAT doubtful; 🔥 MSG atmosphere
-    ];
+        // 4-game FanDuel main slate Mar 15 2026 — confirmed via Basketball Monster CSV
+        { away: "MIL", home: "IND", total: 228.5, homeSpread:  7.5, awayML: -280, homeML:  230 }, // MIL road fav; Giannis vs Siakam Q
+        { away: "DET", home: "TOR", total: 220.5, homeSpread:  3.5, awayML: -175, homeML:  148 }, // DET 48-18 road fav; Cade leads; Ausar Q
+        { away: "CLE", home: "DAL", total: 237.5, homeSpread: 17.5, awayML: -900, homeML:  620 }, // 🔥 Highest total; CLE massive fav; Mitchell+Harden+Mobley
+        { away: "POR", home: "PHI", total: 228.5, homeSpread:  7.5, awayML: -280, homeML:  230 }, // POR road fav; Avdija+Clingan vs depleted PHI
+    ];;
     const teamMap = {};
     const gamesList = [];
     for (const g of games) {
@@ -280,18 +276,21 @@ const PLAYER_FORM = {
     "brandin podziemski":      { last5: 28.4, season: 26.1, trend: "hot" },
     "stephen curry":           { last5: 44.8, season: 46.2, trend: "cold" },
     // ── CLE@DAL ──
-    "donovan mitchell":        { last5: 54.8, season: 51.2, trend: "hot" },
-    "evan mobley":             { last5: 46.2, season: 43.8, trend: "hot" },
+    "donovan mitchell":        { last5: 44.4, season: 44.2, trend: "neutral" },
+    "evan mobley":             { last5: 41.7, season: 40.2, trend: "neutral" },
     "darius garland":          { last5: 38.4, season: 36.8, trend: "hot" },
     "cooper flagg":            { last5: 36.8, season: 34.2, trend: "hot" },
     "klay thompson":           { last5: 28.2, season: 29.4, trend: "cold" },
+    "james harden":            { last5: 43.4, season: 40.2, trend: "hot" },
     // ── POR@PHI ──
-    "deni avdija":             { last5: 50.4, season: 47.2, trend: "hot" },
+    "deni avdija":             { last5: 36.9, season: 34.2, trend: "neutral" },
     "donovan clingan":         { last5: 42.8, season: 39.6, trend: "hot" },
     "toumani camara":          { last5: 28.4, season: 26.8, trend: "hot" },
-    "vj edgecombe":            { last5: 30.2, season: 27.8, trend: "hot" },
+    "vj edgecombe":            { last5: 34.6, season: 28.4, trend: "hot" },
+    "quentin grimes":          { last5: 35.1, season: 28.8, trend: "hot" },
+    "scoot henderson":         { last5: 23.6, season: 22.8, trend: "neutral" },
     "andre drummond":          { last5: 34.8, season: 32.4, trend: "hot" },
-    // ── MEM@DET ──
+    // ── DET@TOR ──
     "cade cunningham":         { last5: 47.4, season: 44.8, trend: "hot" },
     "jalen duren":             { last5: 36.2, season: 34.8, trend: "cold" },
     // ── NOP@HOU ──
@@ -305,7 +304,14 @@ const PLAYER_FORM = {
     "pascal siakam":           { last5: 48.2, season: 46.8, trend: "hot" },
     "tyrese haliburton":       { last5: 38.2, season: 42.1, trend: "cold" },
     "bobby portis":            { last5: 28.4, season: 26.8, trend: "hot" },
-    // ── PHX@TOR ──
+    "giannis antetokounmpo":   { last5: 46.7, season: 44.8, trend: "neutral" },
+    "kevin porter jr.":        { last5: 33.6, season: 30.2, trend: "hot" },
+    "ivica zubac":             { last5: 32.6, season: 28.4, trend: "hot" },
+    "myles turner":            { last5: 26.0, season: 24.8, trend: "neutral" },
+    "jarace walker":           { last5: 26.5, season: 22.4, trend: "hot" },
+    "andrew nembhard":         { last5: 27.5, season: 26.8, trend: "neutral" },
+    "kobe brown":              { last5: 21.3, season: 18.4, trend: "hot" },
+    // ── DET@TOR (PHX NOT PLAYING — data below is stale) ──
     "devin booker":            { last5: 52.4, season: 48.8, trend: "hot" },
     "kevin durant":            { last5: 46.2, season: 44.8, trend: "hot" },
     "scottie barnes":          { last5: 42.8, season: 44.2, trend: "cold" },
@@ -316,6 +322,17 @@ const PLAYER_FORM = {
     "trae young":              { last5: 49.8, season: 51.2, trend: "cold" },
     "bam adebayo":             { last5: 41.2, season: 43.8, trend: "cold" },
     "desmond bane":            { last5: 36.8, season: 34.2, trend: "hot" },
+    // ── UTA@SAC 🔥 (233.5 total — 2nd highest on slate) ──
+    "de'aaron fox":               { last5: 48.2, season: 46.4, trend: "hot" },
+    "domantas sabonis":           { last5: 44.8, season: 43.2, trend: "neutral" },
+    "maxime raynaud":             { last5: 34.2, season: 26.8, trend: "hot" },
+    "nique clifford":             { last5: 30.9, season: 24.2, trend: "hot" },
+    "demar derozan":              { last5: 30.3, season: 32.1, trend: "cold" },
+    "precious achiuwa":           { last5: 33.2, season: 22.4, trend: "hot" },
+    "lauri markkanen":            { last5: 38.4, season: 40.2, trend: "neutral" },
+    "keyonte george":             { last5: 28.4, season: 26.8, trend: "neutral" },
+    "cody williams":              { last5: 25.0, season: 18.2, trend: "hot" },
+    "russell westbrook":          { last5: 31.2, season: 28.4, trend: "hot" },
 };
 // Boom/bust profile — floor and ceiling FD pts (based on last 20 games)
 const PLAYER_BOOM_BUST = {
@@ -343,7 +360,7 @@ const PLAYER_BOOM_BUST = {
     "donovan clingan":         { floor: 28, ceiling: 62, type: "SAFE" },
     "vj edgecombe":            { floor: 18, ceiling: 48, type: "BOOM" },
     "andre drummond":          { floor: 24, ceiling: 50, type: "SAFE" },
-    // ── MEM@DET ──
+    // ── DET@TOR ──
     "cade cunningham":         { floor: 34, ceiling: 72, type: "SAFE" },
     "jalen duren":             { floor: 22, ceiling: 52, type: "BOOM" },
     // ── NOP@HOU ──
@@ -355,7 +372,7 @@ const PLAYER_BOOM_BUST = {
     "pascal siakam":           { floor: 34, ceiling: 72, type: "SAFE" },
     "tyrese haliburton":       { floor: 28, ceiling: 62, type: "BOOM" },
     "ryan rollins":            { floor: 18, ceiling: 46, type: "BOOM" },
-    // ── PHX@TOR ──
+    // ── DET@TOR (PHX NOT PLAYING — data below is stale) ──
     "devin booker":            { floor: 36, ceiling: 80, type: "SAFE" },
     "kevin durant":            { floor: 34, ceiling: 72, type: "SAFE" },
     "scottie barnes":          { floor: 28, ceiling: 62, type: "BOOM" },
@@ -367,6 +384,28 @@ const PLAYER_BOOM_BUST = {
     "trae young":              { floor: 30, ceiling: 74, type: "BOOM" },
     "jamal murray":            { floor: 28, ceiling: 68, type: "BOOM" },
     "desmond bane":            { floor: 20, ceiling: 56, type: "BOOM" },
+    // ── BM-calibrated additions ──
+    "giannis antetokounmpo":   { floor: 32, ceiling: 68, type: "SAFE" },
+    "james harden":            { floor: 28, ceiling: 62, type: "SAFE" },
+    "evan mobley":             { floor: 28, ceiling: 58, type: "SAFE" },
+    "quentin grimes":          { floor: 22, ceiling: 52, type: "BOOM" },
+    "vj edgecombe":            { floor: 20, ceiling: 54, type: "BOOM" },
+    "ivica zubac":             { floor: 22, ceiling: 48, type: "SAFE" },
+    "kevin porter jr.":        { floor: 20, ceiling: 52, type: "BOOM" },
+    "myles turner":            { floor: 16, ceiling: 42, type: "SAFE" },
+    "jarace walker":           { floor: 14, ceiling: 44, type: "BOOM" },
+    "keon ellis":              { floor: 14, ceiling: 38, type: "BOOM" },
+    "scoot henderson":         { floor: 14, ceiling: 38, type: "BOOM" },
+    "khris middleton":         { floor: 14, ceiling: 36, type: "BOOM" },
+    // ── UTA@SAC ──
+    "de'aaron fox":       { floor: 32, ceiling: 68, type: "SAFE" },
+    "domantas sabonis":   { floor: 30, ceiling: 62, type: "SAFE" },
+    "maxime raynaud":     { floor: 22, ceiling: 52, type: "BOOM" },
+    "nique clifford":     { floor: 18, ceiling: 48, type: "BOOM" },
+    "precious achiuwa":   { floor: 16, ceiling: 52, type: "BOOM" },
+    "lauri markkanen":    { floor: 26, ceiling: 62, type: "SAFE" },
+    "keyonte george":     { floor: 18, ceiling: 46, type: "BOOM" },
+    "russell westbrook":  { floor: 18, ceiling: 52, type: "BOOM" },
 };
 function getMatchupGrade(playerPos, opponentTeam) {
     const def = TEAM_DEF_VS_POS[opponentTeam];
@@ -420,7 +459,7 @@ const PLAYER_PRA_BASE = {
     "toumani camara":          { pts:12.4, reb:5.2,  ast:2.4, gp:58 },
     "vj edgecombe":            { pts:15.3, reb:4.4,  ast:3.2, gp:52 },
     "andre drummond":          { pts:11.2, reb:8.4,  ast:1.8, gp:50 },
-    // ── MEM@DET ──
+    // ── DET@TOR ──
     "cade cunningham":         { pts:26.2, reb:4.8,  ast:8.4, gp:55 },
     "jalen duren":             { pts:13.4, reb:9.8,  ast:1.6, gp:50 },
     "ausar thompson":          { pts:14.8, reb:7.4,  ast:3.2, gp:48 },
@@ -438,7 +477,7 @@ const PLAYER_PRA_BASE = {
     "ivica zubac":             { pts:12.8, reb:10.8, ast:1.8, gp:52 },
     "ryan rollins":            { pts:16.7, reb:3.4,  ast:4.2, gp:48 },
     "bobby portis":            { pts:12.4, reb:6.3,  ast:1.8, gp:54 },
-    // ── PHX@TOR ──
+    // ── DET@TOR (PHX NOT PLAYING — data below is stale) ──
     "devin booker":            { pts:28.4, reb:4.8,  ast:6.4, gp:56 },
     "kevin durant":            { pts:24.8, reb:6.8,  ast:4.2, gp:52 },
     "scottie barnes":          { pts:22.4, reb:8.4,  ast:5.8, gp:50 },
@@ -451,6 +490,27 @@ const PLAYER_PRA_BASE = {
     "desmond bane":            { pts:18.6, reb:4.2,  ast:3.4, gp:55 },
     "cameron payne":           { pts:12.4, reb:2.8,  ast:5.6, gp:42 },
     "russell westbrook":       { pts:10.4, reb:5.2,  ast:5.8, gp:48 },
+    // ── BM-calibrated additions ──
+    "james harden":            { pts:20.4, reb:4.8,  ast:8.2,  gp:52 },
+    "giannis antetokounmpo":   { pts:28.4, reb:11.2, ast:6.4,  gp:58 },
+    "quentin grimes":          { pts:18.2, reb:6.4,  ast:3.2,  gp:54 },
+    "ivica zubac":             { pts:14.2, reb:9.8,  ast:2.4,  gp:56 },
+    "kevin porter jr.":        { pts:16.4, reb:4.2,  ast:6.8,  gp:48 },
+    "myles turner":            { pts:14.2, reb:6.8,  ast:1.8,  gp:52 },
+    "jarace walker":           { pts:12.4, reb:6.8,  ast:2.2,  gp:50 },
+    "keon ellis":              { pts:12.2, reb:4.2,  ast:3.4,  gp:48 },
+    "scoot henderson":         { pts:12.4, reb:2.8,  ast:5.2,  gp:54 },
+    "khris middleton":         { pts:14.2, reb:4.4,  ast:2.8,  gp:44 },
+    // ── UTA@SAC ──
+    "de'aaron fox":              { pts:28.2, reb:4.2,  ast:7.8,  gp:58 },
+    "domantas sabonis":          { pts:18.4, reb:13.2, ast:8.2,  gp:56 },
+    "maxime raynaud":            { pts:16.0, reb:9.0,  ast:2.2,  gp:59 },
+    "nique clifford":            { pts:14.2, reb:7.8,  ast:3.2,  gp:52 },
+    "precious achiuwa":          { pts:11.4, reb:7.7,  ast:1.5,  gp:60 },
+    "demar derozan":             { pts:18.4, reb:4.2,  ast:4.8,  gp:52 },
+    "lauri markkanen":           { pts:22.4, reb:8.4,  ast:2.8,  gp:54 },
+    "keyonte george":            { pts:14.8, reb:3.2,  ast:5.4,  gp:55 },
+    "cody williams":             { pts:8.4,  reb:4.2,  ast:2.4,  gp:48 },
 };
 // Defensive rating vs stat category per opponent team
 // Scale: multiplier applied to opposing player's base stat
@@ -593,7 +653,7 @@ const CORR_PAIRS = [
     { p1:"Deni Avdija",             p2:"Toumani Camara",   score:68, type:"stack", note:"POR trio — Camara spacing off Avdija creation" },
     { p1:"VJ Edgecombe",            p2:"Andre Drummond",   score:72, type:"stack", note:"PHI young core — both benefit from open looks" },
 
-    // ── MEM@DET ──
+    // ── DET@TOR ──
     { p1:"Cade Cunningham",         p2:"Jalen Duren",      score:78, type:"stack", note:"DET anchor pair — Cade feeds Duren on pick+roll" },
     { p1:"Ja Morant",               p2:"Jaren Jackson Jr.", score:82, type:"stack", note:"MEM dynamic duo — if Morant active" },
     { p1:"Cade Cunningham",         p2:"Ja Morant",        score:65, type:"game",  note:"Game stack — two explosive guards" },
@@ -608,9 +668,15 @@ const CORR_PAIRS = [
     { p1:"Tyrese Haliburton",       p2:"Ivica Zubac",      score:68, type:"stack", note:"IND PnR — Haliburton feeds Zubac" },
     { p1:"Ryan Rollins",            p2:"Bobby Portis",     score:62, type:"stack", note:"MIL usage duo — both elevated without Giannis" },
 
-    // ── PHX@TOR ──
+    // ── DET@TOR (PHX NOT PLAYING — data below is stale) ──
     { p1:"Devin Booker",            p2:"Kevin Durant",     score:86, type:"stack", note:"PHX co-stars — elite scoring pair, high ceiling" },
     { p1:"Devin Booker",            p2:"Scottie Barnes",   score:62, type:"game",  note:"If Barnes plays — marquee matchup game stack" },
+    // ── UTA@SAC (233.5 total — high-scoring near pick-em) ──
+    { p1:"De'Aaron Fox",            p2:"Domantas Sabonis", score:84, type:"stack", note:"SAC co-stars — Fox/Sabonis the core SAC stack" },
+    { p1:"De'Aaron Fox",            p2:"Maxime Raynaud",   score:72, type:"stack", note:"Fox feeds Raynaud — emerging big man" },
+    { p1:"De'Aaron Fox",            p2:"Keyonte George",   score:68, type:"game",  note:"UTA@SAC high total game stack" },
+    { p1:"Lauri Markkanen",          p2:"Keyonte George",   score:74, type:"stack", note:"UTA co-stars in high total game" },
+    { p1:"De'Aaron Fox",            p2:"Lauri Markkanen",  score:70, type:"game",  note:"SAC vs UTA best players game stack" },
 ];
 
 function getCorrScore(name1, name2) {
@@ -1457,7 +1523,7 @@ const RECENT_DNP = {
     "kelly oubre jr.":    { games: 6, reason: "Elbow — long absence" },
     "joel embiid":        { games: 12, reason: "Oblique — season-long" },
     "tyrese maxey":       { games: 8, reason: "Finger — extended" },
-    "giannis antetokounmpo": { games: 3, reason: "Load management" },
+    "giannis antetokounmpo":   { last5: 46.7, season: 44.8, trend: "neutral" },
     "aaron gordon":       { games: 4, reason: "Hamstring" },
     "peyton watson":      { games: 4, reason: "Hamstring" },
     "austin reaves":      { games: 3, reason: "Calf" },
@@ -1478,55 +1544,55 @@ function isDNP(playerName, smData) {
 }
 
 const TONIGHT_INJURIES = [
+    // ── 4-GAME SLATE: MIL@IND · DET@TOR · CLE@DAL · POR@PHI ──
     // ── OUTS ──
-    { name: "Karl-Anthony Towns",   team: "NYK", status: "OUT", reason: "Knee — doubtful, expected out", dfsImpact: "🚨 NYK: Brunson/Anunoby usage ↑ — must play them" },
-    { name: "P.J. Washington",      team: "DAL", status: "OUT", reason: "Ankle",                         dfsImpact: "Flagg/Thompson get more spacing" },
-    { name: "Jarrett Allen",        team: "CLE", status: "OUT", reason: "Knee",                          dfsImpact: "🔥 Mobley max minutes — must anchor CLE stack" },
-    { name: "Ausar Thompson",       team: "DET", status: "OUT", reason: "Ankle — doubtful",              dfsImpact: "Cade/Duren minutes up — DET stack" },
-    { name: "Chet Holmgren",        team: "OKC", status: "Q",  reason: "Back — monitor",                dfsImpact: "If out: SGA/JW usage maxed — OKC still stackable" },
+    { name: "P.J. Washington",      team: "DAL", status: "OUT", reason: "Ankle",              dfsImpact: "🔥 Flagg/Naji Marshall get more usage — DAL stack value up" },
+    { name: "Jarrett Allen",        team: "CLE", status: "OUT", reason: "Knee",               dfsImpact: "🔥 Mobley solo C — max minutes + rebounds" },
+    { name: "Ausar Thompson",       team: "DET", status: "OUT", reason: "Ankle",              dfsImpact: "Cade/Duren minutes up — DET stack remains elite" },
+    { name: "Joel Embiid",          team: "PHI", status: "OUT", reason: "Load management",   dfsImpact: "🔥 PHI depleted — POR players get easy matchup" },
+    { name: "Paul George",          team: "PHI", status: "OUT", reason: "Load management",   dfsImpact: "PHI even weaker — Edgecombe/Grimes usage up" },
+    { name: "Tyrese Maxey",         team: "PHI", status: "OUT", reason: "Load management",   dfsImpact: "🚨 PHI missing 3 stars — Avdija/Clingan matchup A+" },
     // ── QUESTIONABLE ──
-    { name: "Anthony Edwards",      team: "MIN", status: "Q",  reason: "Ankle — monitor",               dfsImpact: "🚨 If out: MIN stack collapses — pivot to OKC side" },
-    { name: "Pascal Siakam",        team: "IND", status: "Q",  reason: "Knee — doubtful",               dfsImpact: "If plays: IND stack opens; Haliburton always plays" },
-    { name: "Ivica Zubac",          team: "IND", status: "Q",  reason: "Ankle",                         dfsImpact: "Monitor — center slot affected" },
-    { name: "Scottie Barnes",       team: "TOR", status: "Q",  reason: "Illness",                       dfsImpact: "If out: Booker/KD even better — PHX heavy fav" },
-    { name: "Jalen Duren",          team: "DET", status: "Q",  reason: "Knee",                          dfsImpact: "Cade still plays — Duren absence boosts him more" },
+    { name: "Pascal Siakam",        team: "IND", status: "Q",  reason: "Knee — monitor",     dfsImpact: "If out: Haliburton/Zubac/Nembhard all get more — IND still stackable" },
+    { name: "Jalen Duren",          team: "DET", status: "Q",  reason: "Knee",               dfsImpact: "If out: Cade gets even more usage — still play DET" },
+    { name: "Scottie Barnes",       team: "TOR", status: "Q",  reason: "Illness",            dfsImpact: "If out: Quickley/Ingram/Poeltl usage all up" },
     // ── USAGE BOOSTERS ──
-    { name: "Shai Gilgeous-Alexander", team:"OKC", status:"UP", reason:"Best game environment — O/U 230", dfsImpact:"🔥 #1 overall anchor. 49 FD proj. Lock him in" },
-    { name: "Jalen Brunson",        team: "NYK", status: "UP", reason: "KAT doubtful — all usage falls to Brunson", dfsImpact:"🔥 Must-play PG. 40+ FD proj at MSG" },
-    { name: "Donovan Mitchell",     team: "CLE", status: "UP", reason: "Allen out — Mitchell + Mobley dominate",    dfsImpact:"🔥 CLE stack anchor. 51+ FD ceiling" },
-    { name: "Evan Mobley",          team: "CLE", status: "UP", reason: "Allen out — max rebounds + usage",          dfsImpact:"🔥 CLE C anchor — Allen gone = Mobley 30+ min" },
-    { name: "Devin Booker",         team: "PHX", status: "UP", reason: "Barnes Q — PHX dominant if Barnes out",     dfsImpact:"Elite ceiling 52 FD — stack with KD" },
-    { name: "Alperen Sengun",       team: "HOU", status: "UP", reason: "HOU 22-8 at home — dominant paint game",    dfsImpact:"Top C option — HOU implied 120+ pts" },
-    { name: "Cade Cunningham",      team: "DET", status: "UP", reason: "Ausar doubtful — all ball goes through Cade", dfsImpact:"43+ FD proj, elite value at $11K" },
-    { name: "Deni Avdija",          team: "POR", status: "UP", reason: "POR best offensive option — 24 ppg",         dfsImpact:"Good value, hot streak — stack with Clingan" },
+    { name: "Donovan Mitchell",     team: "CLE", status: "UP", reason: "Allen OUT + CLE -17.5 massive fav", dfsImpact: "🔥 #1 anchor tonight — 44 proj, 237.5 total" },
+    { name: "Evan Mobley",          team: "CLE", status: "UP", reason: "Allen OUT — solo C, max minutes",   dfsImpact: "🔥 Must-play C — 41 proj, minutes maxed" },
+    { name: "James Harden",         team: "CLE", status: "UP", reason: "CLE -17.5 — heavy run-it-up game", dfsImpact: "🔥 43 proj — underowned on this slate" },
+    { name: "Cade Cunningham",      team: "DET", status: "UP", reason: "Ausar OUT — all offense through Cade", dfsImpact: "🔥 45 proj at $11K — elite anchor value" },
+    { name: "Giannis Antetokounmpo",team: "MIL", status: "UP", reason: "MIL road fav by 7.5",               dfsImpact: "47 proj — top overall on slate" },
+    { name: "Deni Avdija",          team: "POR", status: "UP", reason: "POR vs depleted PHI — Embiid/PG/Maxey all OUT", dfsImpact: "🔥 PHI missing 3 stars — A+ matchup for POR" },
+    { name: "Donovan Clingan",      team: "POR", status: "UP", reason: "PHI missing Embiid — easy paint matchup", dfsImpact: "36 proj at $7500 — top C value on slate" },
 ];
 // ── CASCADE RULES ENGINE ──────────────────────────────────────────────────
 const CASCADE_RULES = [
-    { trigger: "Karl-Anthony Towns", team: "NYK", beneficiaries: [
-        { name: "Jalen Brunson",   ownBoost: 1.20, projBoost: 1.12, note: "All creation through Brunson without KAT" },
-        { name: "OG Anunoby",      ownBoost: 1.18, projBoost: 1.08, note: "More usage off ball" },
-        { name: "Mikal Bridges",   ownBoost: 1.15, projBoost: 1.06, note: "Spot-up volume up without KAT" },
-    ] },
+    // ── 4-game slate CLE@DAL / DET@TOR / MIL@IND / POR@PHI ──
     { trigger: "Jarrett Allen", team: "CLE", beneficiaries: [
-        { name: "Evan Mobley",     ownBoost: 1.30, projBoost: 1.18, note: "Solo center — max minutes + boards" },
-        { name: "Donovan Mitchell",ownBoost: 1.10, projBoost: 1.06, note: "Mitchell draw doubles more without Allen spacing" },
+        { name: "Evan Mobley",      ownBoost: 1.30, projBoost: 1.18, note: "Solo C — max minutes + boards + scoring" },
+        { name: "Donovan Mitchell", ownBoost: 1.10, projBoost: 1.06, note: "More usage in isolation without Allen spacing" },
+        { name: "James Harden",     ownBoost: 1.08, projBoost: 1.04, note: "Minor pace/usage boost" },
     ] },
     { trigger: "Ausar Thompson", team: "DET", beneficiaries: [
-        { name: "Cade Cunningham", ownBoost: 1.15, projBoost: 1.08, note: "More ball in Cade's hands" },
-        { name: "Jalen Duren",     ownBoost: 1.15, projBoost: 1.08, note: "Duren benefits from extra wing minutes" },
+        { name: "Cade Cunningham",  ownBoost: 1.15, projBoost: 1.08, note: "More ball in Cade's hands without Ausar" },
+        { name: "Jalen Duren",      ownBoost: 1.12, projBoost: 1.06, note: "Extra wing minutes benefit Duren" },
+        { name: "Tobias Harris",    ownBoost: 1.10, projBoost: 1.05, note: "More offensive role" },
     ] },
-    { trigger: "Anthony Edwards", team: "MIN", beneficiaries: [
-        { name: "Julius Randle",   ownBoost: 1.35, projBoost: 1.18, note: "Randle becomes primary scorer" },
-        { name: "Rudy Gobert",     ownBoost: 1.15, projBoost: 1.06, note: "More ball movement through bigs" },
+    { trigger: "Joel Embiid", team: "PHI", beneficiaries: [
+        { name: "VJ Edgecombe",     ownBoost: 1.25, projBoost: 1.12, note: "Lead scorer with Embiid/PG/Maxey out" },
+        { name: "Quentin Grimes",   ownBoost: 1.20, projBoost: 1.10, note: "Heavy usage in depleted lineup" },
+        { name: "Adem Bona",        ownBoost: 1.30, projBoost: 1.18, note: "Starting C with Embiid out" },
+        { name: "Dominick Barlow",  ownBoost: 1.15, projBoost: 1.08, note: "Extra minutes" },
     ] },
     { trigger: "Pascal Siakam", team: "IND", beneficiaries: [
-        { name: "Tyrese Haliburton", ownBoost: 1.20, projBoost: 1.12, note: "Haliburton leads offense without Siakam" },
-        { name: "Ivica Zubac",      ownBoost: 1.15, projBoost: 1.08, note: "Zubac gets more scoring responsibility" },
+        { name: "Tyrese Haliburton",ownBoost: 1.20, projBoost: 1.12, note: "Haliburton leads offense without Siakam" },
+        { name: "Ivica Zubac",      ownBoost: 1.15, projBoost: 1.08, note: "More scoring responsibility" },
+        { name: "Jarace Walker",    ownBoost: 1.15, projBoost: 1.06, note: "Starts if Siakam out" },
     ] },
-    { trigger: "Chet Holmgren", team: "OKC", beneficiaries: [
-        { name: "Shai Gilgeous-Alexander", ownBoost: 1.10, projBoost: 1.06, note: "SGA already max usage — minor boost" },
-        { name: "Jalen Williams",          ownBoost: 1.20, projBoost: 1.10, note: "JW gets more front-court responsibility" },
-        { name: "Isaiah Joe",              ownBoost: 1.25, projBoost: 1.12, note: "Joe gets more minutes at 4 spot" },
+    { trigger: "Scottie Barnes", team: "TOR", beneficiaries: [
+        { name: "RJ Barrett",       ownBoost: 1.20, projBoost: 1.10, note: "Barrett becomes lead scorer" },
+        { name: "Immanuel Quickley",ownBoost: 1.15, projBoost: 1.08, note: "More creation responsibility" },
+        { name: "Brandon Ingram",   ownBoost: 1.12, projBoost: 1.06, note: "More offensive touches" },
     ] },
 ];
 // Teams to suppress entirely when key player is out
@@ -1794,15 +1860,11 @@ function App() {
         setStep("upload");
     };
     const [lineMovement, setLineMovement] = useState([
-        // Mar 15 2026 line movement
-        { gameStr: "MIL@IND",  openSpread: -2.5, currentSpread: -3.5, openTotal: 218.0, currentTotal: 220.0 },
-        { gameStr: "CLE@DAL",  openSpread: -6.5, currentSpread: -4.5, openTotal: 226.0, currentTotal: 228.0 }, // DAL moved toward with Mitchell
-        { gameStr: "POR@PHI",  openSpread: -4.0, currentSpread: -3.0, openTotal: 221.0, currentTotal: 222.0 },
-        { gameStr: "MEM@DET",  openSpread: -6.0, currentSpread: -4.5, openTotal: 222.0, currentTotal: 224.0 },
-        { gameStr: "MIN@OKC",  openSpread: -4.5, currentSpread: -5.5, openTotal: 228.0, currentTotal: 230.0 }, // 🔥 Edwards Q → total up
-        { gameStr: "PHX@TOR",  openSpread: -1.0, currentSpread: -2.0, openTotal: 225.0, currentTotal: 226.0 },
-        { gameStr: "NOP@HOU",  openSpread: -4.0, currentSpread: -5.0, openTotal: 226.0, currentTotal: 228.0 }, // HOU implied up at home
-        { gameStr: "GSW@NYK",  openSpread: -2.0, currentSpread: -3.5, openTotal: 228.0, currentTotal: 229.0 }, // 🔥 KAT out → NYK spread adjusted
+        // Mar 15 2026 — 4-game FD main slate line movement
+        { gameStr: "MIL@IND",  openSpread:  5.0, currentSpread:  7.5, openTotal: 225.0, currentTotal: 228.5 }, // MIL road fav; moved up from injury news
+        { gameStr: "DET@TOR",  openSpread:  2.0, currentSpread:  3.5, openTotal: 219.0, currentTotal: 220.5 }, // DET road fav; stable line
+        { gameStr: "CLE@DAL",  openSpread: 14.0, currentSpread: 17.5, openTotal: 233.0, currentTotal: 237.5 }, // 🔥 Biggest total; CLE opened -14, now -17.5
+        { gameStr: "POR@PHI",  openSpread:  5.0, currentSpread:  7.5, openTotal: 225.0, currentTotal: 228.5 }, // POR road fav; PHI depleted roster
     ]);
     const fileRef = useRef();
     const rebuildPlayers = useCallback((csv, ownMap, smMap) => {
@@ -1810,7 +1872,72 @@ function App() {
         setPlayers(parsed);
         return parsed;
     }, []);
-    const handleCSV = useCallback((text) => {
+    const handleCSV = useCallback(async (text) => {
+        // ── LOAD ADMIN PANEL DATA (from admin.html storage) ──────────────
+        try {
+            const adminResult = await window.storage.get('courtedge:daily', true);
+            if (adminResult && adminResult.value) {
+                const adminData = JSON.parse(adminResult.value);
+                // Override Vegas/game data with admin slate
+                if (adminData.games && adminData.games.length > 0) {
+                    // Rebuild Vegas map from admin games
+                    const adminTeamMap = {};
+                    const adminGamesList = [];
+                    for (const g of adminData.games) {
+                        const spread = parseFloat(g.spread) || 0;
+                        const total  = parseFloat(g.total)  || 220;
+                        const homeImpl = +((total/2) - (spread/2)).toFixed(1);
+                        const awayImpl = +(total - homeImpl).toFixed(1);
+                        adminTeamMap[g.home] = { total, impliedPts: homeImpl, spread,  moneyline: parseInt(g.homeML)||0, opponent: g.away, gameStr: `${g.away}@${g.home}` };
+                        adminTeamMap[g.away] = { total, impliedPts: awayImpl, spread: -spread, moneyline: parseInt(g.awayML)||0, opponent: g.home, gameStr: `${g.away}@${g.home}` };
+                        adminGamesList.push({ home: g.home, away: g.away, total, homeImpl, awayImpl, homeSpread: spread, gameStr: `${g.away}@${g.home}` });
+                    }
+                    setVegasMap(adminTeamMap);
+                    setVegasGames(adminGamesList);
+                    setVegasStatus('done');
+                    setVegasMsg(`⚡ Admin: ${adminGamesList.length} games loaded`);
+                }
+                // Build projection override map: name → proj FP
+                // Priority: manualProj overrides CSV projections
+                const projMap = {};
+                if (adminData.projections) {
+                    adminData.projections.forEach(p => {
+                        if (p.name && p.proj > 0) projMap[p.name.toLowerCase()] = p.proj;
+                    });
+                }
+                if (adminData.manualProj) {
+                    adminData.manualProj.forEach(p => {
+                        if (p.name && p.proj > 0) projMap[p.name.toLowerCase()] = p.proj; // manual wins
+                    });
+                }
+                // Inject into PLAYER_FORM so compositeScore uses them
+                if (Object.keys(projMap).length > 0) {
+                    Object.entries(projMap).forEach(([name, proj]) => {
+                        if (PLAYER_FORM[name]) {
+                            PLAYER_FORM[name].last5   = proj;
+                            PLAYER_FORM[name].season  = proj;
+                            PLAYER_FORM[name].trend   = 'neutral'; // don't inflate with hot multiplier
+                        } else {
+                            PLAYER_FORM[name] = { last5: proj, season: proj, trend: 'neutral' };
+                        }
+                    });
+                    console.log(`[Admin] Loaded ${Object.keys(projMap).length} projection overrides`);
+                }
+                // Override injuries from admin panel
+                if (adminData.injuries && adminData.injuries.length > 0) {
+                    // Merge with TONIGHT_INJURIES — admin wins for same player
+                    const adminNames = adminData.injuries.map(i => i.name.toLowerCase());
+                    const base = TONIGHT_INJURIES.filter(i => !adminNames.includes(i.name.toLowerCase()));
+                    TONIGHT_INJURIES.length = 0;
+                    [...base, ...adminData.injuries.map(i => ({
+                        name: i.name, team: i.team, status: i.status,
+                        reason: i.impact || '', dfsImpact: i.impact || ''
+                    }))].forEach(x => TONIGHT_INJURIES.push(x));
+                    console.log(`[Admin] Loaded ${adminData.injuries.length} injury overrides`);
+                }
+            }
+        } catch(e) { console.log('[Admin] No stored data or error:', e.message); }
+        // ── END ADMIN LOAD ────────────────────────────────────────────────
         setCsvText(text);
         const defaultOwn = {};
         text.trim().split("\n").slice(1).forEach(line => {
