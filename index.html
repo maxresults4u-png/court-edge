@@ -281,6 +281,8 @@ const PLAYER_FORM = {
     "stephen curry":           { last5: 44.8, season: 46.2, trend: "cold" },
     // ── CLE@DAL ──
     "donovan mitchell":        { last5: 46.5, season: 44.2, trend: "neutral" },
+    "dennis schroder":         { last5: 14.0, season: 14.0, trend: "cold" },
+    "jaylon tyson":            { last5: 15.0, season: 15.0, trend: "cold" },
     "evan mobley":             { last5: 41.7, season: 40.2, trend: "neutral" },
     "darius garland":          { last5: 38.4, season: 36.8, trend: "hot" },
     "cooper flagg":            { last5: 36.8, season: 34.2, trend: "hot" },
@@ -1079,9 +1081,7 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
     const lineup = [];
     const used   = new Set();
     let budget   = RULES.SALARY_CAP;
-    // On 4-game slates, cap to 3 per team — prevents cheap CLE filler (Schroder/Tyson)
-    // from crowding out better players from other games (Grimes/Flagg/Edgecombe)
-    const MAX_PER_TEAM = gamesCount <= 4 ? 3 : 4;
+    const MAX_PER_TEAM = 4;
     const teamCount = () => {
         const counts = {};
         for (const p of lineup) counts[p.team] = (counts[p.team] || 0) + 1;
@@ -1100,10 +1100,7 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
         if (p._baseName && used.has("__base__" + p._baseName)) return false;
         return true;
     };
-    // Static pool min salary — computed once so it never drifts upward as pool shrinks
-    // Use $4,000 as budget floor — FD min is $4,800 but $4,000 gives breathing room
-    // so Mobley ($8,300) isn't blocked when only $4,800 min players remain
-    const poolMinSal = 4000;
+    const poolMinSal = pool.length ? Math.min(...pool.map(p => p.salary)) : 3500;
 
     // 1. Place locked players
     for (const p of locked) {
@@ -1111,15 +1108,12 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
             if ((needed[pos] || 0) > 0 && canPlace(p)) { place(p, pos); break; }
         }
     }
-    // 2. Greedy fill — pool already sorted by score descending
+    // 2. Greedy fill — pool sorted by score descending
     for (const p of pool) {
         if (used.has(p.name)) continue;
         const slotsLeft = Object.values(needed).reduce((a, b) => a + b, 0);
         if (slotsLeft === 0) break;
-        // Position order: for PG/SG dual players, prefer whichever slot has MORE remaining
-        // This keeps scarce PG slots open for PG-only stars (Harden, SGA, etc.)
-        // Scarcity-first: try rarest position slot first (C=1 beats PF=2)
-        // Ensures Mobley fills C before taking a PF slot and stranding C empty
+        // Scarcity-first: try rarest slot first so C (1 slot) fills before PF (2 slots)
         const posOrder = [...p.positions].sort((a, b) => (needed[a] || 0) - (needed[b] || 0));
         for (const pos of posOrder) {
             if ((needed[pos] || 0) > 0) {
