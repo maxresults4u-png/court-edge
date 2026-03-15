@@ -1113,8 +1113,12 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
         if (used.has(p.name)) continue;
         const slotsLeft = Object.values(needed).reduce((a, b) => a + b, 0);
         if (slotsLeft === 0) break;
-        // Scarcity-first: try rarest slot first so C (1 slot) fills before PF (2 slots)
-        const posOrder = [...p.positions].sort((a, b) => (needed[a] || 0) - (needed[b] || 0));
+        // Smart position ordering:
+        // PG/SG players → try MORE-available slot first (keeps scarce PG open for Harden/SGA)
+        // All others → try FEWER-available slot first (fills scarce C before PF)
+        const posOrder = (p.positions.includes('PG') && p.positions.includes('SG'))
+            ? [...p.positions].sort((a, b) => (needed[b] || 0) - (needed[a] || 0))
+            : [...p.positions].sort((a, b) => (needed[a] || 0) - (needed[b] || 0));
         for (const pos of posOrder) {
             if ((needed[pos] || 0) > 0) {
                 const budgetAfter = budget - p.salary;
