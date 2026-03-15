@@ -25,6 +25,9 @@ const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
 // Tonight's Vegas data - Mar 15 2026 - hardcoded (no API needed)
+// Global Vegas map — updated when Vegas data loads, used by compositeScore
+let VEGAS_TEAM_MAP = {};
+
 function getHardcodedVegasData() {
     const games = [
         // 4-game FanDuel main slate Mar 15 2026 — confirmed via Basketball Monster CSV
@@ -43,6 +46,7 @@ function getHardcodedVegasData() {
         teamMap[g.away] = { total: g.total, impliedPts: awayImpl, spread: -spread, moneyline: g.awayML, opponent: g.home, gameStr: `${g.away}@${g.home}` };
         gamesList.push({ home: g.home, away: g.away, total: g.total, homeImpl, awayImpl, homeSpread: spread, gameStr: `${g.away}@${g.home}` });
     }
+    VEGAS_TEAM_MAP = teamMap; // keep global in sync
     return { teamMap, gamesList, fetchedAt: "2026-03-15 hardcoded", gamesCount: games.length };
 }
 // ── PLATFORM CONFIGS ──────────────────────────────────────────────────────
@@ -276,7 +280,7 @@ const PLAYER_FORM = {
     "brandin podziemski":      { last5: 28.4, season: 26.1, trend: "hot" },
     "stephen curry":           { last5: 44.8, season: 46.2, trend: "cold" },
     // ── CLE@DAL ──
-    "donovan mitchell":        { last5: 44.4, season: 44.2, trend: "neutral" },
+    "donovan mitchell":        { last5: 46.5, season: 44.2, trend: "neutral" },
     "evan mobley":             { last5: 41.7, season: 40.2, trend: "neutral" },
     "darius garland":          { last5: 38.4, season: 36.8, trend: "hot" },
     "cooper flagg":            { last5: 36.8, season: 34.2, trend: "hot" },
@@ -841,19 +845,30 @@ function compositeScore(p) {
     const trend = p.formData?.trend;
     const formMult = trend === 'hot' ? 1.12 : trend === 'cold' ? 0.90 : 1.0;
 
-    // ── Effective fppg: weight recent last5 heavily when player is hot ──
-    // Hot player trending up → 65% recent form, 35% season avg
-    // Cold player or neutral → use season avg only
+    // ── Effective fppg: BM tonight-projection > hot form > season avg ───
+    // PLAYER_FORM.last5 = Basketball Monster tonight projection (loaded at startup)
+    // Using it here (not in parsePlayers) keeps p.fppg clean for budget math
     const last5 = p.formData?.last5 || 0;
-    const effectiveFppg = (last5 > p.fppg && trend === 'hot')
-        ? +(p.fppg * 0.35 + last5 * 0.65).toFixed(2)
-        : p.fppg;
+    const bmProj = (last5 > 0 && last5 !== p.fppg) ? last5 : 0;
+    const effectiveFppg = bmProj > 0
+        ? bmProj                                          // BM tonight projection wins
+        : (last5 > p.fppg && trend === 'hot')
+            ? +(p.fppg * 0.35 + last5 * 0.65).toFixed(2) // hot streak blend
+            : p.fppg;                                     // season avg fallback
 
     // ── Ceiling boost: high-upside players get extra bump ──────────────
     const ceiling = p.boomBust?.ceiling || 0;
     const ceilingBoost = ceiling >= 80 ? 1.08 : ceiling >= 65 ? 1.05 : ceiling >= 50 ? 1.02 : 1.0;
 
-    return (effectiveFppg * inj * ownW + value * 0.12 + sampleW * 0.08) * formMult * ceilingBoost * statMuseBoost;
+    // ── Implied points boost: reward players on high-scoring teams ─────
+    // Uses Vegas implied total — CLE ~127pts gets 1.04x, DAL ~110pts gets 1.01x
+    // This naturally surfaces the highest-total game stack without hardcoding
+    const impliedPts = (typeof VEGAS_TEAM_MAP !== "undefined" && VEGAS_TEAM_MAP[p.team])
+        ? (VEGAS_TEAM_MAP[p.team].impliedPts || 0)
+        : 0;
+    const impliedBoost = impliedPts >= 125 ? 1.04 : impliedPts >= 118 ? 1.03 : impliedPts >= 112 ? 1.02 : impliedPts >= 106 ? 1.01 : 1.0;
+
+    return (effectiveFppg * inj * ownW + value * 0.12 + sampleW * 0.08) * formMult * ceilingBoost * statMuseBoost * impliedBoost;
 }
 function estimateOwnership(player, teamMap) {
     const v = teamMap[player.team];
