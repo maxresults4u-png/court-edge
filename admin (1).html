@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Court Edge — Admin</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #f0b429;
+    --accent2: #4ade80;
+    --danger: #f87171;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+
+  /* ── LOGIN SCREEN ── */
+  #login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at 30% 40%, #1a1205 0%, var(--bg) 60%);
+  }
+
+  .login-box {
+    width: 360px;
+    padding: 48px 40px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .login-logo {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .login-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 32px;
+    line-height: 1.2;
+  }
+
+  .login-title span { color: var(--accent); }
+
+  .field-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .field-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .field-input:focus { border-color: var(--accent); }
+
+  .btn-primary {
+    width: 100%;
+    margin-top: 24px;
+    padding: 14px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .btn-primary:hover { opacity: 0.85; }
+
+  .login-error {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--danger);
+    text-align: center;
+    display: none;
+  }
+
+  /* ── ADMIN PANEL ── */
+  #admin-panel { display: none; }
+
+  .top-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 3px 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  .btn-logout {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 6px 14px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+  .main-layout {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 32px;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 32px;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: sticky;
+    top: 88px;
+    height: fit-content;
+  }
+
+  .nav-section {
+    margin-bottom: 8px;
+  }
+
+  .nav-section-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 0 12px;
+    margin-bottom: 4px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+
+  .nav-item.active {
+    color: var(--accent);
+    background: rgba(240,180,41,0.08);
+    border-color: rgba(240,180,41,0.2);
+  }
+
+  .nav-icon { font-size: 15px; }
+
+  .save-status {
+    margin-top: 24px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .save-status.saved { color: var(--accent2); border-color: rgba(74,222,128,0.3); }
+  .save-status.saving { color: var(--accent); }
+
+  /* ── CONTENT ── */
+  .content { min-width: 0; }
+
+  .section {
+    display: none;
+  }
+
+  .section.active { display: block; }
+
+  .section-header {
+    margin-bottom: 28px;
+  }
+
+  .section-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .section-subtitle {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── GAME SLATE ── */
+  .game-row {
+    display: grid;
+    grid-template-columns: 80px 80px 1fr 1fr 1fr;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .game-row:last-child { border-bottom: none; margin-bottom: 0; }
+
+  .input-group { display: flex; flex-direction: column; gap: 5px; }
+
+  .input-sm {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+
+  .input-sm:focus { border-color: var(--accent); }
+
+  .input-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .btn-add-game {
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 3px;
+    padding: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+    transition: all 0.15s;
+    margin-top: 12px;
+  }
+
+  .btn-add-game:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-remove {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    transition: color 0.15s;
+    align-self: flex-end;
+    padding-bottom: 10px;
+  }
+
+  .btn-remove:hover { color: var(--danger); }
+
+  /* ── PROJECTIONS ── */
+  .csv-drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .csv-drop-zone:hover, .csv-drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(240,180,41,0.04);
+  }
+
+  .csv-drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon { font-size: 32px; margin-bottom: 12px; }
+  .drop-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .drop-subtitle { font-size: 12px; color: var(--muted); }
+
+  .proj-table-wrap {
+    margin-top: 20px;
+    max-height: 380px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+
+  .proj-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .proj-table th {
+    background: var(--surface2);
+    padding: 8px 12px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .proj-table td {
+    padding: 7px 12px;
+    border-bottom: 1px solid rgba(42,42,58,0.6);
+    color: var(--text);
+  }
+
+  .proj-table tr:last-child td { border-bottom: none; }
+  .proj-table tr:hover td { background: var(--surface2); }
+
+  .proj-val { font-family: var(--mono); color: var(--accent); }
+  .proj-name { font-weight: 500; }
+
+  /* ── INJURIES ── */
+  .injury-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 100px 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 10px;
+  }
+
+  .status-select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    width: 100%;
+  }
+
+  .status-select:focus { border-color: var(--accent); }
+
+  .status-out { color: var(--danger); }
+  .status-q { color: var(--accent); }
+  .status-up { color: var(--accent2); }
+
+  /* ── SAVE BAR ── */
+  .save-bar {
+    position: fixed;
+    bottom: 28px;
+    right: 32px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .btn-save {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 3px;
+    padding: 12px 28px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    box-shadow: 0 4px 20px rgba(240,180,41,0.3);
+  }
+
+  .btn-save:hover { opacity: 0.85; }
+
+  .btn-clear {
+    background: var(--surface);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-clear:hover { border-color: var(--danger); color: var(--danger); }
+
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid var(--accent2);
+    border-radius: 3px;
+    padding: 10px 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--accent2);
+    opacity: 0;
+    transition: all 0.3s;
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── MANUAL PROJ ENTRY ── */
+  .proj-manual-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 8px;
+  }
+
+  .proj-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+    margin-top: 8px;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">Court Edge</div>
+    <div class="login-title">Admin<br><span>Panel</span></div>
+    <label class="field-label">Password</label>
+    <input type="password" class="field-input" id="pw-input" placeholder="••••••••" autocomplete="off">
+    <button class="btn-primary" onclick="tryLogin()">ENTER</button>
+    <div class="login-error" id="login-error">Incorrect password</div>
+  </div>
+</div>
+
+<!-- ── ADMIN ── -->
+<div id="admin-panel">
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <span class="logo-text">Court Edge</span>
+      <span class="badge">ADMIN</span>
+      <span class="badge" id="date-badge"></span>
+    </div>
+    <button class="btn-logout" onclick="logout()">LOGOUT</button>
+  </div>
+
+  <div class="main-layout">
+    <!-- sidebar -->
+    <div class="sidebar">
+      <div class="nav-section">
+        <div class="nav-section-label">Daily Setup</div>
+        <div class="nav-item active" onclick="showSection('slate')">
+          <span class="nav-icon">🏀</span> Game Slate
+        </div>
+        <div class="nav-item" onclick="showSection('projections')">
+          <span class="nav-icon">📊</span> Projections
+        </div>
+        <div class="nav-item" onclick="showSection('injuries')">
+          <span class="nav-icon">🏥</span> Injuries
+        </div>
+      </div>
+      <div class="nav-section" style="margin-top:16px">
+        <div class="nav-section-label">Tools</div>
+        <div class="nav-item" onclick="showSection('status')">
+          <span class="nav-icon">⚡</span> Live Status
+        </div>
+      </div>
+      <div class="save-status" id="sidebar-status">No data saved yet</div>
+    </div>
+
+    <!-- content -->
+    <div class="content">
+
+      <!-- SLATE -->
+      <div class="section active" id="section-slate">
+        <div class="section-header">
+          <div class="section-title">Game Slate</div>
+          <div class="section-subtitle">Set today's games, totals, and spreads. Court Edge uses these for implied points and stacking.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">📅 Today's Games</div>
+          <div id="games-container"></div>
+          <button class="btn-add-game" onclick="addGame()">+ Add Game</button>
+        </div>
+      </div>
+
+      <!-- PROJECTIONS -->
+      <div class="section" id="section-projections">
+        <div class="section-header">
+          <div class="section-title">Projections</div>
+          <div class="section-subtitle">Upload Basketball Monster CSV or enter projections manually. These override hardcoded values in Court Edge.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">📁 Upload CSV (Basketball Monster / Any Projection CSV)</div>
+          <div class="csv-drop-zone" id="drop-zone">
+            <input type="file" accept=".csv" onchange="handleCSV(this.files[0])">
+            <div class="drop-icon">📄</div>
+            <div class="drop-title">Drop CSV file here or click to browse</div>
+            <div class="drop-subtitle">Supports Basketball Monster DAILY.csv — columns: player, fantasy, salary, minutes</div>
+          </div>
+          <div id="proj-table-container" style="display:none">
+            <div class="proj-count" id="proj-count"></div>
+            <div class="proj-table-wrap">
+              <table class="proj-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Player</th>
+                    <th>Team</th>
+                    <th>Proj FP</th>
+                    <th>Salary</th>
+                    <th>Mins</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="proj-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">✏️ Manual Overrides</div>
+          <div class="section-subtitle" style="margin-bottom:16px; font-size:12px">Override specific player projections here — takes priority over CSV.</div>
+          <div id="manual-proj-container"></div>
+          <button class="btn-add-game" onclick="addManualProj()">+ Add Player Override</button>
+        </div>
+      </div>
+
+      <!-- INJURIES -->
+      <div class="section" id="section-injuries">
+        <div class="section-header">
+          <div class="section-title">Injury Report</div>
+          <div class="section-subtitle">OUT/Q players are blocked from lineups. UP players get usage boost in scoring.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🏥 Player Status</div>
+          <div id="injury-container"></div>
+          <button class="btn-add-game" onclick="addInjury()">+ Add Player</button>
+        </div>
+      </div>
+
+      <!-- STATUS -->
+      <div class="section" id="section-status">
+        <div class="section-header">
+          <div class="section-title">Live Status</div>
+          <div class="section-subtitle">What Court Edge is currently reading from storage.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">💾 Stored Data</div>
+          <pre id="status-json" style="font-family:var(--mono);font-size:11px;color:var(--muted);white-space:pre-wrap;line-height:1.6;max-height:500px;overflow-y:auto">Loading...</pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- save bar -->
+<div class="save-bar">
+  <button class="btn-clear" onclick="clearAll()">CLEAR ALL</button>
+  <button class="btn-save" onclick="saveAll()">💾 SAVE TO COURT EDGE</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── PASSWORD ──────────────────────────────────────────────────────────────
+const ADMIN_PASSWORD = 'courtedge2026';  // Change this to your own password
+
+function tryLogin() {
+  const pw = document.getElementById('pw-input').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    init();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('pw-input').value = '';
+  }
+}
+
+document.getElementById('pw-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') tryLogin();
+});
+
+function logout() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('admin-panel').style.display = 'none';
+  document.getElementById('pw-input').value = '';
+}
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+let state = {
+  games: [],
+  projections: [],       // from CSV
+  manualProj: [],        // manual overrides
+  injuries: [],
+  savedAt: null,
+};
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+async function init() {
+  // Date badge
+  document.getElementById('date-badge').textContent =
+    new Date().toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }).toUpperCase();
+
+  // Load existing data from storage
+  try {
+    const result = await window.storage.get('courtedge:daily', true);
+    if (result && result.value) {
+      state = JSON.parse(result.value);
+      updateSidebarStatus();
+    }
+  } catch(e) { /* no data yet */ }
+
+  // Default games if empty
+  if (!state.games || state.games.length === 0) {
+    state.games = [
+      { away:'MIL', home:'IND', total:'228.5', spread:'7.5', awayML:'-280', homeML:'230' },
+      { away:'DET', home:'TOR', total:'220.5', spread:'3.5', awayML:'-175', homeML:'148' },
+      { away:'CLE', home:'DAL', total:'237.5', spread:'17.5', awayML:'-900', homeML:'620' },
+      { away:'POR', home:'PHI', total:'228.5', spread:'7.5', awayML:'-280', homeML:'230' },
+    ];
+  }
+
+  if (!state.manualProj) state.manualProj = [];
+  if (!state.injuries) state.injuries = [
+    { name:'P.J. Washington', team:'DAL', status:'OUT', impact:'Flagg/Naji more usage' },
+    { name:'Jarrett Allen', team:'CLE', status:'OUT', impact:'Mobley solo C — max mins' },
+    { name:'Ausar Thompson', team:'DET', status:'OUT', impact:'Cade usage maxed' },
+    { name:'Joel Embiid', team:'PHI', status:'OUT', impact:'POR matchup A+' },
+    { name:'Paul George', team:'PHI', status:'OUT', impact:'PHI depleted' },
+    { name:'Tyrese Maxey', team:'PHI', status:'OUT', impact:'PHI depleted' },
+    { name:'Pascal Siakam', team:'IND', status:'Q', impact:'Haliburton/Zubac up if out' },
+    { name:'Jalen Duren', team:'DET', status:'Q', impact:'Cade still elite' },
+    { name:'Scottie Barnes', team:'TOR', status:'Q', impact:'Quickley/Ingram up if out' },
+  ];
+
+  renderGames();
+  renderManualProj();
+  renderInjuries();
+  if (state.projections && state.projections.length > 0) renderProjTable(state.projections);
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────────
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('section-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'status') refreshStatus();
+}
+
+// ── GAMES ─────────────────────────────────────────────────────────────────
+function renderGames() {
+  const c = document.getElementById('games-container');
+  c.innerHTML = '';
+  state.games.forEach((g, i) => {
+    const row = document.createElement('div');
+    row.className = 'game-row';
+    row.style.cssText = 'display:grid;grid-template-columns:80px 80px 90px 90px 90px 90px auto;gap:10px;align-items:end;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)';
+    row.innerHTML = `
+      <div class="input-group">
+        <span class="input-label">Away</span>
+        <input class="input-sm" value="${g.away}" onchange="state.games[${i}].away=this.value" placeholder="MIL">
+      </div>
+      <div class="input-group">
+        <span class="input-label">Home</span>
+        <input class="input-sm" value="${g.home}" onchange="state.games[${i}].home=this.value" placeholder="IND">
+      </div>
+      <div class="input-group">
+        <span class="input-label">O/U Total</span>
+        <input class="input-sm" value="${g.total}" onchange="state.games[${i}].total=this.value" placeholder="228.5">
+      </div>
+      <div class="input-group">
+        <span class="input-label">Home Spread</span>
+        <input class="input-sm" value="${g.spread}" onchange="state.games[${i}].spread=this.value" placeholder="-7.5">
+      </div>
+      <div class="input-group">
+        <span class="input-label">Away ML</span>
+        <input class="input-sm" value="${g.awayML||''}" onchange="state.games[${i}].awayML=this.value" placeholder="-280">
+      </div>
+      <div class="input-group">
+        <span class="input-label">Home ML</span>
+        <input class="input-sm" value="${g.homeML||''}" onchange="state.games[${i}].homeML=this.value" placeholder="230">
+      </div>
+      <button class="btn-remove" onclick="removeGame(${i})">✕</button>
+    `;
+    c.appendChild(row);
+  });
+}
+
+function addGame() {
+  state.games.push({ away:'', home:'', total:'', spread:'', awayML:'', homeML:'' });
+  renderGames();
+}
+
+function removeGame(i) {
+  state.games.splice(i, 1);
+  renderGames();
+}
+
+// ── CSV PROJECTIONS ───────────────────────────────────────────────────────
+function handleCSV(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').filter(l => l.trim());
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g,''));
+
+    // Find column indices — supports Basketball Monster and generic formats
+    const nameIdx   = headers.indexOf('player');
+    const fpIdx     = headers.indexOf('fantasy');
+    const salIdx    = headers.indexOf('salary');
+    const minsIdx   = headers.indexOf('minutes');
+    const teamIdx   = headers.indexOf('team');
+    const gameIdx   = headers.indexOf('gameinfo');
+
+    const players = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cells = lines[i].split(',').map(c => c.trim().replace(/"/g,''));
+      const name = cells[nameIdx] || '';
+      const fp   = parseFloat(cells[fpIdx]);
+      const salRaw = (cells[salIdx] || '').replace('$','').replace(',','');
+      const sal  = parseInt(salRaw);
+      const mins = parseFloat(cells[minsIdx] || 0);
+      const team = (cells[teamIdx] || '').split(' ').pop();  // last word = abbrev or use as-is
+
+      if (!name || isNaN(fp) || fp <= 0 || isNaN(sal)) continue;
+      players.push({ name, proj: fp, salary: sal, mins, team });
+    }
+
+    players.sort((a,b) => b.proj - a.proj);
+    state.projections = players;
+    renderProjTable(players);
+    showToast(`✓ Loaded ${players.length} players from CSV`);
+  };
+  reader.readAsText(file);
+}
+
+function renderProjTable(players) {
+  document.getElementById('proj-table-container').style.display = 'block';
+  document.getElementById('proj-count').textContent = `${players.length} players loaded — sorted by projection`;
+
+  const tbody = document.getElementById('proj-tbody');
+  tbody.innerHTML = players.slice(0, 80).map((p, i) => `
+    <tr>
+      <td style="color:var(--muted);font-family:var(--mono)">${i+1}</td>
+      <td class="proj-name">${p.name}</td>
+      <td style="color:var(--muted);font-family:var(--mono)">${p.team}</td>
+      <td class="proj-val">${p.proj.toFixed(1)}</td>
+      <td style="font-family:var(--mono)">$${p.salary?.toLocaleString()||'—'}</td>
+      <td style="color:var(--muted);font-family:var(--mono)">${p.mins?.toFixed(1)||'—'}</td>
+      <td style="color:var(--muted);font-family:var(--mono)">${p.salary ? (p.proj/(p.salary/1000)).toFixed(2)+'x' : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+// ── MANUAL PROJ ───────────────────────────────────────────────────────────
+function renderManualProj() {
+  const c = document.getElementById('manual-proj-container');
+  c.innerHTML = '';
+  state.manualProj.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'proj-manual-row';
+    row.innerHTML = `
+      <div class="input-group">
+        <span class="input-label">Player Name</span>
+        <input class="input-sm" value="${p.name}" onchange="state.manualProj[${i}].name=this.value" placeholder="Donovan Mitchell">
+      </div>
+      <div class="input-group">
+        <span class="input-label">FP Proj</span>
+        <input class="input-sm" value="${p.proj}" onchange="state.manualProj[${i}].proj=parseFloat(this.value)||0" placeholder="44.4" type="number" step="0.1">
+      </div>
+      <div class="input-group">
+        <span class="input-label">Salary</span>
+        <input class="input-sm" value="${p.salary||''}" onchange="state.manualProj[${i}].salary=parseInt(this.value)||0" placeholder="9500">
+      </div>
+      <button class="btn-remove" onclick="removeManualProj(${i})">✕</button>
+    `;
+    c.appendChild(row);
+  });
+}
+
+function addManualProj() {
+  state.manualProj.push({ name:'', proj:0, salary:0 });
+  renderManualProj();
+}
+
+function removeManualProj(i) {
+  state.manualProj.splice(i, 1);
+  renderManualProj();
+}
+
+// ── INJURIES ──────────────────────────────────────────────────────────────
+function renderInjuries() {
+  const c = document.getElementById('injury-container');
+  c.innerHTML = '';
+  state.injuries.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'injury-row';
+    const statusColor = p.status === 'OUT' ? 'var(--danger)' : p.status === 'Q' ? 'var(--accent)' : 'var(--accent2)';
+    row.innerHTML = `
+      <div class="input-group">
+        <span class="input-label">Player Name</span>
+        <input class="input-sm" value="${p.name}" onchange="state.injuries[${i}].name=this.value" placeholder="Player Name">
+      </div>
+      <div class="input-group">
+        <span class="input-label">Team</span>
+        <input class="input-sm" value="${p.team}" onchange="state.injuries[${i}].team=this.value" placeholder="CLE">
+      </div>
+      <div class="input-group">
+        <span class="input-label">Status</span>
+        <select class="status-select" onchange="state.injuries[${i}].status=this.value;renderInjuries()" style="color:${statusColor}">
+          <option value="OUT" ${p.status==='OUT'?'selected':''}>🔴 OUT</option>
+          <option value="Q"   ${p.status==='Q'?'selected':''}>🟡 Q</option>
+          <option value="UP"  ${p.status==='UP'?'selected':''}>🟢 UP</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <span class="input-label">DFS Impact Note</span>
+        <input class="input-sm" value="${p.impact||''}" onchange="state.injuries[${i}].impact=this.value" placeholder="Usage impact note...">
+      </div>
+      <button class="btn-remove" onclick="removeInjury(${i})">✕</button>
+    `;
+    c.appendChild(row);
+  });
+}
+
+function addInjury() {
+  state.injuries.push({ name:'', team:'', status:'Q', impact:'' });
+  renderInjuries();
+}
+
+function removeInjury(i) {
+  state.injuries.splice(i, 1);
+  renderInjuries();
+}
+
+// ── SAVE ──────────────────────────────────────────────────────────────────
+async function saveAll() {
+  state.savedAt = new Date().toISOString();
+  const statusEl = document.getElementById('sidebar-status');
+  statusEl.textContent = 'Saving...';
+  statusEl.className = 'save-status saving';
+
+  try {
+    await window.storage.set('courtedge:daily', JSON.stringify(state), true);
+    statusEl.textContent = '✓ Saved — ' + new Date().toLocaleTimeString();
+    statusEl.className = 'save-status saved';
+    showToast('✓ Data saved — Court Edge will use this on next CSV upload');
+  } catch(e) {
+    statusEl.textContent = 'Save failed: ' + e.message;
+    statusEl.className = 'save-status';
+    showToast('✗ Save failed: ' + e.message);
+  }
+}
+
+async function clearAll() {
+  if (!confirm('Clear all saved data? Court Edge will fall back to hardcoded values.')) return;
+  try {
+    await window.storage.delete('courtedge:daily', true);
+    state.projections = [];
+    state.manualProj = [];
+    document.getElementById('proj-table-container').style.display = 'none';
+    renderManualProj();
+    const statusEl = document.getElementById('sidebar-status');
+    statusEl.textContent = 'Cleared';
+    statusEl.className = 'save-status';
+    showToast('✓ All data cleared');
+  } catch(e) { showToast('✗ Clear failed'); }
+}
+
+function updateSidebarStatus() {
+  const statusEl = document.getElementById('sidebar-status');
+  if (state.savedAt) {
+    const d = new Date(state.savedAt);
+    statusEl.textContent = '✓ Last saved ' + d.toLocaleTimeString();
+    statusEl.className = 'save-status saved';
+  }
+}
+
+// ── STATUS ────────────────────────────────────────────────────────────────
+async function refreshStatus() {
+  const el = document.getElementById('status-json');
+  try {
+    const result = await window.storage.get('courtedge:daily', true);
+    if (result) {
+      const d = JSON.parse(result.value);
+      const summary = {
+        savedAt: d.savedAt,
+        games: d.games?.length + ' games',
+        projections: d.projections?.length + ' players from CSV',
+        manualOverrides: d.manualProj?.length + ' manual overrides',
+        injuries: d.injuries?.length + ' players',
+        topProjections: d.projections?.slice(0,10).map(p => `${p.name}: ${p.proj}`),
+      };
+      el.textContent = JSON.stringify(summary, null, 2);
+    } else {
+      el.textContent = 'No data saved yet.\n\nCourt Edge will use hardcoded values until you save from this panel.';
+    }
+  } catch(e) {
+    el.textContent = 'No data saved yet.';
+  }
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// drag and drop
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleCSV(e.dataTransfer.files[0]);
+});
+</script>
+</body>
+</html>
