@@ -55,7 +55,7 @@ const PLATFORM_CONFIG = {
         name: "FanDuel", short: "FD", color: "#1493ff",
         SALARY_CAP: 60000, MIN_SALARY_USED: 58000,
         NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 18,
+        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 24,
         MIN_PLAYER_SALARY: 4800,  // block bench DNP-risk players
         MIN_ACTIVE_RATE: 0.30,    // must have played ≥30% of team games (~25/82)
         MIN_SLOT_BUDGET: 5200,    // remaining budget / remaining slots must stay above this
@@ -851,7 +851,9 @@ function compositeScore(p) {
     // PLAYER_FORM.last5 = Basketball Monster tonight projection (loaded at startup)
     // Using it here (not in parsePlayers) keeps p.fppg clean for budget math
     const last5 = p.formData?.last5 || 0;
-    const bmProj = (last5 > 0 && last5 !== p.fppg) ? last5 : 0;
+    // Only use BM projection when it is HIGHER than season avg (upside game)
+    // If BM is lower, the player is in a down spot — trust the season avg instead
+    const bmProj = (last5 > 0 && last5 > p.fppg) ? last5 : 0;
     const effectiveFppg = bmProj > 0
         ? bmProj                                          // BM tonight projection wins
         : (last5 > p.fppg && trend === 'hot')
