@@ -54,8 +54,8 @@ const PLATFORM_CONFIG = {
         ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 18,
         MIN_PLAYER_SALARY: 4800,  // block bench DNP-risk players
         MIN_ACTIVE_RATE: 0.30,    // must have played ≥30% of team games (~25/82)
-        MIN_SLOT_BUDGET: 4800,    // remaining budget / remaining slots must stay above this
-        MIN_VALUE_CHEAP: 3.8,     // players under $6500 must have ≥3.8x value (fppg per $1K)
+        MIN_SLOT_BUDGET: 5200,    // remaining budget / remaining slots must stay above this
+        MIN_VALUE_CHEAP: 4.2,     // players under $6500 must have ≥3.8x value (fppg per $1K)
         POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
         POSITION_ORDER: ["PG", "SG", "SF", "PF", "C"],
         LINEUP_SIZE: 9,
@@ -957,11 +957,7 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         // In showdown mode, CPT rows get 1.5x fppg projection (already have 1.5x salary)
         // FLEX rows use base fppg. For FD Showdown, we create 3 variants below.
         const smData = statMuseMap[name.toLowerCase()];
-        // ── PROJECTION PRIORITY: PLAYER_FORM.last5 > StatMuse > CSV season avg ──
-        // PLAYER_FORM is populated by admin panel BM projections (tonight-specific)
-        // This ensures Mitchell projects at 44.4 tonight, not his 38-avg from CSV
-        const formProj = PLAYER_FORM[name.toLowerCase()]?.last5 || 0;
-        const baseFppg = (formProj > 0 ? formProj : null) || (smData?.fdAvg) || csvFppg;
+        const baseFppg = (smData?.fdAvg) || csvFppg;
         // CPT multiplier for DK Showdown
         const slotMult = (RULES.isShowdown && isCPTRow && RULES.cptMult && !RULES.starMult) ? RULES.cptMult : 1.0;
         const fppg = +(baseFppg * slotMult).toFixed(2);
@@ -1064,17 +1060,11 @@ function exportLineupsCSV(lineups, platform) {
 function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams = []) {
     const locked = players.filter(p => lockedNames.includes(p.name));
     const pool   = players.filter(p => !excludedNames.includes(p.name) && !lockedNames.includes(p.name));
-
-    const needed  = Object.assign({}, RULES.POSITIONS);
-    const lineup  = [];
-    const used    = new Set();
-    let   budget  = RULES.SALARY_CAP;
-    const LINEUP_SIZE    = RULES.LINEUP_SIZE;
-    const MAX_PER_TEAM   = 4;
-    const MIN_SLOT_BUD   = RULES.MIN_SLOT_BUDGET  || 5000;
-    const MIN_VAL_CHEAP  = RULES.MIN_VALUE_CHEAP  || 0;
-    const CHEAP_SAL_LINE = 6500; // below this salary → enforce value floor
-
+    const needed = Object.assign({}, RULES.POSITIONS);
+    const lineup = [];
+    const used   = new Set();
+    let budget   = RULES.SALARY_CAP;
+    const MAX_PER_TEAM = 4;
     const teamCount = () => {
         const counts = {};
         for (const p of lineup) counts[p.team] = (counts[p.team] || 0) + 1;
@@ -1093,136 +1083,41 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
         if (p._baseName && used.has("__base__" + p._baseName)) return false;
         return true;
     };
+    // Static pool min salary — computed once so it never drifts upward as pool shrinks
+    const poolMinSal = pool.length ? Math.min(...pool.map(p => p.salary)) : 3500;
 
-    // ── 0. Salary helpers ────────────────────────────────────────────────
-    const slotsLeft  = () => Object.values(needed).reduce((a, b) => a + b, 0);
-    const poolMinSal = () => {
-        const avail = pool.filter(p => !used.has(p.name));
-        return avail.length ? Math.min(...avail.map(p => p.salary)) : 4500;
-    };
-
-    // Budget guard: can we afford this player AND still fill remaining slots?
-    // Uses actual pool minimum salary — allows stars to coexist without artificial block
-    const budgetOK = (p) => {
-        const sl = slotsLeft();
-        const afterSal = budget - p.salary;
-        const remaining = sl - 1;
-        if (remaining <= 0) return afterSal >= 0;
-        // Use actual cheapest available player salary as the floor
-        // This lets Mitchell+Harden+Mobley+Cade all fit — no artificial $5200 block
-        const actualMin = poolMinSal();
-        return afterSal >= remaining * actualMin;
-    };
-
-    // Value floor: cheap players must earn their spot
-    const passesValueFloor = (p) => {
-        if (p.salary >= CHEAP_SAL_LINE) return true; // no value check for expensive players
-        const val = p.fppg / (p.salary / 1000);
-        return val >= MIN_VAL_CHEAP;
-    };
-
-    // ── 1. Place locked players ──────────────────────────────────────────
+    // 1. Place locked players
     for (const p of locked) {
         for (const pos of p.positions) {
             if ((needed[pos] || 0) > 0 && canPlace(p)) { place(p, pos); break; }
         }
     }
-
-    // ── 2. Pre-seed stack: force 2 players from stackTeams into lineup ───
-    // This ensures every lineup has a real game stack, not just by accident
-    if (stackTeams.length >= 2 && !RULES.isShowdown) {
-        // On small slates (≤4 games), only pre-seed 1 stack player
-        // Greedy fill naturally picks the best remaining players from the same game
-        // This prevents the DAL "anchor" from consuming budget needed for CLE stars
-        const stackNeeded = (gamesList && gamesList.length <= 4) ? 1 : 2;
-        let stackPlaced = 0;
-        for (const team of stackTeams) {
-            if (stackPlaced >= stackNeeded) break;
-            const teamPlayers = pool
-                .filter(p => !used.has(p.name) && p.team === team && canPlace(p))
-                .sort((a, b) => b.score - a.score);
-            for (const p of teamPlayers) {
-                if (stackPlaced >= stackNeeded) break;
-                // ── POSITION PRIORITY: prefer placing dual-pos players in non-PG slot ──
-                // Keeps PG slots open for PG-only stars like Harden/SGA
-                const posOrder = p.positions.includes('SG') && p.positions.includes('PG')
-                    ? ['SG', ...p.positions.filter(x => x !== 'SG')]  // try SG first
-                    : p.positions;
-                for (const pos of posOrder) {
-                    if ((needed[pos] || 0) > 0 && budgetOK(p) && passesValueFloor(p)) {
-                        place(p, pos);
-                        stackPlaced++;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    // ── 3. Greedy fill with budget distribution guard ────────────────────
+    // 2. Greedy fill — pool already sorted by score descending
     for (const p of pool) {
         if (used.has(p.name)) continue;
-        const sl = slotsLeft();
-        if (sl === 0) break;
-        if (!passesValueFloor(p)) continue;
-        for (const pos of p.positions) {
-            if ((needed[pos] || 0) > 0 && budgetOK(p) && canPlace(p)) {
-                place(p, pos);
-                break;
-            }
-        }
-    }
-
-    // ── 4. Anchor enforcement ────────────────────────────────────────────
-    if (RULES.ANCHOR_FPPG_THRESHOLD && !lineup.some(p => p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD)) {
-        const anchors = pool
-            .filter(p => !used.has(p.name) && p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD)
-            .sort((a, b) => b.fppg - a.fppg);
-        for (const anchor of anchors) {
-            let swapped = false;
-            for (const pos of anchor.positions) {
-                if ((needed[pos] || 0) > 0) {
-                    if (budget - anchor.salary >= (slotsLeft()-1) * poolMinSal() && canPlace(anchor)) {
-                        place(anchor, pos); swapped = true; break;
-                    }
-                } else {
-                    const swapOut = lineup
-                        .filter(lp => lp.slot === pos && lp.fppg < RULES.ANCHOR_FPPG_THRESHOLD)
-                        .sort((a, b) => a.score - b.score)[0];
-                    if (swapOut && budget + swapOut.salary - anchor.salary >= 0 && canPlace(anchor)) {
-                        lineup.splice(lineup.indexOf(swapOut), 1);
-                        budget += swapOut.salary;
-                        used.delete(swapOut.name);
-                        if (swapOut._baseName) used.delete("__base__" + swapOut._baseName);
-                        place(anchor, pos); swapped = true; break;
-                    }
-                }
-            }
-            if (swapped || lineup.some(p => p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD)) break;
-        }
-    }
-
-    // ── 5. Emergency fill: open slots, drop value floor, just fill legally ──
-    if (slotsLeft() > 0) {
-        const fallback = [...pool]
-            .filter(p => !used.has(p.name))
-            .sort((a, b) => b.score - a.score);
-        for (const p of fallback) {
-            const sl = slotsLeft();
-            if (sl === 0) break;
-            for (const pos of p.positions) {
-                if ((needed[pos] || 0) > 0 && budget - p.salary >= (sl-1) * poolMinSal() && canPlace(p)) {
+        const slotsLeft = Object.values(needed).reduce((a, b) => a + b, 0);
+        if (slotsLeft === 0) break;
+        // Position order: for PG/SG dual players, prefer whichever slot has MORE remaining
+        // This keeps scarce PG slots open for PG-only stars (Harden, SGA, etc.)
+        const posOrder = (p.positions.includes('PG') && p.positions.includes('SG'))
+            ? [...p.positions].sort((a, b) => (needed[b] || 0) - (needed[a] || 0))
+            : p.positions;
+        for (const pos of posOrder) {
+            if ((needed[pos] || 0) > 0) {
+                const budgetAfter = budget - p.salary;
+                const minNeeded   = (slotsLeft - 1) * poolMinSal;
+                if (budgetAfter >= minNeeded && canPlace(p)) {
                     place(p, pos); break;
                 }
             }
         }
     }
-
-    // ── 6. Last resort: absolute cheapest to fill any remaining open slots ──
-    if (slotsLeft() > 0) {
+    // 3. Fill remaining open slots with cheapest eligible players
+    if (Object.values(needed).reduce((a, b) => a + b, 0) > 0) {
         const cheap = [...pool].filter(p => !used.has(p.name)).sort((a, b) => a.salary - b.salary);
         for (const p of cheap) {
-            if (slotsLeft() === 0) break;
+            const slotsLeft = Object.values(needed).reduce((a, b) => a + b, 0);
+            if (slotsLeft === 0) break;
             for (const pos of p.positions) {
                 if ((needed[pos] || 0) > 0 && budget - p.salary >= 0 && canPlace(p)) {
                     place(p, pos); break;
@@ -1230,10 +1125,8 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
             }
         }
     }
-
-    return lineup.length === LINEUP_SIZE ? lineup : null;
+    return lineup.length === RULES.LINEUP_SIZE ? lineup : null;
 }
-
 function generateLineups(players, count, lockedNames, excludedNames) {
     const lineups = [];
     const used = new Set();
