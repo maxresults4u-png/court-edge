@@ -957,7 +957,11 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         // In showdown mode, CPT rows get 1.5x fppg projection (already have 1.5x salary)
         // FLEX rows use base fppg. For FD Showdown, we create 3 variants below.
         const smData = statMuseMap[name.toLowerCase()];
-        const baseFppg = (smData?.fdAvg) || csvFppg;
+        // ── PROJECTION PRIORITY: PLAYER_FORM.last5 > StatMuse > CSV season avg ──
+        // PLAYER_FORM is populated by admin panel BM projections (tonight-specific)
+        // This ensures Mitchell projects at 44.4 tonight, not his 38-avg from CSV
+        const formProj = PLAYER_FORM[name.toLowerCase()]?.last5 || 0;
+        const baseFppg = (formProj > 0 ? formProj : null) || (smData?.fdAvg) || csvFppg;
         // CPT multiplier for DK Showdown
         const slotMult = (RULES.isShowdown && isCPTRow && RULES.cptMult && !RULES.starMult) ? RULES.cptMult : 1.0;
         const fppg = +(baseFppg * slotMult).toFixed(2);
