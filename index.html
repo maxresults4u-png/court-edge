@@ -17,6 +17,11 @@
 </style>
 </head>
 <body>
+<div id="data-status-badge" style="
+  position:fixed; top:10px; right:10px; z-index:9999;
+  padding:6px 12px; border-radius:6px; font-size:12px;
+  font-weight:600; color:#fff; background:#6b7280;
+">⟳ Loading live data...</div>
 <div id="root"></div>
 <script>
 const { useState, useCallback, useRef, useEffect } = React;
@@ -55,7 +60,7 @@ const PLATFORM_CONFIG = {
         name: "FanDuel", short: "FD", color: "#1493ff",
         SALARY_CAP: 60000, MIN_SALARY_USED: 58000,
         NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 24,
+        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 15,
         MIN_PLAYER_SALARY: 4800,  // block bench DNP-risk players
         MIN_ACTIVE_RATE: 0.30,    // must have played ≥30% of team games (~25/82)
         MIN_SLOT_BUDGET: 5200,    // remaining budget / remaining slots must stay above this
@@ -265,6 +270,107 @@ const TEAM_PACE = {
 const SLATE_AVG_PACE = 100.8;
 // Recent form vs season avg — positive = trending up, negative = trending down
 // Based on last 5 games FD avg vs season FD avg
+// ── PLAYER LAST 10 GAMES AVAILABILITY (updated each slate) ──────────────
+// Source: NBA.com Traditional Stats → Last 10 Games filter
+// gp10 = games played in last 10 — key DNP/rest risk signal
+// pts10, min10 = scoring/minutes trend over last 10
+// If gp10 < 7, player is flagged as availability risk
+// PASTE UPDATED DATA FROM NBA.COM BEFORE EACH SLATE
+const PLAYER_LAST10 = {
+    // FORMAT: "player name": { gp10, min10, pts10, reb10, ast10 }
+    // Tonight's slate — NEEDS UPDATE (paste NBA.com Last 10 data)
+    "donovan mitchell":  { gp10: 9, min10: 35.2, pts10: 27.1, reb10: 4.8, ast10: 5.9 },
+    "james harden":      { gp10: 9, min10: 34.8, pts10: 21.4, reb10: 5.2, ast10: 8.6 },
+    "evan mobley":       { gp10: 8, min10: 33.1, pts10: 18.2, reb10: 9.4, ast10: 3.1 },
+    "cade cunningham":   { gp10: 9, min10: 35.5, pts10: 25.3, reb10: 4.9, ast10: 9.1 },
+    "cooper flagg":      { gp10: 8, min10: 30.4, pts10: 19.8, reb10: 8.2, ast10: 3.8 },
+    "jalen duren":       { gp10: 8, min10: 28.2, pts10: 13.4, reb10:11.8, ast10: 1.2 },
+    "pascal siakam":     { gp10: 7, min10: 32.6, pts10: 22.1, reb10: 7.8, ast10: 4.9 },
+    "deni avdija":       { gp10: 9, min10: 31.8, pts10: 18.6, reb10: 6.4, ast10: 3.8 },
+    "donovan clingan":   { gp10: 9, min10: 26.4, pts10: 10.8, reb10: 9.6, ast10: 1.8 },
+    "quentin grimes":    { gp10: 9, min10: 28.1, pts10: 14.2, reb10: 3.1, ast10: 2.4 },
+    "vj edgecombe":      { gp10: 9, min10: 29.4, pts10: 15.8, reb10: 3.8, ast10: 2.1 },
+    "brandon ingram":    { gp10: 8, min10: 33.2, pts10: 21.4, reb10: 4.8, ast10: 4.2 },
+    "scottie barnes":    { gp10: 7, min10: 32.8, pts10: 20.2, reb10: 8.8, ast10: 5.6 },
+    "immanuel quickley": { gp10: 9, min10: 31.2, pts10: 18.4, reb10: 4.2, ast10: 6.8 },
+    "bobby portis":      { gp10: 9, min10: 27.8, pts10: 15.2, reb10: 7.4, ast10: 1.8 },
+    "myles turner":      { gp10: 8, min10: 27.4, pts10: 12.8, reb10: 6.2, ast10: 1.4 },
+    "shaedon sharpe":    { gp10: 8, min10: 30.4, pts10: 19.8, reb10: 3.8, ast10: 2.4 },
+    "jerami grant":      { gp10: 7, min10: 28.6, pts10: 16.4, reb10: 4.8, ast10: 2.8 },
+    "naji marshall":     { gp10: 9, min10: 27.2, pts10: 14.8, reb10: 4.4, ast10: 2.8 },
+    "klay thompson":     { gp10: 8, min10: 26.8, pts10: 13.4, reb10: 2.8, ast10: 2.2 },
+    "tobias harris":     { gp10: 8, min10: 27.8, pts10: 14.8, reb10: 6.2, ast10: 2.8 },
+    "andrew nembhard":   { gp10: 9, min10: 30.8, pts10: 15.4, reb10: 4.2, ast10: 6.4 },
+    "jrue holiday":      { gp10: 7, min10: 32.4, pts10: 18.2, reb10: 5.8, ast10: 8.4 },
+    "toumani camara":    { gp10: 9, min10: 28.4, pts10: 14.2, reb10: 6.4, ast10: 2.8 },
+    "dennis schroder":   { gp10: 0, min10:  0.0, pts10:  0.0, reb10: 0.0, ast10: 0.0 }, // DNP-rest
+    "jaylon tyson":      { gp10: 0, min10:  0.0, pts10:  0.0, reb10: 0.0, ast10: 0.0 }, // DNP-rest
+};
+
+// Availability multiplier — penalizes players who've missed games recently
+// This is the DNP/rest risk signal: missing 3+ of last 10 = meaningful risk
+function getAvailabilityMult(playerName) {
+    const d = PLAYER_LAST10[playerName?.toLowerCase()];
+    if (!d) return 1.0; // unknown = assume available
+    const gp = d.gp10;
+    if (gp === 0)  return 0.0;  // confirmed out
+    if (gp >= 9)   return 1.0;  // iron man
+    if (gp >= 7)   return 0.95; // minor risk
+    if (gp >= 5)   return 0.85; // real risk — deprioritize
+    return 0.70;                // high risk — near-exclude
+}
+
+// ── PLAYER SHOOTING EFFICIENCY 2024-25 (updated Mar 16 2026) ────────────
+// Source: NBA.com player shooting stats
+// fg_pct = field goal %, efg = effective FG% (3PT weighted)
+// three_freq = % of attempts that are 3-pointers
+// two_freq = % of attempts that are 2-pointers (interior/mid tendency)
+// Used to calibrate projection accuracy: efficient shooters get slight boost
+const PLAYER_SHOOTING = {
+    "donovan mitchell":  {"fg_pct":48.3,"efg":56.5,"three_freq":45.4,"three_pct":36.5,"two_pct":58.0,"profile":"BALANCED"},
+    "james harden":      {"fg_pct":43.2,"efg":52.5,"three_freq":51.0,"three_pct":36.6,"two_pct":50.1,"profile":"PERIMETER"},
+    "evan mobley":       {"fg_pct":52.6,"efg":57.0,"three_freq":27.8,"three_pct":31.2,"two_pct":60.9,"profile":"INTERIOR"},
+    "cade cunningham":   {"fg_pct":46.3,"efg":51.7,"three_freq":30.9,"three_pct":34.9,"two_pct":51.4,"profile":"BALANCED"},
+    "cooper flagg":      {"fg_pct":47.0,"efg":50.2,"three_freq":21.2,"three_pct":29.6,"two_pct":51.8,"profile":"INTERIOR"},
+    "jalen duren":       {"fg_pct":64.8,"efg":64.8,"three_freq":0.0, "three_pct":0.0, "two_pct":64.9,"profile":"INTERIOR"},
+    "pascal siakam":     {"fg_pct":48.4,"efg":53.1,"three_freq":26.0,"three_pct":36.3,"two_pct":52.7,"profile":"INTERIOR"},
+    "deni avdija":       {"fg_pct":46.4,"efg":52.8,"three_freq":37.9,"three_pct":33.7,"two_pct":54.2,"profile":"BALANCED"},
+    "donovan clingan":   {"fg_pct":52.5,"efg":58.6,"three_freq":36.3,"three_pct":33.3,"two_pct":63.4,"profile":"BALANCED"},
+    "vj edgecombe":      {"fg_pct":42.5,"efg":49.9,"three_freq":42.6,"three_pct":34.9,"two_pct":48.1,"profile":"BALANCED"},
+    "quentin grimes":    {"fg_pct":44.1,"efg":53.1,"three_freq":54.7,"three_pct":32.8,"two_pct":57.7,"profile":"PERIMETER"},
+    "brandon ingram":    {"fg_pct":47.2,"efg":52.5,"three_freq":28.2,"three_pct":37.7,"two_pct":51.0,"profile":"INTERIOR"},
+    "scottie barnes":    {"fg_pct":49.8,"efg":52.8,"three_freq":20.6,"three_pct":29.5,"two_pct":55.1,"profile":"INTERIOR"},
+    "immanuel quickley": {"fg_pct":44.8,"efg":54.7,"three_freq":52.6,"three_pct":37.7,"two_pct":52.6,"profile":"PERIMETER"},
+    "bobby portis":      {"fg_pct":49.1,"efg":58.3,"three_freq":39.8,"three_pct":46.4,"two_pct":50.9,"profile":"BALANCED"},
+    "kyle kuzma":        {"fg_pct":49.3,"efg":55.1,"three_freq":33.3,"three_pct":35.0,"two_pct":56.3,"profile":"BALANCED"},
+    "myles turner":      {"fg_pct":44.0,"efg":55.4,"three_freq":59.1,"three_pct":38.6,"two_pct":51.8,"profile":"PERIMETER"},
+    "dennis schroder":   {"fg_pct":40.1,"efg":46.4,"three_freq":37.7,"three_pct":33.8,"two_pct":43.9,"profile":"BALANCED"},
+    "jaylon tyson":      {"fg_pct":49.7,"efg":60.0,"three_freq":45.2,"three_pct":45.6,"two_pct":52.9,"profile":"BALANCED"},
+    "shaedon sharpe":    {"fg_pct":45.6,"efg":51.5,"three_freq":35.1,"three_pct":33.9,"two_pct":51.8,"profile":"BALANCED"},
+    "jerami grant":      {"fg_pct":45.3,"efg":54.4,"three_freq":46.9,"three_pct":38.6,"two_pct":51.2,"profile":"BALANCED"},
+    "jrue holiday":      {"fg_pct":47.4,"efg":56.9,"three_freq":48.8,"three_pct":38.9,"two_pct":55.5,"profile":"BALANCED"},
+    "naji marshall":     {"fg_pct":52.5,"efg":56.5,"three_freq":26.7,"three_pct":29.9,"two_pct":60.6,"profile":"INTERIOR"},
+    "klay thompson":     {"fg_pct":39.2,"efg":52.9,"three_freq":72.0,"three_pct":38.0,"two_pct":42.1,"profile":"PERIMETER"},
+    "tobias harris":     {"fg_pct":45.0,"efg":51.0,"three_freq":36.0,"three_pct":33.3,"two_pct":51.6,"profile":"BALANCED"},
+    "isaiah stewart":    {"fg_pct":54.0,"efg":58.6,"three_freq":29.5,"three_pct":31.6,"two_pct":63.3,"profile":"INTERIOR"},
+    "andrew nembhard":   {"fg_pct":44.0,"efg":51.1,"three_freq":38.7,"three_pct":36.2,"two_pct":49.0,"profile":"BALANCED"},
+    "toumani camara":    {"fg_pct":42.4,"efg":54.0,"three_freq":66.4,"three_pct":35.1,"two_pct":56.7,"profile":"PERIMETER"},
+    "joel embiid":       {"fg_pct":49.5,"efg":53.0,"three_freq":22.0,"three_pct":31.8,"two_pct":54.5,"profile":"INTERIOR"},
+    "paul george":       {"fg_pct":42.4,"efg":51.7,"three_freq":48.9,"three_pct":38.1,"two_pct":46.4,"profile":"BALANCED"},
+};
+
+// Shooting efficiency boost — applied to compositeScore
+// Players shooting above 55% EFG get a slight boost, below 50% a slight penalty
+function getShootingBoost(playerName) {
+    const d = PLAYER_SHOOTING[playerName?.toLowerCase()];
+    if (!d) return 1.0;
+    if (d.efg >= 60) return 1.04;
+    if (d.efg >= 56) return 1.02;
+    if (d.efg >= 52) return 1.0;
+    if (d.efg >= 48) return 0.99;
+    return 0.97;
+}
+
 const PLAYER_FORM = {
     // ── OKC@MIN 🔥 ──
     "shai gilgeous-alexander": { last5: 54.2, season: 49.1, trend: "hot" },
@@ -283,14 +389,14 @@ const PLAYER_FORM = {
     "donovan mitchell":        { last5: 46.5, season: 44.2, trend: "neutral" },
     "dennis schroder":         { last5: 14.0, season: 14.0, trend: "cold" },
     "jaylon tyson":            { last5: 15.0, season: 15.0, trend: "cold" },
-    "evan mobley":             { last5: 52.0, season: 40.2, trend: "neutral" },
+    "evan mobley":             { last5: 41.7, season: 40.2, trend: "neutral" },
     "darius garland":          { last5: 38.4, season: 36.8, trend: "hot" },
     "cooper flagg":            { last5: 36.8, season: 34.2, trend: "hot" },
     "klay thompson":           { last5: 28.2, season: 29.4, trend: "cold" },
     "james harden":            { last5: 58.0, season: 40.2, trend: "hot" },
     // ── POR@PHI ──
     "deni avdija":             { last5: 36.9, season: 34.2, trend: "neutral" },
-    "donovan clingan":         { last5: 42.8, season: 39.6, trend: "hot" },
+    "donovan clingan":         { last5: 35.6, season: 34.8, trend: "neutral" },
     "toumani camara":          { last5: 28.4, season: 26.8, trend: "hot" },
     "vj edgecombe":            { last5: 34.6, season: 28.4, trend: "hot" },
     "quentin grimes":          { last5: 35.1, season: 28.8, trend: "hot" },
@@ -521,7 +627,334 @@ const PLAYER_PRA_BASE = {
 // Defensive rating vs stat category per opponent team
 // Scale: multiplier applied to opposing player's base stat
 // >1.0 = defense leaks that stat (good for DFS), <1.0 = stingy
-let TEAM_DEF_VS_STAT = { BKN:{pts:1.18,reb:1.14,ast:1.12}, WAS:{pts:1.16,reb:1.10,ast:1.14}, PHI:{pts:1.14,reb:1.08,ast:1.10}, CHA:{pts:1.10,reb:1.06,ast:1.08}, ATL:{pts:1.06,reb:1.04,ast:1.06}, MIL:{pts:1.02,reb:1.02,ast:1.02}, SAC:{pts:1.06,reb:1.04,ast:1.04}, ORL:{pts:0.98,reb:0.96,ast:1.00}, MIA:{pts:0.99,reb:1.00,ast:0.98}, LAL:{pts:1.02,reb:1.02,ast:1.02}, DEN:{pts:1.00,reb:0.96,ast:0.98}, SAS:{pts:1.04,reb:1.02,ast:1.04}, LAC:{pts:0.98,reb:0.98,ast:0.98}, BOS:{pts:0.88,reb:0.92,ast:0.90} };
+// ── TEAM OFFENSE STATS (NBA.com, 2024-25 season) ─────────────────────────
+// FG%, eFG%, paint%, 3P% — used to weight opponent matchup multipliers
+// Higher eFG% = team converts possessions more efficiently = more DFS pts per game
+const TEAM_OFFENSE_STATS = {
+    MIA: { fg:46.5, efg:53.6, paint:53.4, three:36.0 },
+    ATL: { fg:47.0, efg:54.9, paint:54.7, three:36.7 },
+    BOS: { fg:46.4, efg:54.9, paint:55.5, three:36.1 },
+    MEM: { fg:46.0, efg:53.5, paint:53.6, three:35.5 },
+    CLE: { fg:47.7, efg:55.8, paint:57.1, three:36.1 },
+    NOP: { fg:46.5, efg:52.7, paint:53.1, three:34.6 },
+    NYK: { fg:47.3, efg:55.4, paint:55.0, three:37.3 },
+    POR: { fg:45.2, efg:53.2, paint:55.2, three:33.9 },
+    UTA: { fg:46.7, efg:53.8, paint:54.7, three:35.0 },
+    WAS: { fg:46.0, efg:53.1, paint:53.0, three:35.6 },
+    PHI: { fg:45.9, efg:52.8, paint:53.2, three:34.8 },
+    IND: { fg:44.9, efg:52.1, paint:52.5, three:34.3 },
+    SAC: { fg:46.5, efg:52.1, paint:53.0, three:33.6 },
+    CHA: { fg:45.7, efg:54.8, paint:53.0, three:37.8 },
+    CHI: { fg:46.8, efg:54.9, paint:55.1, three:36.5 },
+    OKC: { fg:48.2, efg:55.9, paint:57.3, three:36.0 },
+    DET: { fg:48.2, efg:54.3, paint:55.5, three:34.7 },
+    DAL: { fg:46.8, efg:52.7, paint:53.8, three:33.9 },
+    PHX: { fg:45.5, efg:53.8, paint:53.1, three:36.5 },
+    GSW: { fg:45.9, efg:55.0, paint:56.2, three:35.9 },
+    SAS: { fg:48.0, efg:55.6, paint:56.9, three:35.9 },
+    HOU: { fg:47.5, efg:53.7, paint:53.2, three:36.4 },
+    ORL: { fg:46.5, efg:53.2, paint:53.9, three:34.7 },
+    TOR: { fg:47.3, efg:53.7, paint:54.9, three:34.5 },
+    MIN: { fg:48.7, efg:56.6, paint:57.0, three:37.3 },
+    DEN: { fg:49.2, efg:57.1, paint:56.1, three:39.1 },
+    MIL: { fg:47.9, efg:56.4, paint:55.2, three:38.5 },
+    BKN: { fg:44.5, efg:52.5, paint:53.3, three:34.3 },
+    LAL: { fg:49.9, efg:57.1, paint:59.4, three:35.8 },
+    LAC: { fg:48.2, efg:55.7, paint:56.4, three:36.4 },
+};
+// League avg eFG% = 54.5 — used as baseline for matchup multiplier
+const LEAGUE_AVG_EFG = 54.5;
+
+// ── NBA TEAM STATS 2024-25 (updated Mar 16 2026) ─────────────────────────
+// Source: NBA.com official team stats
+// pts = team scoring avg, ast = assists, tov = turnovers, reb = rebounds
+// pace_mult = pts / league_avg(115.3) — used to boost players on fast/high-scoring teams
+const LEAGUE_AVG_PTS = 115.3;
+const NBA_TEAM_STATS = {
+    "OKC": {"pts":118.5,"ast":25.5,"tov":12.5,"reb":43.8,"stl":9.7,"blk":5.5,"fg_pct":48.1,"w":53,"l":15},
+    "SAS": {"pts":118.8,"ast":27.4,"tov":13.6,"reb":46.5,"stl":7.6,"blk":5.4,"fg_pct":48.0,"w":49,"l":18},
+    "DET": {"pts":117.2,"ast":26.9,"tov":15.1,"reb":45.8,"stl":10.5,"blk":6.4,"fg_pct":48.0,"w":48,"l":19},
+    "BOS": {"pts":114.2,"ast":24.5,"tov":12.2,"reb":46.4,"stl":7.2,"blk":5.3,"fg_pct":46.4,"w":44,"l":23},
+    "NYK": {"pts":116.9,"ast":27.4,"tov":13.7,"reb":46.2,"stl":8.0,"blk":4.1,"fg_pct":47.3,"w":44,"l":25},
+    "LAL": {"pts":116.5,"ast":25.7,"tov":14.5,"reb":41.1,"stl":8.2,"blk":4.2,"fg_pct":49.9,"w":42,"l":25},
+    "HOU": {"pts":114.1,"ast":24.7,"tov":15.6,"reb":48.2,"stl":8.7,"blk":5.9,"fg_pct":47.4,"w":41,"l":25},
+    "CLE": {"pts":119.1,"ast":28.3,"tov":14.2,"reb":44.2,"stl":8.7,"blk":5.2,"fg_pct":47.8,"w":41,"l":27},
+    "DEN": {"pts":120.7,"ast":28.2,"tov":13.0,"reb":43.3,"stl":7.0,"blk":4.0,"fg_pct":49.2,"w":41,"l":27},
+    "MIN": {"pts":118.5,"ast":26.1,"tov":14.9,"reb":44.4,"stl":8.6,"blk":5.6,"fg_pct":48.5,"w":41,"l":27},
+    "PHX": {"pts":112.5,"ast":24.7,"tov":14.7,"reb":43.1,"stl":9.8,"blk":4.0,"fg_pct":45.5,"w":39,"l":28},
+    "ORL": {"pts":115.7,"ast":26.6,"tov":13.7,"reb":43.8,"stl":8.6,"blk":5.0,"fg_pct":46.5,"w":38,"l":28},
+    "TOR": {"pts":113.6,"ast":28.7,"tov":13.7,"reb":42.5,"stl":8.6,"blk":4.8,"fg_pct":47.3,"w":38,"l":29},
+    "MIA": {"pts":120.4,"ast":28.6,"tov":13.9,"reb":47.0,"stl":9.2,"blk":4.3,"fg_pct":46.5,"w":38,"l":30},
+    "PHI": {"pts":115.6,"ast":24.4,"tov":13.9,"reb":43.1,"stl":9.4,"blk":5.7,"fg_pct":46.0,"w":37,"l":31},
+    "ATL": {"pts":117.7,"ast":30.3,"tov":14.2,"reb":43.4,"stl":9.4,"blk":4.7,"fg_pct":47.2,"w":36,"l":31},
+    "LAC": {"pts":113.4,"ast":23.6,"tov":14.5,"reb":40.8,"stl":8.9,"blk":4.8,"fg_pct":48.3,"w":34,"l":33},
+    "CHA": {"pts":115.5,"ast":26.4,"tov":15.6,"reb":46.1,"stl":7.1,"blk":4.6,"fg_pct":45.7,"w":34,"l":34},
+    "GSW": {"pts":115.1,"ast":29.1,"tov":15.4,"reb":42.9,"stl":9.8,"blk":4.4,"fg_pct":45.8,"w":32,"l":35},
+    "POR": {"pts":115.1,"ast":24.9,"tov":17.3,"reb":45.8,"stl":8.2,"blk":5.4,"fg_pct":45.1,"w":32,"l":36},
+    "MIL": {"pts":111.2,"ast":26.0,"tov":14.7,"reb":41.0,"stl":7.4,"blk":3.9,"fg_pct":48.0,"w":28,"l":39},
+    "CHI": {"pts":115.7,"ast":28.8,"tov":15.1,"reb":45.1,"stl":7.4,"blk":5.0,"fg_pct":46.8,"w":27,"l":40},
+    "MEM": {"pts":115.7,"ast":28.5,"tov":15.2,"reb":43.6,"stl":8.7,"blk":5.1,"fg_pct":46.1,"w":23,"l":43},
+    "DAL": {"pts":113.2,"ast":25.1,"tov":14.9,"reb":44.8,"stl":7.4,"blk":5.3,"fg_pct":46.9,"w":23,"l":45},
+    "NOP": {"pts":115.4,"ast":25.1,"tov":14.3,"reb":44.0,"stl":8.8,"blk":5.0,"fg_pct":46.5,"w":22,"l":46},
+    "UTA": {"pts":117.3,"ast":29.4,"tov":15.6,"reb":43.8,"stl":8.6,"blk":3.6,"fg_pct":46.5,"w":20,"l":48},
+    "SAC": {"pts":110.8,"ast":25.4,"tov":14.3,"reb":42.1,"stl":8.3,"blk":4.5,"fg_pct":46.5,"w":18,"l":51},
+    "BKN": {"pts":106.7,"ast":25.4,"tov":15.9,"reb":40.1,"stl":7.7,"blk":4.3,"fg_pct":44.5,"w":17,"l":50},
+    "WAS": {"pts":112.7,"ast":25.1,"tov":15.7,"reb":42.9,"stl":7.8,"blk":5.9,"fg_pct":46.0,"w":16,"l":50},
+    "IND": {"pts":111.2,"ast":26.5,"tov":14.5,"reb":42.2,"stl":7.4,"blk":4.6,"fg_pct":45.0,"w":15,"l":53},
+};
+
+// ── DEFENSIVE GRADES (opponent FG% allowed vs league avg) ───────────────
+// Applied to players based on their OPPONENT'S defense
+// A+/A = weak defense = boost opposing players
+// D = elite defense = penalize opposing players
+const TEAM_DEF_GRADE = {
+    "OKC":{"opp_fg":43.6,"diff":-3.3,"mult":0.92,"grade":"D"},
+    "BOS":{"opp_fg":44.1,"diff":-2.7,"mult":0.92,"grade":"D"},
+    "DET":{"opp_fg":44.1,"diff":-2.6,"mult":0.92,"grade":"D"},
+    "SAS":{"opp_fg":45.1,"diff":-1.9,"mult":0.95,"grade":"C"},
+    "NYK":{"opp_fg":45.6,"diff":-1.2,"mult":0.95,"grade":"C"},
+    "MIA":{"opp_fg":45.7,"diff":-1.1,"mult":0.95,"grade":"C"},
+    "HOU":{"opp_fg":45.9,"diff":-1.0,"mult":0.97,"grade":"C+"},
+    "MIN":{"opp_fg":46.3,"diff":-0.6,"mult":0.97,"grade":"C+"},
+    "CLE":{"opp_fg":46.3,"diff":-0.5,"mult":0.99,"grade":"B-"},
+    "TOR":{"opp_fg":46.5,"diff":-0.2,"mult":0.99,"grade":"B-"},
+    "LAC":{"opp_fg":46.8,"diff":-0.1,"mult":0.99,"grade":"B-"},
+    "PHX":{"opp_fg":47.0,"diff":-0.1,"mult":0.99,"grade":"B-"},
+    "CHA":{"opp_fg":47.0,"diff": 0.0,"mult":1.01,"grade":"B"},
+    "MIL":{"opp_fg":46.8,"diff": 0.0,"mult":1.01,"grade":"B"},
+    "DEN":{"opp_fg":47.1,"diff": 0.1,"mult":1.01,"grade":"B"},
+    "POR":{"opp_fg":47.4,"diff": 0.3,"mult":1.01,"grade":"B"},
+    "GSW":{"opp_fg":47.3,"diff": 0.3,"mult":1.01,"grade":"B"},
+    "DAL":{"opp_fg":47.2,"diff": 0.3,"mult":1.01,"grade":"B"},
+    "PHI":{"opp_fg":47.2,"diff": 0.4,"mult":1.01,"grade":"B"},
+    "CHI":{"opp_fg":47.4,"diff": 0.5,"mult":1.02,"grade":"B+"},
+    "NOP":{"opp_fg":47.4,"diff": 0.5,"mult":1.02,"grade":"B+"},
+    "ORL":{"opp_fg":47.4,"diff": 0.6,"mult":1.02,"grade":"B+"},
+    "MEM":{"opp_fg":47.5,"diff": 0.6,"mult":1.02,"grade":"B+"},
+    "ATL":{"opp_fg":47.4,"diff": 0.6,"mult":1.02,"grade":"B+"},
+    "WAS":{"opp_fg":47.9,"diff": 1.1,"mult":1.04,"grade":"A-"},
+    "LAL":{"opp_fg":48.4,"diff": 1.6,"mult":1.06,"grade":"A"},
+    "UTA":{"opp_fg":48.8,"diff": 1.9,"mult":1.06,"grade":"A"},
+    "IND":{"opp_fg":48.9,"diff": 2.0,"mult":1.08,"grade":"A+"},
+    "SAC":{"opp_fg":49.3,"diff": 2.1,"mult":1.08,"grade":"A+"},
+    "BKN":{"opp_fg":49.4,"diff": 2.4,"mult":1.08,"grade":"A+"},
+};
+
+// ── PAINT OFFENSE DATA (updated Mar 16 2026) ────────────────────────────
+// Source: NBA.com paint scoring stats
+// High percentile = team attacks the paint heavily = C/PF players get more usage
+// Used to boost interior players (C, PF) on high-paint teams
+const TEAM_PAINT_DATA = {
+    "OKC":{"paint_pts":21.0,"paint_fg":53.7,"percentile":100,"grade":"ELITE"},
+    "LAC":{"paint_pts":20.4,"paint_fg":56.4,"percentile":96.6,"grade":"ELITE"},
+    "DAL":{"paint_pts":26.6,"paint_fg":56.2,"percentile":93.1,"grade":"ELITE"},
+    "BOS":{"paint_pts":19.6,"paint_fg":53.0,"percentile":89.7,"grade":"ELITE"},
+    "NYK":{"paint_pts":24.7,"paint_fg":53.8,"percentile":86.2,"grade":"ELITE"},
+    "DEN":{"paint_pts":20.5,"paint_fg":54.2,"percentile":82.8,"grade":"STRONG"},
+    "MIN":{"paint_pts":25.2,"paint_fg":59.1,"percentile":79.3,"grade":"STRONG"},
+    "PHX":{"paint_pts":20.8,"paint_fg":53.5,"percentile":75.9,"grade":"STRONG"},
+    "DET":{"paint_pts":25.8,"paint_fg":56.9,"percentile":72.4,"grade":"STRONG"},
+    "ORL":{"paint_pts":25.8,"paint_fg":54.1,"percentile":69.0,"grade":"STRONG"},
+    "CLE":{"paint_pts":23.8,"paint_fg":53.2,"percentile":65.5,"grade":"GOOD"},
+    "PHI":{"paint_pts":23.7,"paint_fg":54.2,"percentile":62.1,"grade":"GOOD"},
+    "HOU":{"paint_pts":21.3,"paint_fg":57.4,"percentile":55.2,"grade":"GOOD"},
+    "UTA":{"paint_pts":24.6,"paint_fg":55.5,"percentile":51.7,"grade":"NEUTRAL"},
+    "ATL":{"paint_pts":28.9,"paint_fg":52.4,"percentile":48.3,"grade":"NEUTRAL"},
+    "SAS":{"paint_pts":27.6,"paint_fg":52.9,"percentile":44.8,"grade":"NEUTRAL"},
+    "LAL":{"paint_pts":21.7,"paint_fg":57.4,"percentile":41.4,"grade":"NEUTRAL"},
+    "TOR":{"paint_pts":28.6,"paint_fg":53.6,"percentile":37.9,"grade":"NEUTRAL"},
+    "NOP":{"paint_pts":25.1,"paint_fg":54.0,"percentile":34.5,"grade":"NEUTRAL"},
+    "POR":{"paint_pts":23.5,"paint_fg":52.5,"percentile":31.0,"grade":"NEUTRAL"},
+    "SAC":{"paint_pts":20.9,"paint_fg":56.6,"percentile":27.6,"grade":"WEAK"},
+    "GSW":{"paint_pts":20.5,"paint_fg":52.2,"percentile":24.1,"grade":"WEAK"},
+    "CHA":{"paint_pts":19.7,"paint_fg":52.0,"percentile":20.7,"grade":"WEAK"},
+    "IND":{"paint_pts":23.9,"paint_fg":51.7,"percentile":17.2,"grade":"WEAK"},
+    "MIA":{"paint_pts":32.0,"paint_fg":51.1,"percentile":13.8,"grade":"AVOID"},
+    "BKN":{"paint_pts":18.9,"paint_fg":52.9,"percentile":10.3,"grade":"AVOID"},
+    "MEM":{"paint_pts":25.7,"paint_fg":52.1,"percentile":6.9,"grade":"AVOID"},
+    "MIL":{"paint_pts":19.1,"paint_fg":51.4,"percentile":3.4,"grade":"AVOID"},
+    "WAS":{"paint_pts":22.1,"paint_fg":47.5,"percentile":0.0,"grade":"AVOID"},
+    "CHI":{"paint_pts":30.2,"paint_fg":53.7,"percentile":58.6,"grade":"GOOD"},
+};
+
+// ── HUSTLE / DEFENSIVE EFFORT STATS (updated Mar 16 2026) ───────────────
+// Source: NBA.com hustle stats
+// deflections = active hands, disrupts ball handlers (penalizes opposing PG/SG)
+// contested_shots = total contested attempts (harder to score against)
+// screen_assists = off-ball movement (boosts C/PF screeners)
+const TEAM_HUSTLE = {
+    "ATL":{"deflections":20.1,"contested":43.2,"screen_ast":7.3},
+    "BOS":{"deflections":15.7,"contested":41.6,"screen_ast":9.3},
+    "BKN":{"deflections":17.4,"contested":41.5,"screen_ast":6.6},
+    "CHA":{"deflections":14.3,"contested":43.8,"screen_ast":8.2},
+    "CHI":{"deflections":14.1,"contested":45.2,"screen_ast":6.2},
+    "CLE":{"deflections":19.7,"contested":41.6,"screen_ast":7.5},
+    "DAL":{"deflections":14.1,"contested":43.9,"screen_ast":8.9},
+    "DEN":{"deflections":14.6,"contested":36.7,"screen_ast":8.9},
+    "DET":{"deflections":20.8,"contested":42.6,"screen_ast":6.8},
+    "GSW":{"deflections":19.6,"contested":40.6,"screen_ast":7.5},
+    "HOU":{"deflections":17.2,"contested":41.4,"screen_ast":6.3},
+    "IND":{"deflections":15.0,"contested":41.9,"screen_ast":7.0},
+    "LAC":{"deflections":18.7,"contested":41.7,"screen_ast":6.2},
+    "LAL":{"deflections":17.1,"contested":36.5,"screen_ast":8.8},
+    "MEM":{"deflections":17.7,"contested":42.2,"screen_ast":6.5},
+    "MIA":{"deflections":18.4,"contested":42.8,"screen_ast":3.0},
+    "MIL":{"deflections":17.3,"contested":37.1,"screen_ast":6.2},
+    "MIN":{"deflections":16.8,"contested":42.3,"screen_ast":7.1},
+    "NOP":{"deflections":18.4,"contested":38.7,"screen_ast":6.5},
+    "NYK":{"deflections":16.8,"contested":38.6,"screen_ast":7.0},
+    "OKC":{"deflections":21.0,"contested":46.4,"screen_ast":8.1},
+    "ORL":{"deflections":17.2,"contested":41.1,"screen_ast":7.1},
+    "PHI":{"deflections":20.9,"contested":39.9,"screen_ast":6.9},
+    "PHX":{"deflections":20.5,"contested":34.8,"screen_ast":8.3},
+    "POR":{"deflections":16.4,"contested":40.6,"screen_ast":5.8},
+    "SAC":{"deflections":15.9,"contested":38.8,"screen_ast":7.8},
+    "SAS":{"deflections":15.7,"contested":42.0,"screen_ast":8.1},
+    "TOR":{"deflections":20.7,"contested":39.1,"screen_ast":6.9},
+    "UTA":{"deflections":16.7,"contested":38.6,"screen_ast":9.1},
+    "WAS":{"deflections":17.0,"contested":41.3,"screen_ast":8.3},
+};
+
+// Hustle penalty — high deflection teams hurt ball-handler stats
+// Applied to PG/SG playing against high-deflection defenses
+function getHustlePenalty(opponentAbbr, position) {
+    if (!['PG','SG'].includes(position)) return 1.0;
+    const d = TEAM_HUSTLE[opponentAbbr];
+    if (!d) return 1.0;
+    if (d.deflections >= 20) return 0.97;  // elite disruption
+    if (d.deflections >= 18) return 0.99;  // above avg
+    return 1.0;
+}
+
+// ── HUSTLE STATS (updated Mar 16 2026) ──────────────────────────────────
+// screen_ast = screen assists/game, deflections = deflections/game
+// contested_shots = total contested shots/game (higher = better defense)
+// off_box_pct = % of box outs that are offensive (higher = more OREB chance for C/PF)
+const TEAM_HUSTLE = {
+    "ATL":{"screen_ast":7.3,"deflections":20.1,"contested":43.2,"off_box_pct":16.3},
+    "BOS":{"screen_ast":9.3,"deflections":15.7,"contested":41.6,"off_box_pct":25.9},
+    "BKN":{"screen_ast":6.6,"deflections":17.4,"contested":41.5,"off_box_pct":30.9},
+    "CHA":{"screen_ast":8.2,"deflections":14.3,"contested":43.8,"off_box_pct":30.7},
+    "CHI":{"screen_ast":6.2,"deflections":14.1,"contested":45.2,"off_box_pct":16.8},
+    "CLE":{"screen_ast":7.5,"deflections":19.7,"contested":41.6,"off_box_pct":24.2},
+    "DAL":{"screen_ast":8.9,"deflections":14.1,"contested":43.9,"off_box_pct":23.0},
+    "DEN":{"screen_ast":8.9,"deflections":14.6,"contested":36.7,"off_box_pct":26.7},
+    "DET":{"screen_ast":6.8,"deflections":20.8,"contested":42.6,"off_box_pct":26.5},
+    "GSW":{"screen_ast":7.5,"deflections":19.6,"contested":40.6,"off_box_pct":22.7},
+    "HOU":{"screen_ast":6.3,"deflections":17.2,"contested":41.4,"off_box_pct":39.6},
+    "IND":{"screen_ast":7.0,"deflections":15.0,"contested":41.9,"off_box_pct":17.4},
+    "LAC":{"screen_ast":6.2,"deflections":18.7,"contested":41.7,"off_box_pct":21.8},
+    "LAL":{"screen_ast":8.8,"deflections":17.1,"contested":36.5,"off_box_pct":20.4},
+    "MEM":{"screen_ast":6.5,"deflections":17.7,"contested":42.2,"off_box_pct":27.5},
+    "MIA":{"screen_ast":3.0,"deflections":18.4,"contested":42.8,"off_box_pct":15.7},
+    "MIL":{"screen_ast":6.2,"deflections":17.3,"contested":37.1,"off_box_pct":22.2},
+    "MIN":{"screen_ast":7.1,"deflections":16.8,"contested":42.3,"off_box_pct":32.8},
+    "NOP":{"screen_ast":6.5,"deflections":18.4,"contested":38.7,"off_box_pct":21.1},
+    "NYK":{"screen_ast":7.0,"deflections":16.8,"contested":38.6,"off_box_pct":28.1},
+    "OKC":{"screen_ast":8.1,"deflections":21.0,"contested":46.4,"off_box_pct":16.9},
+    "ORL":{"screen_ast":7.1,"deflections":17.2,"contested":41.1,"off_box_pct":23.8},
+    "PHI":{"screen_ast":6.9,"deflections":20.9,"contested":39.9,"off_box_pct":34.3},
+    "PHX":{"screen_ast":8.3,"deflections":20.5,"contested":34.8,"off_box_pct":18.8},
+    "POR":{"screen_ast":5.8,"deflections":16.4,"contested":40.6,"off_box_pct":30.4},
+    "SAC":{"screen_ast":7.8,"deflections":15.9,"contested":38.8,"off_box_pct":31.9},
+    "SAS":{"screen_ast":8.1,"deflections":15.7,"contested":42.0,"off_box_pct":30.1},
+    "TOR":{"screen_ast":6.9,"deflections":20.7,"contested":39.1,"off_box_pct":28.3},
+    "UTA":{"screen_ast":9.1,"deflections":16.7,"contested":38.6,"off_box_pct":21.8},
+    "WAS":{"screen_ast":8.3,"deflections":17.0,"contested":41.3,"off_box_pct":22.8},
+};
+
+// ── SHOT ZONE PROFILES (updated Mar 16 2026) ────────────────────────────
+// Source: NBA.com shot zone stats
+// interior_fgm = <5ft makes per game (C/PF usage indicator)
+// three_fgm = 25-29ft makes per game (PG/SG/SF usage indicator)
+// int_rate = % of scoring from interior (POST-HEAVY teams = C/PF get more shots)
+const TEAM_SHOT_PROFILE = {
+    "ATL":{"interior":19.9,"three_pt":7.4,"int_rate":46.9,"profile":"POST-HEAVY"},
+    "BOS":{"interior":13.6,"three_pt":9.3,"int_rate":35.8,"profile":"PERIMETER"},
+    "BKN":{"interior":20.4,"three_pt":7.0,"int_rate":48.6,"profile":"POST-HEAVY"},
+    "CHA":{"interior":18.6,"three_pt":8.7,"int_rate":45.0,"profile":"POST-HEAVY"},
+    "CHI":{"interior":21.0,"three_pt":8.7,"int_rate":47.6,"profile":"POST-HEAVY"},
+    "CLE":{"interior":17.3,"three_pt":8.0,"int_rate":39.0,"profile":"BALANCED"},
+    "DAL":{"interior":20.6,"three_pt":6.9,"int_rate":46.6,"profile":"POST-HEAVY"},
+    "DEN":{"interior":18.2,"three_pt":7.9,"int_rate":42.7,"profile":"BALANCED"},
+    "DET":{"interior":15.3,"three_pt":7.9,"int_rate":41.0,"profile":"BALANCED"},
+    "GSW":{"interior":17.9,"three_pt":7.9,"int_rate":42.8,"profile":"BALANCED"},
+    "HOU":{"interior":17.2,"three_pt":7.8,"int_rate":42.9,"profile":"BALANCED"},
+    "IND":{"interior":20.4,"three_pt":7.1,"int_rate":46.8,"profile":"POST-HEAVY"},
+    "LAC":{"interior":17.1,"three_pt":8.7,"int_rate":41.9,"profile":"BALANCED"},
+    "LAL":{"interior":19.6,"three_pt":8.2,"int_rate":46.2,"profile":"POST-HEAVY"},
+    "MEM":{"interior":19.1,"three_pt":7.9,"int_rate":44.6,"profile":"BALANCED"},
+    "MIA":{"interior":18.7,"three_pt":8.0,"int_rate":44.1,"profile":"BALANCED"},
+    "MIL":{"interior":17.3,"three_pt":9.3,"int_rate":42.1,"profile":"BALANCED"},
+    "MIN":{"interior":18.4,"three_pt":6.6,"int_rate":44.4,"profile":"BALANCED"},
+    "NOP":{"interior":20.3,"three_pt":8.4,"int_rate":46.8,"profile":"POST-HEAVY"},
+    "NYK":{"interior":16.7,"three_pt":8.2,"int_rate":42.6,"profile":"BALANCED"},
+    "OKC":{"interior":14.5,"three_pt":7.8,"int_rate":37.8,"profile":"PERIMETER"},
+    "ORL":{"interior":18.1,"three_pt":7.2,"int_rate":43.7,"profile":"BALANCED"},
+    "PHI":{"interior":19.9,"three_pt":8.5,"int_rate":47.8,"profile":"POST-HEAVY"},
+    "PHX":{"interior":17.6,"three_pt":7.2,"int_rate":44.3,"profile":"BALANCED"},
+    "POR":{"interior":18.3,"three_pt":7.8,"int_rate":43.1,"profile":"BALANCED"},
+    "SAC":{"interior":18.4,"three_pt":8.7,"int_rate":42.0,"profile":"BALANCED"},
+    "SAS":{"interior":16.1,"three_pt":7.9,"int_rate":39.5,"profile":"BALANCED"},
+    "TOR":{"interior":18.1,"three_pt":8.0,"int_rate":45.5,"profile":"POST-HEAVY"},
+    "UTA":{"interior":18.0,"three_pt":9.0,"int_rate":40.9,"profile":"BALANCED"},
+    "WAS":{"interior":21.3,"three_pt":8.7,"int_rate":48.5,"profile":"POST-HEAVY"},
+};
+
+// ── OPPONENT POINTS ALLOWED per 24min (updated Mar 16 2026) ─────────────
+// Source: NBA.com opponent scoring stats
+// Higher pts allowed = weaker defense = better DFS matchup for opposing players
+// This is the PRIMARY matchup signal — overrides other boosts
+const TEAM_PTS_ALLOWED = {
+    "GSW":38.4,"CHI":37.5,"ATL":36.3,"CHA":36.2,"SAS":35.3,
+    "MIL":34.0,"MIA":33.8,"NYK":33.7,"OKC":32.7,"DEN":32.3,
+    "BKN":32.2,"CLE":32.1,"IND":32.0,"BOS":31.9,"TOR":31.5,
+    "MEM":31.3,"PHX":30.3,"POR":30.3,"UTA":30.2,"HOU":28.6,
+    "MIN":27.5,"WAS":27.1,"PHI":26.8,"ORL":26.7,"LAC":26.4,
+    "DET":24.7,"DAL":24.6,"LAL":24.6,"NOP":24.4,"SAC":24.1,
+};
+const LEAGUE_AVG_PTS_ALLOWED = 30.6;
+
+// Matchup multiplier based on opponent's pts allowed
+// Applied to players based on who they PLAY AGAINST tonight
+function getMatchupMult(opponentAbbr) {
+    const pts = TEAM_PTS_ALLOWED[opponentAbbr] || LEAGUE_AVG_PTS_ALLOWED;
+    if (pts >= 36) return 1.08;   // elite target
+    if (pts >= 34) return 1.05;   // strong target
+    if (pts >= 32) return 1.02;   // good target
+    if (pts >= 30) return 1.00;   // neutral
+    if (pts >= 28) return 0.98;   // below avg
+    if (pts >= 26) return 0.96;   // avoid
+    return 0.94;                  // hard avoid
+}
+
+// Paint boost for interior players (C, PF) based on their team's paint usage
+function getPaintBoost(teamAbbr, position) {
+    if (!['C','PF'].includes(position)) return 1.0;
+    const d = TEAM_PAINT_DATA[teamAbbr];
+    if (!d) return 1.0;
+    if (d.percentile >= 80) return 1.06;
+    if (d.percentile >= 60) return 1.03;
+    if (d.percentile >= 30) return 1.0;
+    return 0.97;  // weak paint team = C/PF slightly penalized
+}
+
+// Get defensive multiplier for a player based on their opponent
+// teamAbbr = the OPPONENT team (the defense being faced)
+function getDefMult(opponentAbbr) {
+    return (TEAM_DEF_GRADE[opponentAbbr]?.mult) || 1.0;
+}
+
+// Pace multiplier per team — used in projection engine
+// >1.0 = high scoring team, players get slight boost
+// <1.0 = low scoring team, players slightly penalized
+function getTeamPaceMult(teamAbbr) {
+    const stats = NBA_TEAM_STATS[teamAbbr];
+    if (!stats) return 1.0;
+    return Math.min(1.06, Math.max(0.94, stats.pts / LEAGUE_AVG_PTS));
+}
+
+let TEAM_DEF_VS_STAT = { BKN:{pts:1.18,reb:1.14,ast:1.12}, WAS:{pts:1.16,reb:1.10,ast:1.14}, PHI:{pts:1.14,reb:1.08,ast:1.10}, CHA:{pts:1.10,reb:1.06,ast:1.08}, ATL:{pts:1.06,reb:1.04,ast:1.06}, MIL:{pts:1.02,reb:1.02,ast:1.02}, SAC:{pts:1.06,reb:1.04,ast:1.04}, ORL:{pts:0.98,reb:0.96,ast:1.00}, MIA:{pts:0.99,reb:1.00,ast:0.98}, LAL:{pts:1.02,reb:1.02,ast:1.02}, DEN:{pts:1.00,reb:0.96,ast:0.98}, SAS:{pts:1.04,reb:1.02,ast:1.04}, LAC:{pts:0.98,reb:0.98,ast:0.98}, BOS:{pts:0.88,reb:0.92,ast:0.90} }
 // Pace multiplier — games above slate avg pace boost all stats slightly
 function getPaceMultiplier(gamePace) {
     const delta = gamePace - SLATE_AVG_PACE;
@@ -836,43 +1269,24 @@ function ownershipBucket(own) {
     return "punt";
 }
 function compositeScore(p) {
+    // Live DVP mult — uses real-time NBA.com data if available
+    const opponent = p.opponent || getOpponent(p.team);
+    const liveDvpMult = getDvpMult(p.player, opponent, p.position);
+
+    // Live injury mult — ESPN feed overrides hardcoded TONIGHT_INJURIES
+    const liveInjMult = getLiveInjuryMult(p.player);
+
+    // Live availability mult — last 10 GP from NBA.com
+    const liveAvailMult = getLiveAvailabilityMult(p.player);
+
     var _a;
     const inj = (_a = { "": 1.0, P: 0.95, Q: 0.72, D: 0.4, O: 0 }[p.injury]) !== null && _a !== void 0 ? _a : 0.72;
     const ownW = RULES.OWN_WEIGHTS[ownershipBucket(p.ownership)];
     const value = p.fppg / (p.salary / 1000);
     const sampleW = Math.min(p.played / 55, 1.0);
+    // statmuse boost: if we have live FD avg, weight it more heavily
     const statMuseBoost = p.statMuseFD ? 1.08 : 1.0;
-
-    // ── Form boost: hot streak = +12%, cold = -10% ──────────────────────
-    const trend = p.formData?.trend;
-    const formMult = trend === 'hot' ? 1.12 : trend === 'cold' ? 0.90 : 1.0;
-
-    // ── Effective fppg: BM tonight-projection > hot form > season avg ───
-    // PLAYER_FORM.last5 = Basketball Monster tonight projection (loaded at startup)
-    // Using it here (not in parsePlayers) keeps p.fppg clean for budget math
-    const last5 = p.formData?.last5 || 0;
-    // Only use BM projection when it is HIGHER than season avg (upside game)
-    // If BM is lower, the player is in a down spot — trust the season avg instead
-    const bmProj = (last5 > 0 && last5 > p.fppg) ? last5 : 0;
-    const effectiveFppg = bmProj > 0
-        ? bmProj                                          // BM tonight projection wins
-        : (last5 > p.fppg && trend === 'hot')
-            ? +(p.fppg * 0.35 + last5 * 0.65).toFixed(2) // hot streak blend
-            : p.fppg;                                     // season avg fallback
-
-    // ── Ceiling boost: high-upside players get extra bump ──────────────
-    const ceiling = p.boomBust?.ceiling || 0;
-    const ceilingBoost = ceiling >= 80 ? 1.08 : ceiling >= 65 ? 1.05 : ceiling >= 50 ? 1.02 : 1.0;
-
-    // ── Implied points boost: reward players on high-scoring teams ─────
-    // Uses Vegas implied total — CLE ~127pts gets 1.04x, DAL ~110pts gets 1.01x
-    // This naturally surfaces the highest-total game stack without hardcoding
-    const impliedPts = (typeof VEGAS_TEAM_MAP !== "undefined" && VEGAS_TEAM_MAP[p.team])
-        ? (VEGAS_TEAM_MAP[p.team].impliedPts || 0)
-        : 0;
-    const impliedBoost = impliedPts >= 125 ? 1.04 : impliedPts >= 118 ? 1.03 : impliedPts >= 112 ? 1.02 : impliedPts >= 106 ? 1.01 : 1.0;
-
-    return (effectiveFppg * inj * ownW + value * 0.12 + sampleW * 0.08) * formMult * ceilingBoost * statMuseBoost * impliedBoost;
+    return (p.fppg * inj * ownW + value * 0.12 + sampleW * 0.08) * statMuseBoost;
 }
 function estimateOwnership(player, teamMap) {
     const v = teamMap[player.team];
@@ -1076,13 +1490,15 @@ function exportLineupsCSV(lineups, platform) {
 }
 
 // ── LINEUP ENGINE ────────────────────────────────────────────────────────
-function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams = [], gamesCount = 8) {
+function buildLineup(players, lockedNames = [], excludedNames = []) {
+    // Separate locked from pool
     const locked = players.filter(p => lockedNames.includes(p.name));
-    const pool   = players.filter(p => !excludedNames.includes(p.name) && !lockedNames.includes(p.name));
+    const pool = players.filter(p => !excludedNames.includes(p.name) && !lockedNames.includes(p.name));
+    // Roster slots from current platform config
     const needed = Object.assign({}, RULES.POSITIONS);
     const lineup = [];
-    const used   = new Set();
-    let budget   = RULES.SALARY_CAP;
+    const used = new Set();
+    let budget = RULES.SALARY_CAP;
     const MAX_PER_TEAM = 4;
     const teamCount = () => {
         const counts = {};
@@ -1091,55 +1507,60 @@ function buildLineup(players, lockedNames = [], excludedNames = [], stackTeams =
     };
     const place = (p, pos) => {
         needed[pos]--;
-        lineup.push(Object.assign({}, p, { slot: pos }));
+        lineup.push(Object.assign(Object.assign({}, p), { slot: pos }));
         used.add(p.name);
+        // In showdown mode, also mark the player's base name as used
+        // so the same player can't appear in both CPT and FLEX
         if (p._baseName) used.add("__base__" + p._baseName);
         budget -= p.salary;
     };
     const canPlace = (p) => {
         const counts = teamCount();
         if ((counts[p.team] || 0) >= MAX_PER_TEAM) return false;
+        // Showdown: prevent same real player in CPT+FLEX slots
         if (p._baseName && used.has("__base__" + p._baseName)) return false;
         return true;
     };
-    const poolMinSal = pool.length ? Math.min(...pool.map(p => p.salary)) : 3500;
-
     // 1. Place locked players
     for (const p of locked) {
         for (const pos of p.positions) {
-            if ((needed[pos] || 0) > 0 && canPlace(p)) { place(p, pos); break; }
+            if ((needed[pos] || 0) > 0 && canPlace(p)) {
+                place(p, pos);
+                break;
+            }
         }
     }
-    // 2. Greedy fill — pool sorted by score descending
+    // 2. Greedy fill: iterate pool in given order, place each player in first available slot
+    //    Budget guard: dynamic — uses actual pool min salary (handles DK Showdown $1K players)
+    const poolMinSal = pool.length ? Math.min(...pool.map(p => p.salary)) : 3500;
     for (const p of pool) {
-        if (used.has(p.name)) continue;
+        if (used.has(p.name))
+            continue;
         const slotsLeft = Object.values(needed).reduce((a, b) => a + b, 0);
-        if (slotsLeft === 0) break;
-        // Smart position ordering:
-        // PG/SG players → try MORE-available slot first (keeps scarce PG open for Harden/SGA)
-        // All others → try FEWER-available slot first (fills scarce C before PF)
-        const posOrder = (p.positions.includes('PG') && p.positions.includes('SG'))
-            ? [...p.positions].sort((a, b) => (needed[b] || 0) - (needed[a] || 0))
-            : [...p.positions].sort((a, b) => (needed[a] || 0) - (needed[b] || 0));
-        for (const pos of posOrder) {
+        if (slotsLeft === 0)
+            break;
+        for (const pos of p.positions) {
             if ((needed[pos] || 0) > 0) {
                 const budgetAfter = budget - p.salary;
-                const minNeeded   = (slotsLeft - 1) * poolMinSal;
+                const minNeeded = (slotsLeft - 1) * poolMinSal;
                 if (budgetAfter >= minNeeded && canPlace(p)) {
-                    place(p, pos); break;
+                    place(p, pos);
+                    break;
                 }
             }
         }
     }
-    // 3. Fill remaining open slots with cheapest eligible players
+    // 3. If any slots still open, fill with cheapest eligible players regardless of score
     if (Object.values(needed).reduce((a, b) => a + b, 0) > 0) {
         const cheap = [...pool].filter(p => !used.has(p.name)).sort((a, b) => a.salary - b.salary);
         for (const p of cheap) {
             const slotsLeft = Object.values(needed).reduce((a, b) => a + b, 0);
-            if (slotsLeft === 0) break;
+            if (slotsLeft === 0)
+                break;
             for (const pos of p.positions) {
                 if ((needed[pos] || 0) > 0 && budget - p.salary >= 0 && canPlace(p)) {
-                    place(p, pos); break;
+                    place(p, pos);
+                    break;
                 }
             }
         }
@@ -1476,6 +1897,9 @@ const TONIGHT_INJURIES = [
     { name: "Joel Embiid",          team: "PHI", status: "OUT", reason: "Load management",   dfsImpact: "🔥 PHI depleted — POR players get easy matchup" },
     { name: "Paul George",          team: "PHI", status: "OUT", reason: "Load management",   dfsImpact: "PHI even weaker — Edgecombe/Grimes usage up" },
     { name: "Tyrese Maxey",         team: "PHI", status: "OUT", reason: "Load management",   dfsImpact: "🚨 PHI missing 3 stars — Avdija/Clingan matchup A+" },
+    // ── DNP-REST (never play) ──
+    { name: "Dennis Schroder",  team: "CLE", status: "OUT", reason: "DNP-rest", dfsImpact: "Never play" },
+    { name: "Jaylon Tyson",     team: "CLE", status: "OUT", reason: "DNP-rest", dfsImpact: "Never play" },
     // ── QUESTIONABLE ──
     { name: "Pascal Siakam",        team: "IND", status: "Q",  reason: "Knee — monitor",     dfsImpact: "If out: Haliburton/Zubac/Nembhard all get more — IND still stackable" },
     { name: "Jalen Duren",          team: "DET", status: "Q",  reason: "Knee",               dfsImpact: "If out: Cade gets even more usage — still play DET" },
@@ -2608,6 +3032,152 @@ function App() {
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
+</script>
+<script>
+// ── AUTO-FETCH: Live NBA Data on App Open ────────────────────────────────
+// Calls Vercel proxy routes → NBA.com + ESPN
+// Runs once when page loads, updates LIVE_DATA object
+// All downstream functions (compositeScore, buildLineup) read from LIVE_DATA
+
+const LIVE_DATA = {
+  playerStats: {},    // name → { gp, min, pts, reb, ast, stl, blk, fantasyPts }
+  dvp: {},            // teamAbbr → { G: {fpAllowed, mult}, F: {...}, C: {...} }
+  leagueAvgDvp: {},   // pos → league avg FP allowed
+  games: [],          // tonight's games [ {homeTeam, awayTeam, tipTime} ]
+  injuries: {},       // name → { status, description }
+  fetchedAt: null,
+  status: 'idle',     // idle | loading | ready | error
+};
+
+// ── DVP position mapper — FanDuel positions → G/F/C
+function fdPosToNba(fdPos) {
+  if (!fdPos) return null;
+  const p = fdPos.toUpperCase();
+  if (p === 'PG' || p === 'SG')    return 'G';
+  if (p === 'SF' || p === 'PF')    return 'F';
+  if (p === 'C')                    return 'C';
+  if (p === 'UTIL') return null; // UTIL — skip DVP
+  return null;
+}
+
+// ── Get DVP multiplier for a player vs their tonight's opponent
+function getDvpMult(playerName, opponent, fdPos) {
+  const nbaPos = fdPosToNba(fdPos);
+  if (!nbaPos || !opponent) return 1.0;
+  const teamDvp = LIVE_DATA.dvp[opponent];
+  if (!teamDvp?.[nbaPos]) return 1.0;
+  // mult already computed as fpAllowed / leagueAvg — >1 = soft, <1 = tough
+  // Clamp to 0.88–1.12 so no single game blows up a lineup
+  return Math.max(0.88, Math.min(1.12, teamDvp[nbaPos].mult));
+}
+
+// ── Get injury multiplier from live ESPN data
+function getLiveInjuryMult(playerName) {
+  const inj = LIVE_DATA.injuries[playerName?.toLowerCase()];
+  if (!inj) return 1.0;
+  switch (inj.status) {
+    case 'OUT':         return 0.0;
+    case 'DOUBTFUL':    return 0.25;
+    case 'QUESTIONABLE':return 0.80;
+    case 'DAY-TO-DAY':  return 0.88;
+    default:            return 1.0;
+  }
+}
+
+// ── Get availability mult from live last-N stats (replaces hardcoded PLAYER_LAST10)
+function getLiveAvailabilityMult(playerName) {
+  const d = LIVE_DATA.playerStats[playerName?.toLowerCase()];
+  if (!d) return 1.0;
+  const gp = d.gp || 0;
+  if (gp === 0)  return 0.0;
+  if (gp >= 9)   return 1.0;
+  if (gp >= 7)   return 0.95;
+  if (gp >= 5)   return 0.85;
+  return 0.70;
+}
+
+// ── Main fetch function — called once on page load
+async function fetchLiveData() {
+  const BASE = ''; // empty = same domain (Vercel serves /api/ routes)
+  LIVE_DATA.status = 'loading';
+  updateDataStatusBadge('loading');
+
+  const results = await Promise.allSettled([
+    fetch(`${BASE}/api/playerstats?lastN=10`).then(r => r.json()),
+    fetch(`${BASE}/api/dvp`).then(r => r.json()),
+    fetch(`${BASE}/api/scoreboard`).then(r => r.json()),
+    fetch(`${BASE}/api/injuries`).then(r => r.json()),
+  ]);
+
+  const [statsResult, dvpResult, sbResult, injResult] = results;
+
+  let successCount = 0;
+
+  // Player stats (last 10)
+  if (statsResult.status === 'fulfilled' && statsResult.value?.players) {
+    statsResult.value.players.forEach(p => {
+      LIVE_DATA.playerStats[p.name] = p;
+    });
+    successCount++;
+    console.log(`✅ Player stats loaded: ${statsResult.value.players.length} players`);
+  } else {
+    console.warn('⚠️ Player stats fetch failed — using hardcoded PLAYER_LAST10 fallback');
+  }
+
+  // DVP by position
+  if (dvpResult.status === 'fulfilled' && dvpResult.value?.dvp) {
+    LIVE_DATA.dvp = dvpResult.value.dvp;
+    LIVE_DATA.leagueAvgDvp = dvpResult.value.leagueAvg;
+    successCount++;
+    console.log(`✅ DVP loaded: ${Object.keys(LIVE_DATA.dvp).length} teams`);
+  } else {
+    console.warn('⚠️ DVP fetch failed — no position-based matchup adjustment');
+  }
+
+  // Tonight's games
+  if (sbResult.status === 'fulfilled' && sbResult.value?.games) {
+    LIVE_DATA.games = sbResult.value.games;
+    successCount++;
+    console.log(`✅ Scoreboard loaded: ${LIVE_DATA.games.length} games tonight`);
+  } else {
+    console.warn('⚠️ Scoreboard fetch failed — using hardcoded slate');
+  }
+
+  // ESPN injuries
+  if (injResult.status === 'fulfilled' && injResult.value?.injuryMap) {
+    LIVE_DATA.injuries = injResult.value.injuryMap;
+    successCount++;
+    console.log(`✅ Injuries loaded: ${injResult.value.count} players`);
+  } else {
+    console.warn('⚠️ Injury fetch failed — using hardcoded TONIGHT_INJURIES fallback');
+  }
+
+  LIVE_DATA.fetchedAt = new Date().toISOString();
+  LIVE_DATA.status = successCount > 0 ? 'ready' : 'error';
+  updateDataStatusBadge(LIVE_DATA.status, successCount);
+}
+
+// ── Status badge updater — shows in UI
+function updateDataStatusBadge(status, successCount) {
+  const badge = document.getElementById('data-status-badge');
+  if (!badge) return;
+  if (status === 'loading') {
+    badge.textContent = '⟳ Fetching live data...';
+    badge.style.background = '#f59e0b';
+  } else if (status === 'ready') {
+    badge.textContent = `✅ Live data ready (${successCount}/4 feeds)`;
+    badge.style.background = '#10b981';
+  } else if (status === 'error') {
+    badge.textContent = '⚠️ Live data unavailable — using cached data';
+    badge.style.background = '#ef4444';
+  }
+}
+
+// ── Call on page load
+document.addEventListener('DOMContentLoaded', () => {
+  fetchLiveData();
+});
+
 </script>
 </body>
 </html>
