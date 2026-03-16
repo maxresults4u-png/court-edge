@@ -1054,17 +1054,23 @@ function generateLineups(players, count, lockedNames, excludedNames) {
         // 2. Sort by noised score
         const varied = [...noised].sort((a, b) => b.score - a.score);
 
-        // 3. Exposure cap — if a player has hit max exposure, push them down
-        if (lineups.length > 5) {
+        // 3. Exposure cap — HARD BLOCK: completely remove over-exposed players
+        let filteredPool = varied;
+        if (lineups.length >= 5) {
             const expMap = getExposureMap(lineups);
-            varied.sort((a, b) => {
-                const aOverExposed = (expMap[a.name] || 0) >= maxExposureCount ? -999 : 0;
-                const bOverExposed = (expMap[b.name] || 0) >= maxExposureCount ? -999 : 0;
-                return (b.score + bOverExposed) - (a.score + aOverExposed);
-            });
+            // Hard remove any player over cap (unless they are locked)
+            filteredPool = varied.filter(p =>
+                lockedNames.includes(p.name) ||
+                (expMap[p.name] || 0) < maxExposureCount
+            );
+            // Safety: if hard filter leaves too few players, fall back to full pool
+            // (avoids empty lineups when pool is small)
+            if (filteredPool.length < RULES.LINEUP_SIZE * 2) {
+                filteredPool = varied; // pool too small, skip cap this attempt
+            }
         }
 
-        const lu = buildLineup(varied, lockedNames, excludedNames);
+        const lu = buildLineup(filteredPool, lockedNames, excludedNames);
         if (!lu) continue;
 
         // 4. Deduplicate
@@ -1238,13 +1244,17 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                     pool = [pivot, ...pool.filter(p => p.name !== pivot.name)];
                 }
             }
-            // Exposure cap across all lineups so far
-            const expMap = getExposureMap(allLineups);
-            pool.sort((a, b) => {
-                const aOver = (expMap[a.name] || 0) >= maxExpCount ? -999 : 0;
-                const bOver = (expMap[b.name] || 0) >= maxExpCount ? -999 : 0;
-                return (b.score + bOver) - (a.score + aOver);
-            });
+            // Exposure cap — HARD BLOCK
+            if (allLineups.length >= 5) {
+                const expMap = getExposureMap(allLineups);
+                const hardFiltered = pool.filter(p =>
+                    lockedNames.includes(p.name) ||
+                    (expMap[p.name] || 0) < maxExpCount
+                );
+                if (hardFiltered.length >= RULES.LINEUP_SIZE * 2) {
+                    pool = hardFiltered;
+                }
+            }
             const lu = buildLineup(pool, lockedNames, excludedNames);
             if (!lu) continue;
             const key = lu.map(p => p.name).sort().join("|");
@@ -2133,7 +2143,7 @@ function App() {
                             React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 8 } },
                                 React.createElement("button", { onClick: () => { setRandomness(5); setNumUniques(1); setMaxExposure(60); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#0d2010", border: "1px solid #16a34a44", borderRadius: 5, color: "#22c55e", cursor: "pointer" } }, "💵 CASH"),
                                 React.createElement("button", { onClick: () => { setRandomness(15); setNumUniques(2); setMaxExposure(40); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#1a1000", border: "1px solid #f59e0b44", borderRadius: 5, color: "#f59e0b", cursor: "pointer" } }, "⚖️ BALANCED"),
-                                React.createElement("button", { onClick: () => { setRandomness(22); setNumUniques(3); setMaxExposure(25); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#1a0a1a", border: "1px solid #a78bfa44", borderRadius: 5, color: "#a78bfa", cursor: "pointer" } }, "🏆 GPP"))),
+                                React.createElement("button", { onClick: () => { setRandomness(22); setNumUniques(3); setMaxExposure(20); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#1a0a1a", border: "1px solid #a78bfa44", borderRadius: 5, color: "#a78bfa", cursor: "pointer" } }, "🏆 GPP"))),
                         React.createElement("div", { style: { marginBottom: 12, padding: "10px 12px", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8 } },
                             React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 7 } }, "\uD83D\uDCB0 BANKROLL ADVISOR"),
                             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
