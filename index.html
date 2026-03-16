@@ -332,6 +332,7 @@ function getShootingBoost(n) { const d=PLAYER_SHOOTING[n?.toLowerCase()]; if(!d)
 const LIVE_DATA = {
   playerStats:{}, dvp:{}, leagueAvgDvp:{}, games:[], injuries:{},
   odds:{ teamMap:{}, gamesList:[], fetchedAt:null },
+  roster:{ probables:{}, games:[], counts:{}, fetchedAt:null },
   fetchedAt:null, status:'idle',
 };
 function fdPosToNba(fdPos) {
@@ -379,8 +380,9 @@ async function fetchLiveData() {
     fetch('/api/scoreboard').then(r=>r.json()),
     fetch('/api/injuries').then(r=>r.json()),
     fetch('/api/odds').then(r=>r.json()),
+    fetch('/api/roster').then(r=>r.json()),
   ]);
-  const [s,d,sb,inj,odds]=results;
+  const [s,d,sb,inj,odds,roster]=results;
   let ok=0;
   if(s.status==='fulfilled'&&s.value?.players){
     s.value.players.forEach(p=>{LIVE_DATA.playerStats[p.name]=p;});ok++;
@@ -405,9 +407,17 @@ async function fetchLiveData() {
     ok++;
     console.log('Odds loaded:',odds.value.gamesList.length,'games, quota remaining:',odds.value.quotaRemaining);
   }
+  if(roster.status==='fulfilled'&&roster.value?.games?.length>0){
+    LIVE_DATA.roster.probables=roster.value.probables||{};
+    LIVE_DATA.roster.games=roster.value.games||[];
+    LIVE_DATA.roster.counts=roster.value.counts||{};
+    LIVE_DATA.roster.fetchedAt=roster.value.fetchedAt;
+    ok++;
+    console.log('Roster loaded:',roster.value.counts?.active,'active,',roster.value.counts?.out,'out,',roster.value.counts?.questionable,'questionable');
+  }
   LIVE_DATA.status=ok>0?'ready':'error';
   if(badge){
-    badge.textContent=ok>0?'✅ Live data ('+ok+'/5 feeds)':'⚠️ Using cached data';
+    badge.textContent=ok>0?'✅ Live data ('+ok+'/6 feeds)':'⚠️ Using cached data';
     badge.style.background=ok>0?'#10b981':'#ef4444';
     // Auto-dismiss after 4 seconds
     setTimeout(() => {
@@ -1902,6 +1912,13 @@ function App() {
                 const liveStats = LIVE_DATA.playerStats[p.name?.toLowerCase()];
                 if (liveStats && liveStats.gp < 5) return false;
 
+                // 5. Tonight's roster check — if we have live roster data,
+                //    exclude players marked OUT on tonight's actual roster
+                if (Object.keys(LIVE_DATA.roster.probables).length > 0) {
+                    const rosterEntry = LIVE_DATA.roster.probables[p.name?.toLowerCase()];
+                    if (rosterEntry && rosterEntry.status === 'OUT') return false;
+                }
+
                 return true;
             });
             const lus = generateLineupsWithStrategy(eligiblePlayers, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
@@ -2226,6 +2243,30 @@ function App() {
                             lockedNames.length > 0 && `🔒 ${lockedNames.length} locked  `,
                             excludedNames.length > 0 && `✕ ${excludedNames.length} excluded  `,
                             Object.keys(statMuseMap).length > 0 && `📊 ${Object.keys(statMuseMap).length} SM`),
+                        React.createElement("div", { style: { marginBottom: 12 } },
+                            (() => {
+                                const rosterGames = LIVE_DATA.roster.games || [];
+                                const counts = LIVE_DATA.roster.counts || {};
+                                if (rosterGames.length === 0) return React.createElement("div", { style: { padding: "8px 10px", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 7 } },
+                                    React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2 } }, "🏀 TONIGHT'S ROSTER"),
+                                    React.createElement("div", { style: { fontSize: 9, color: "#3b6280", marginTop: 4 } }, "Loading roster data..."));
+                                return React.createElement("div", { style: { padding: "8px 10px", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 7 } },
+                                    React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
+                                        React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2 } }, "🏀 TONIGHT'S ROSTER"),
+                                        React.createElement("div", { style: { display: "flex", gap: 6 } },
+                                            React.createElement("span", { style: { fontSize: 9, color: "#22c55e" } }, "✅ ", counts.active || 0, " active"),
+                                            React.createElement("span", { style: { fontSize: 9, color: "#f59e0b" } }, "❓ ", counts.questionable || 0, " Q"),
+                                            React.createElement("span", { style: { fontSize: 9, color: "#ef4444" } }, "🚫 ", counts.out || 0, " OUT"))),
+                                    rosterGames.map(g => React.createElement("div", { key: g.gameId, style: { marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #1e3040" } },
+                                        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 9, marginBottom: 3 } },
+                                            React.createElement("span", { style: { color: "#60a5fa", fontWeight: 700 } }, g.matchup),
+                                            React.createElement("span", { style: { color: "#4a6a80" } }, g.status)),
+                                        g.homeOuts.length > 0 && React.createElement("div", { style: { fontSize: 8, color: "#ef4444", marginBottom: 1 } },
+                                            "🚫 OUT: ", g.homeOuts.join(", ")),
+                                        g.awayOuts.length > 0 && React.createElement("div", { style: { fontSize: 8, color: "#ef4444", marginBottom: 1 } },
+                                            "🚫 OUT: ", g.awayOuts.join(", ")),
+                                        (g.homeOuts.length === 0 && g.awayOuts.length === 0) && React.createElement("div", { style: { fontSize: 8, color: "#22c55e" } }, "✅ No reported OUTs"))));
+                            })()),
                         cascadeLog.length > 0 && (React.createElement("div", { style: { marginBottom: 10, padding: "8px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 } },
                             React.createElement("div", { style: { fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 } }, "\uD83D\uDD17 CASCADE BOOSTS APPLIED"),
                             cascadeLog.map((c, i) => (React.createElement("div", { key: i, style: { fontSize: 9, color: "#4a6a80", marginBottom: 2 } },
