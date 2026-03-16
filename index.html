@@ -62,7 +62,7 @@ const PLATFORM_CONFIG = {
         name: "FanDuel", short: "FD", color: "#1493ff",
         SALARY_CAP: 60000, MIN_SALARY_USED: 58000,
         NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 15,
+        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 10,
         POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
         POSITION_ORDER: ["PG", "SG", "SF", "PF", "C"],
         LINEUP_SIZE: 9,
@@ -73,7 +73,7 @@ const PLATFORM_CONFIG = {
         name: "DraftKings", short: "DK", color: "#53d337",
         SALARY_CAP: 50000, MIN_SALARY_USED: 48500,
         NEVER_PLAY_OWN_THRESHOLD: 6.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 38, FLOOR_FPPG_MIN: 14,
+        ANCHOR_FPPG_THRESHOLD: 38, FLOOR_FPPG_MIN: 10,
         POSITIONS: { PG: 1, SG: 1, SF: 1, PF: 1, C: 1, G: 1, F: 1, UTIL: 1 },
         POSITION_ORDER: ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
         LINEUP_SIZE: 8,
@@ -84,7 +84,7 @@ const PLATFORM_CONFIG = {
         name: "DraftKings Showdown", short: "DK", color: "#53d337",
         SALARY_CAP: 50000, MIN_SALARY_USED: 30000,
         NEVER_PLAY_OWN_THRESHOLD: 6.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 55, FLOOR_FPPG_MIN: 14,
+        ANCHOR_FPPG_THRESHOLD: 55, FLOOR_FPPG_MIN: 10,
         POSITIONS: { CPT: 1, FLEX: 5 },
         POSITION_ORDER: ["CPT", "FLEX"],
         LINEUP_SIZE: 6,
@@ -96,7 +96,7 @@ const PLATFORM_CONFIG = {
         name: "FanDuel Showdown", short: "FD", color: "#1493ff",
         SALARY_CAP: 60000, MIN_SALARY_USED: 55000,
         NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 60, FLOOR_FPPG_MIN: 15,
+        ANCHOR_FPPG_THRESHOLD: 60, FLOOR_FPPG_MIN: 10,
         POSITIONS: { MVP: 1, STAR: 1, PRO: 1, UTIL: 3 },
         POSITION_ORDER: ["MVP", "STAR", "PRO", "UTIL"],
         LINEUP_SIZE: 6,
@@ -660,11 +660,14 @@ function recommendContests(lineups, platform) {
     if (avgOwn <= 20) {
         recs.push({ type:"🏆 LARGE GPP", reason:`Low avg ownership (${avgOwn.toFixed(1)}%) = contrarian edge`, stake: isFD?"$1-3":"$1-3", priority:"HIGH" });
         recs.push({ type:"🎯 SINGLE-ENTRY GPP", reason:"Low ownership + stacks = tournament upside", stake: isFD?"$5-10":"$5-10", priority:"HIGH" });
+        recs.push({ type:"🌱 MICRO GPP ($0.25)", reason:"Build bankroll — same contrarian edge, penny stakes", stake:"$0.05-0.25", priority:"MED" });
     } else if (avgOwn <= 28) {
         recs.push({ type:"🎯 DOUBLE-UP / 50/50", reason:`Avg ownership ${avgOwn.toFixed(1)}% = solid cash game lineup`, stake: isFD?"$2-5":"$2-5", priority:"HIGH" });
         recs.push({ type:"🏆 SMALL GPP", reason:"Mid ownership works in smaller fields", stake: isFD?"$3-5":"$3-5", priority:"MED" });
+        recs.push({ type:"🌱 MICRO GPP ($0.25)", reason:"Low-risk reps — great for learning tournament play", stake:"$0.05-0.25", priority:"MED" });
     } else {
         recs.push({ type:"💵 CASH / HEAD-TO-HEAD", reason:`High ownership (${avgOwn.toFixed(1)}%) = safe cash game lineup`, stake: isFD?"$2-5":"$2-5", priority:"HIGH" });
+        recs.push({ type:"🌱 MICRO CASH ($0.10)", reason:"Low risk H2H — high ownership is perfect for micro cash", stake:"$0.05-0.25", priority:"MED" });
         recs.push({ type:"⚠️ AVOID LARGE GPP", reason:"High ownership won't differentiate in tournaments", stake:"—", priority:"LOW" });
     }
 
