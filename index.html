@@ -1879,11 +1879,11 @@ function App() {
             // G-League call-ups / non-rotation players get auto-excluded
             // unless manually locked. Thresholds match chanzer0 approach.
             // ── ROTATION FILTER ───────────────────────────────────────
-            // Primary signal = MINUTES — G-leaguers get no run
+            // Goal: block G-League call-ups who will DNP or play 0 mins
+            // Signals: salary floor + ESPN OUT confirmation + ownership floor
+            // NOTE: FD CSV has no minutes column — we rely on pricing + roster
             const MIN_SALARY_FD = 4000;
             const MIN_SALARY_DK = 3600;
-            const MIN_AVG_MIN = 18;    // under 18 avg minutes = not in rotation
-            const MIN_GP_SEASON = 5;
             const salaryFloor = RULES.name.includes('DraftKings') ? MIN_SALARY_DK : MIN_SALARY_FD;
 
             const eligiblePlayers = players.filter(p => {
@@ -1898,29 +1898,19 @@ function App() {
                 // Always include locked players
                 if (lockedNames.includes(p.name)) return true;
 
-                // 1. Salary floor
+                // 1. Salary floor — G-League call-ups always get minimum pricing
                 if (p.salary < salaryFloor) return false;
 
-                // 2. Minutes floor — primary G-League gate
-                const rawMin = parseFloat(String(p.minutes || p.min || '0').split(':')[0]);
-                if (rawMin > 0 && rawMin < MIN_AVG_MIN) return false;
-
-                // 3. Games played gate
-                if (p.played > 0 && p.played < MIN_GP_SEASON) return false;
-
-                // 4. Live stats check — real season avg minutes
-                const liveStats = LIVE_DATA.playerStats[p.name?.toLowerCase()];
-                if (liveStats) {
-                    const liveMin = parseFloat(String(liveStats.min || '0').split(':')[0]);
-                    if (liveMin > 0 && liveMin < MIN_AVG_MIN) return false;
-                    if (liveStats.gp < 3) return false;
-                }
-
-                // 5. Tonight's roster — hard exclude confirmed OUTs
+                // 2. ESPN roster OUT — hard exclude confirmed scratches
                 if (Object.keys(LIVE_DATA.roster.probables).length > 0) {
                     const rosterEntry = LIVE_DATA.roster.probables[p.name?.toLowerCase()];
                     if (rosterEntry && rosterEntry.status === 'OUT') return false;
                 }
+
+                // 3. Live playerstats GP gate — if a player has < 3 GP
+                //    in our live stats, they haven't proven rotation status
+                const liveStats = LIVE_DATA.playerStats[p.name?.toLowerCase()];
+                if (liveStats && liveStats.gp < 3) return false;
 
                 return true;
             });
