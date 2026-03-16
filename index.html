@@ -24,18 +24,26 @@ const { useState, useCallback, useRef, useEffect } = React;
 const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
-// Tonight's Vegas data - Mar 14 2026 - hardcoded (no API needed)
+// Tonight's Vegas data - Vegas odds — live from /api/odds, falls back to league-avg totals
 function getLiveOrHardcodedVegasData() {
+    // Use live odds from /api/odds if available (≥2 games loaded)
+    if (LIVE_DATA.odds && LIVE_DATA.odds.gamesList && LIVE_DATA.odds.gamesList.length >= 2) {
+        return { teamMap: LIVE_DATA.odds.teamMap, gamesList: LIVE_DATA.odds.gamesList, source: 'live' };
+    }
+    // Fallback: generic neutral totals using today's date
+    const today = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
     const games = [
-        // 6-game FanDuel slate Mar 14 2026
-        { away: "BKN", home: "PHI", total: 220.5, homeSpread: -11.5, awayML: 420, homeML: -560 }, // PHI still favored without Embiid (BKN even worse)
-        { away: "MIL", home: "ATL", total: 228.0, homeSpread: -8.5, awayML: 310, homeML: -400 }, // Giannis OUT → ATL big fav, total jumps
-        { away: "SAS", home: "CHA", total: 222.0, homeSpread: -4.0, awayML: 160, homeML: -192 }, // Close game
-        { away: "BOS", home: "WAS", total: 224.5, homeSpread: 18.0, awayML: -1400, homeML: 900 }, // BOS demolishes WAS
-        { away: "ORL", home: "MIA", total: 227.0, homeSpread: -3.5, awayML: 148, homeML: -180 }, // Close
-        { away: "DEN", home: "LAL", total: 241.0, homeSpread: 5.0, awayML: -205, homeML: 170 }, // 🔥 GAME OF NIGHT — Jokic vs Luka
-        { away: "SAC", home: "LAC", total: 225.0, homeSpread: -14.0, awayML: 540, homeML: -780 }, // LAC B2B but still heavy fav
+        // Fallback totals — live odds unavailable, using league averages
+        // These will be replaced once /api/odds loads successfully
+        { away: "BKN", home: "PHI", total: 222.0, homeSpread: -10.0, awayML: 380, homeML: -500 },
+        { away: "MIL", home: "ATL", total: 228.0, homeSpread: -7.0, awayML: 280, homeML: -360 },
+        { away: "SAS", home: "CHA", total: 222.0, homeSpread: -4.0, awayML: 160, homeML: -192 },
+        { away: "BOS", home: "WAS", total: 225.0, homeSpread: 17.0, awayML: -1200, homeML: 800 },
+        { away: "ORL", home: "MIA", total: 227.0, homeSpread: -3.5, awayML: 148, homeML: -180 },
+        { away: "DEN", home: "LAL", total: 238.0, homeSpread: 4.5, awayML: -195, homeML: 162 },
+        { away: "SAC", home: "LAC", total: 225.0, homeSpread: -13.0, awayML: 500, homeML: -720 },
     ];
+    console.warn('[CourtEdge] Vegas fallback active as of', today, '— odds API not yet loaded');
     const teamMap = {};
     const gamesList = [];
     for (const g of games) {
@@ -229,7 +237,7 @@ async function fetchAllDVP(platform) {
     for (const { pos, data } of results) dvpByPos[pos] = data;
     return dvpByPos;
 }
-// Pace data — Mar 14 2026 (possessions per 48)
+// Pace data — Current slate pace data (possessions per 48)
 // Slate avg ~100.2 — above = pace-up game
 const TEAM_PACE = {
     BKN:97.8, PHI:99.1, MIL:98.4, ATL:101.2, SAS:100.8, CHA:99.6,
@@ -406,6 +414,9 @@ async function fetchLiveData() {
     LIVE_DATA.odds.fetchedAt=odds.value.fetchedAt;
     ok++;
     console.log('Odds loaded:',odds.value.gamesList.length,'games, quota remaining:',odds.value.quotaRemaining);
+    // Force React to re-render the slate panel so it picks up live odds
+    // Trigger React re-render via exposed callback
+    if (typeof window.__onOddsReady === 'function') window.__onOddsReady();
   }
   if(roster.status==='fulfilled'&&roster.value?.games?.length>0){
     LIVE_DATA.roster.probables=roster.value.probables||{};
@@ -1250,7 +1261,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     }
     const buildBatch = (batchCount, type) => {
         const { randomnessPct, numUniques, maxExposurePct } = getOptimizerSettings();
-        const maxExpCount = Math.ceil((maxExposurePct / 100) * batchCount * 3);
+        const maxExpCount = Math.ceil((maxExposurePct / 100) * count); // GLOBAL cap uses total count
         // Per-type randomness scaling
         const typeNoise = type === 'chalk' ? randomnessPct * 0.3
                         : type === 'leverage' ? randomnessPct * 0.7
@@ -1323,6 +1334,30 @@ function getEntryStrategy(bankroll, slateGrade) {
         return null;
     const playPct = slateGrade >= 70 ? 0.15 : slateGrade >= 55 ? 0.08 : 0.03;
     const budget = +(bankroll * playPct).toFixed(2);
+    // Micro-stakes tier: bankroll under $5 gets penny contests
+    if (bankroll <= 5) {
+        const microBudget = +(bankroll * 0.50).toFixed(2);
+        return {
+            budget: microBudget,
+            breakdown: [
+                { type: "Micro GPP ($0.25)", entries: Math.floor(microBudget * 0.60 / 0.25), stake: 0.25, pct: "60%" },
+                { type: "Penny GPP ($0.05)", entries: Math.floor(microBudget * 0.40 / 0.05), stake: 0.05, pct: "40%" },
+            ],
+            note: "Micro bankroll — building up 🌱 stick to penny contests",
+        };
+    }
+    // Small-stakes tier: $5–$20 bankroll
+    if (bankroll <= 20) {
+        return {
+            budget,
+            breakdown: [
+                { type: "Micro GPP ($0.25)", entries: Math.floor(budget * 0.40 / 0.25), stake: 0.25, pct: "40%" },
+                { type: "Low GPP ($1)", entries: Math.floor(budget * 0.40 / 1), stake: 1, pct: "40%" },
+                { type: "Mid GPP ($3)", entries: Math.floor(budget * 0.20 / 3), stake: 3, pct: "20%" },
+            ],
+            note: "Small bankroll — volume in cheap GPPs",
+        };
+    }
     return {
         budget,
         breakdown: [
@@ -1652,6 +1687,9 @@ function App() {
     const [vegasStatus, setVegasStatus] = useState("idle");
     const [vegasMsg, setVegasMsg] = useState("");
     const [step, setStep] = useState("upload");
+    const [liveOddsVersion, setLiveOddsVersion] = useState(0);
+    // Expose callback so fetchLiveData (outside React) can trigger re-render when odds arrive
+    window.__onOddsReady = () => setLiveOddsVersion(v => v + 1);
     const [csvText, setCsvText] = useState("");
     const [players, setPlayers] = useState([]);
     const [ownershipMap, setOwnershipMap] = useState({});
@@ -1988,6 +2026,8 @@ function App() {
                 React.createElement("div", { style: { display: "flex", gap: 6 } }, [["upload", "1.UPLOAD"], ["build", "2.BUILD"], ["results", "3.RESULTS"]].map(([st, label]) => (React.createElement("button", { key: st, style: S.pill(step === st), onClick: () => players.length > 0 && setStep(st) }, label)))))),
         step === "upload" && (React.createElement("div", { style: { maxWidth: 620, margin: "40px auto", padding: "0 24px" } },
             (() => {
+                // liveOddsVersion read here forces re-render when odds arrive
+                void liveOddsVersion;
                 const { gamesList } = getLiveOrHardcodedVegasData();
                 const g = gradeSlate(gamesList);
                 const gradeColor = g.grade === "A" ? "#22c55e" : g.grade === "B" ? "#60a5fa" : g.grade === "C" ? "#f59e0b" : "#ef4444";
@@ -2010,7 +2050,12 @@ function App() {
                             React.createElement("div", { style: { fontSize: 22, fontWeight: 700, color: gradeColor } },
                                 g.score,
                                 "/100"),
-                            React.createElement("div", { style: { fontSize: 9, color: "#4a6a80" } }, "SCORE"))),
+                            React.createElement("div", { style: { fontSize: 9, color: "#4a6a80" } }, "SCORE"),
+                            React.createElement("div", { style: { fontSize: 8, color: LIVE_DATA.odds?.gamesList?.length >= 2 ? "#22c55e" : "#f59e0b", marginTop: 2 } },
+                                LIVE_DATA.odds?.gamesList?.length >= 2
+                                    ? ("📡 Live odds · " + new Date(LIVE_DATA.odds.fetchedAt).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'}))
+                                    : ("⚠️ Fallback odds · " + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}))
+                            ))),
                     React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } }, g.notes.map((n, i) => (React.createElement("div", { key: i, style: { fontSize: 10, color: n.startsWith("✅") ? "#22c55e" : n.startsWith("⚠️") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" } }, n))))));
             })(),
             React.createElement("div", { style: S.card },
