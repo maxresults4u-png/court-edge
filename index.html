@@ -25,7 +25,7 @@ const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 // Fetch tonight's NBA game totals + spreads
 // Tonight's Vegas data - Mar 14 2026 - hardcoded (no API needed)
-function getHardcodedVegasData() {
+function getLiveOrHardcodedVegasData() {
     const games = [
         // 6-game FanDuel slate Mar 14 2026
         { away: "BKN", home: "PHI", total: 220.5, homeSpread: -11.5, awayML: 420, homeML: -560 }, // PHI still favored without Embiid (BKN even worse)
@@ -331,6 +331,7 @@ function getShootingBoost(n) { const d=PLAYER_SHOOTING[n?.toLowerCase()]; if(!d)
 // ── LIVE DATA (populated on app open via /api/ Vercel routes) ─────────────
 const LIVE_DATA = {
   playerStats:{}, dvp:{}, leagueAvgDvp:{}, games:[], injuries:{},
+  odds:{ teamMap:{}, gamesList:[], fetchedAt:null },
   fetchedAt:null, status:'idle',
 };
 function fdPosToNba(fdPos) {
@@ -377,8 +378,9 @@ async function fetchLiveData() {
     fetch('/api/dvp').then(r=>r.json()),
     fetch('/api/scoreboard').then(r=>r.json()),
     fetch('/api/injuries').then(r=>r.json()),
+    fetch('/api/odds').then(r=>r.json()),
   ]);
-  const [s,d,sb,inj]=results;
+  const [s,d,sb,inj,odds]=results;
   let ok=0;
   if(s.status==='fulfilled'&&s.value?.players){
     s.value.players.forEach(p=>{LIVE_DATA.playerStats[p.name]=p;});ok++;
@@ -396,9 +398,16 @@ async function fetchLiveData() {
     LIVE_DATA.injuries=inj.value.injuryMap;ok++;
     console.log('Injuries:',inj.value.count,'players');
   }
+  if(odds.status==='fulfilled'&&odds.value?.gamesList?.length>0){
+    LIVE_DATA.odds.teamMap=odds.value.teamMap;
+    LIVE_DATA.odds.gamesList=odds.value.gamesList;
+    LIVE_DATA.odds.fetchedAt=odds.value.fetchedAt;
+    ok++;
+    console.log('Odds loaded:',odds.value.gamesList.length,'games, quota remaining:',odds.value.quotaRemaining);
+  }
   LIVE_DATA.status=ok>0?'ready':'error';
   if(badge){
-    badge.textContent=ok>0?'✅ Live data ('+ok+'/4 feeds)':'⚠️ Using cached data';
+    badge.textContent=ok>0?'✅ Live data ('+ok+'/5 feeds)':'⚠️ Using cached data';
     badge.style.background=ok>0?'#10b981':'#ef4444';
     // Auto-dismiss after 4 seconds
     setTimeout(() => {
@@ -726,9 +735,16 @@ function compositeScore(p) {
     const paceMult = getTeamPaceMult(p.team);
     const matchMult = getMatchupMult(opponent);
     const finalInj = liveInj < 1.0 ? liveInj : inj;
+    // Vegas implied total mult — higher-total games boost all players
+    // 115 = league avg implied pts per team. Scale: 125 → 1.07, 105 → 0.94
+    const vegasData = LIVE_DATA.odds.teamMap[p.team] || null;
+    const impliedPts = vegasData?.impliedPts || null;
+    const vegasMult = impliedPts
+      ? Math.max(0.93, Math.min(1.08, 0.5 + impliedPts / 230))
+      : 1.0;
     return (p.fppg * finalInj * ownW + value * 0.12 + sampleW * 0.08)
            * statMuseBoost * shootBoost * dvpMult * availMult
-           * paceMult * matchMult;
+           * paceMult * matchMult * vegasMult;
 }
 function estimateOwnership(player, teamMap) {
     const v = teamMap[player.team];
@@ -1695,7 +1711,7 @@ function App() {
         }
         // Always auto-apply Vegas ownership on CSV upload
         try {
-            const { teamMap, gamesList } = getHardcodedVegasData();
+            const { teamMap, gamesList } = getLiveOrHardcodedVegasData();
             const tempPlayers = parsePlayers(text, finalOwn, statMuseMap);
             tempPlayers.forEach(p => {
                 finalOwn[p.name.toLowerCase()] = estimateOwnership(p, teamMap);
@@ -1779,7 +1795,7 @@ function App() {
         setVegasStatus("loading");
         setVegasMsg("Loading tonight\'s slate...");
         try {
-            const { teamMap, gamesList, gamesCount } = getHardcodedVegasData();
+            const { teamMap, gamesList, gamesCount } = getLiveOrHardcodedVegasData();
             setVegasMap(teamMap);
             setVegasGames(gamesList);
             const pool = currentPlayers || players;
@@ -1925,7 +1941,7 @@ function App() {
                 React.createElement("div", { style: { display: "flex", gap: 6 } }, [["upload", "1.UPLOAD"], ["build", "2.BUILD"], ["results", "3.RESULTS"]].map(([st, label]) => (React.createElement("button", { key: st, style: S.pill(step === st), onClick: () => players.length > 0 && setStep(st) }, label)))))),
         step === "upload" && (React.createElement("div", { style: { maxWidth: 620, margin: "40px auto", padding: "0 24px" } },
             (() => {
-                const { gamesList } = getHardcodedVegasData();
+                const { gamesList } = getLiveOrHardcodedVegasData();
                 const g = gradeSlate(gamesList);
                 const gradeColor = g.grade === "A" ? "#22c55e" : g.grade === "B" ? "#60a5fa" : g.grade === "C" ? "#f59e0b" : "#ef4444";
                 return (React.createElement("div", { style: { marginBottom: 16, background: "#091520", border: `1px solid ${gradeColor}44`, borderRadius: 12, padding: 18 } },
@@ -2150,7 +2166,7 @@ function App() {
                                 React.createElement("span", { style: { fontSize: 10, color: "#4a6a80" } }, "$"),
                                 React.createElement("input", { type: "number", min: "0", placeholder: "Your bankroll", value: bankroll, onChange: e => setBankroll(e.target.value), style: { flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 5, color: "#e2e8f0", padding: "5px 8px", fontSize: 11, fontFamily: "inherit" } })),
                             bankroll > 0 && (() => {
-                                const { gamesList } = getHardcodedVegasData();
+                                const { gamesList } = getLiveOrHardcodedVegasData();
                                 const grade = gradeSlate(gamesList);
                                 const strat = getEntryStrategy(+bankroll, grade.score);
                                 return strat ? (React.createElement("div", null,
