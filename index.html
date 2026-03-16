@@ -1056,7 +1056,7 @@ function generateLineups(players, count, lockedNames, excludedNames) {
 
         // 3. Exposure cap — HARD BLOCK: completely remove over-exposed players
         let filteredPool = varied;
-        if (lineups.length >= 5) {
+        if (lineups.length >= 2) {
             const expMap = getExposureMap(lineups);
             // Hard remove any player over cap (unless they are locked)
             filteredPool = varied.filter(p =>
@@ -1065,8 +1065,8 @@ function generateLineups(players, count, lockedNames, excludedNames) {
             );
             // Safety: if hard filter leaves too few players, fall back to full pool
             // (avoids empty lineups when pool is small)
-            if (filteredPool.length < RULES.LINEUP_SIZE * 2) {
-                filteredPool = varied; // pool too small, skip cap this attempt
+            if (filteredPool.length < RULES.LINEUP_SIZE + 3) {
+                filteredPool = varied; // pool critically small, skip cap this attempt
             }
         }
 
@@ -1245,13 +1245,13 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                 }
             }
             // Exposure cap — HARD BLOCK
-            if (allLineups.length >= 5) {
+            if (allLineups.length >= 2) {
                 const expMap = getExposureMap(allLineups);
                 const hardFiltered = pool.filter(p =>
                     lockedNames.includes(p.name) ||
                     (expMap[p.name] || 0) < maxExpCount
                 );
-                if (hardFiltered.length >= RULES.LINEUP_SIZE * 2) {
+                if (hardFiltered.length >= RULES.LINEUP_SIZE + 3) {
                     pool = hardFiltered;
                 }
             }
