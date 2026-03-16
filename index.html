@@ -910,7 +910,7 @@ function exportLineupsCSV(lineups, platform) {
         : platform === "DK_SD"
         ? ["CPT","FLEX","FLEX","FLEX","FLEX","FLEX"]
         : isFD
-        ? ["PG","PG","SF","SF","PF","PF","C","SG","SG"]
+        ? ["PG","PG","SG","SG","SF","SF","PF","PF","C"]
         : ["PG","SG","SF","PF","C","G","F","UTIL"];
 
     const header = slotOrder.join(",");
