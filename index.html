@@ -1060,29 +1060,36 @@ function generateLineups(players, count, lockedNames, excludedNames) {
     const { randomnessPct, numUniques, maxExposurePct } = getOptimizerSettings();
     const lineups = [];
     const usedKeys = new Set();
-    const maxAttempts = Math.max(count * 80, 10000); // minimum 10k simulation passes
+    // Scale attempts: more lineups = more attempts needed
+    const maxAttempts = Math.max(count * 200, 25000);
     const maxExposureCount = Math.ceil((maxExposurePct / 100) * count);
 
     for (let attempt = 0; attempt < maxAttempts && lineups.length < count; attempt++) {
+        // Progressive uniqueness relaxation — if we're struggling to fill,
+        // gradually relax uniqueness requirement (never below 1)
+        const fillPct = lineups.length / count;
+        const effectiveUniques = fillPct < 0.7
+            ? numUniques                          // full strictness for first 70%
+            : fillPct < 0.88
+                ? Math.max(1, numUniques - 1)     // relax by 1 for next 18%
+                : 1;                              // minimum uniqueness for last 12%
+
         // 1. Apply randomness — varies projections each attempt
         const noised = applyRandomness(players, randomnessPct);
 
         // 2. Sort by noised score
         const varied = [...noised].sort((a, b) => b.score - a.score);
 
-        // 3. Exposure cap — HARD BLOCK: completely remove over-exposed players
+        // 3. Exposure cap — HARD BLOCK
         let filteredPool = varied;
         if (lineups.length >= 2) {
             const expMap = getExposureMap(lineups);
-            // Hard remove any player over cap (unless they are locked)
             filteredPool = varied.filter(p =>
                 lockedNames.includes(p.name) ||
                 (expMap[p.name] || 0) < maxExposureCount
             );
-            // Safety: if hard filter leaves too few players, fall back to full pool
-            // (avoids empty lineups when pool is small)
             if (filteredPool.length < RULES.LINEUP_SIZE + 3) {
-                filteredPool = varied; // pool critically small, skip cap this attempt
+                filteredPool = varied;
             }
         }
 
@@ -1093,8 +1100,8 @@ function generateLineups(players, count, lockedNames, excludedNames) {
         const key = lu.map(p => p.name).sort().join("|");
         if (usedKeys.has(key)) continue;
 
-        // 5. Uniqueness check — must differ by numUniques from all existing lineups
-        if (!passesUniquenessCheck(lu, lineups, numUniques)) continue;
+        // 5. Uniqueness check with progressive relaxation
+        if (!passesUniquenessCheck(lu, lineups, effectiveUniques)) continue;
 
         usedKeys.add(key);
         lineups.push(lu);
@@ -1238,7 +1245,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         const typeNoise = type === 'chalk' ? randomnessPct * 0.3
                         : type === 'leverage' ? randomnessPct * 0.7
                         : randomnessPct * 1.2; // tournament gets most variance
-        for (let attempt = 0; attempt < Math.max(batchCount * 80, 10000) && allLineups.filter(l => l._type === type).length < batchCount; attempt++) {
+        for (let attempt = 0; attempt < Math.max(batchCount * 200, 15000) && allLineups.filter(l => l._type === type).length < batchCount; attempt++) {
             // Apply randomness to projections
             let pool = applyRandomness([...players], typeNoise);
             if (type === "chalk") {
@@ -1275,8 +1282,10 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             if (!lu) continue;
             const key = lu.map(p => p.name).sort().join("|");
             if (used.has(key)) continue;
-            // Uniqueness check
-            if (!passesUniquenessCheck(lu, allLineups, numUniques)) continue;
+            // Progressive uniqueness relaxation
+            const fillPct2 = allLineups.filter(l=>l._type===type).length / batchCount;
+            const effUniq = fillPct2 < 0.7 ? numUniques : fillPct2 < 0.88 ? Math.max(1,numUniques-1) : 1;
+            if (!passesUniquenessCheck(lu, allLineups, effUniq)) continue;
             used.add(key);
             // Check if this lineup has a stack (2+ players same game/team)
             const gameCounts = {};
