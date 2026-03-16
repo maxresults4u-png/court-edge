@@ -1878,10 +1878,12 @@ function App() {
             // ── ROTATION FILTER constants ─────────────────────────────
             // G-League call-ups / non-rotation players get auto-excluded
             // unless manually locked. Thresholds match chanzer0 approach.
-            const MIN_SALARY_FD = 4200;   // under this = likely non-rotation
-            const MIN_SALARY_DK = 3800;
-            const MIN_FPPG_ROTATION = 18; // under 18 FPPG = likely non-rotation  
-            const MIN_GP_SEASON = 8;      // under 8 GP = too small a sample
+            // ── ROTATION FILTER ───────────────────────────────────────
+            // Primary signal = MINUTES — G-leaguers get no run
+            const MIN_SALARY_FD = 4000;
+            const MIN_SALARY_DK = 3600;
+            const MIN_AVG_MIN = 18;    // under 18 avg minutes = not in rotation
+            const MIN_GP_SEASON = 5;
             const salaryFloor = RULES.name.includes('DraftKings') ? MIN_SALARY_DK : MIN_SALARY_FD;
 
             const eligiblePlayers = players.filter(p => {
@@ -1891,29 +1893,30 @@ function App() {
                 if (currentOwn < RULES.NEVER_PLAY_OWN_THRESHOLD) return false;
                 if (excludedNames.includes(p.name)) return false;
                 if (suppressedTeams.has(p.team)) return false;
-                // Game filter — only include players from selected games
                 if (gameFilter && gameFilter.size > 0 && p.game && !gameFilter.has(p.game)) return false;
 
-                // ── ROTATION FILTER ────────────────────────────────────────
-                // Skip if manually locked (always include locked players)
+                // Always include locked players
                 if (lockedNames.includes(p.name)) return true;
 
-                // 1. Salary floor — G-League call-ups get min salary
+                // 1. Salary floor
                 if (p.salary < salaryFloor) return false;
 
-                // 2. FPPG floor — non-rotation guys average < 18 FP
-                if (p.fppg < MIN_FPPG_ROTATION) return false;
+                // 2. Minutes floor — primary G-League gate
+                const rawMin = parseFloat(String(p.minutes || p.min || '0').split(':')[0]);
+                if (rawMin > 0 && rawMin < MIN_AVG_MIN) return false;
 
-                // 3. Games played gate — too small a sample = unreliable
+                // 3. Games played gate
                 if (p.played > 0 && p.played < MIN_GP_SEASON) return false;
 
-                // 4. Live availability check — if we have player stats,
-                //    require at least 5 GP in last 10 (active rotation)
+                // 4. Live stats check — real season avg minutes
                 const liveStats = LIVE_DATA.playerStats[p.name?.toLowerCase()];
-                if (liveStats && liveStats.gp < 5) return false;
+                if (liveStats) {
+                    const liveMin = parseFloat(String(liveStats.min || '0').split(':')[0]);
+                    if (liveMin > 0 && liveMin < MIN_AVG_MIN) return false;
+                    if (liveStats.gp < 3) return false;
+                }
 
-                // 5. Tonight's roster check — if we have live roster data,
-                //    exclude players marked OUT on tonight's actual roster
+                // 5. Tonight's roster — hard exclude confirmed OUTs
                 if (Object.keys(LIVE_DATA.roster.probables).length > 0) {
                     const rosterEntry = LIVE_DATA.roster.probables[p.name?.toLowerCase()];
                     if (rosterEntry && rosterEntry.status === 'OUT') return false;
