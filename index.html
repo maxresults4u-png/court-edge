@@ -97,9 +97,9 @@ const PLATFORM_CONFIG = {
         SALARY_CAP: 60000, MIN_SALARY_USED: 55000,
         NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
         ANCHOR_FPPG_THRESHOLD: 60, FLOOR_FPPG_MIN: 15,
-        POSITIONS: { MVP: 1, STAR: 1, PRO: 1, UTIL: 3 },
+        POSITIONS: { MVP: 1, STAR: 1, PRO: 1, UTIL: 2 },
         POSITION_ORDER: ["MVP", "STAR", "PRO", "UTIL"],
-        LINEUP_SIZE: 6,
+        LINEUP_SIZE: 5,
         OWN_WEIGHTS: { chalk: 1.15, mid: 1.05, low: 0.88, punt: 0.0 },
         CHALK_THRESHOLD: 30, ownershipNote: "Showdown · MVP 2×, STAR 1.5×",
         isShowdown: true, cptMult: 2.0, starMult: 1.5,
@@ -906,7 +906,7 @@ function exportLineupsCSV(lineups, platform) {
     // DK Showdown: CPT,FLEX,FLEX,FLEX,FLEX,FLEX (6 slots) — exports as player names
     // FD Showdown: MVP,STAR,PRO,UTIL,UTIL (5 slots)
     const slotOrder = platform === "FD_SD"
-        ? ["MVP","STAR","PRO","UTIL","UTIL","UTIL"]
+        ? ["MVP","STAR","PRO","UTIL","UTIL"]
         : platform === "DK_SD"
         ? ["CPT","FLEX","FLEX","FLEX","FLEX","FLEX"]
         : isFD
