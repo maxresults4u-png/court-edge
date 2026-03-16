@@ -400,6 +400,12 @@ async function fetchLiveData() {
   if(badge){
     badge.textContent=ok>0?'✅ Live data ('+ok+'/4 feeds)':'⚠️ Using cached data';
     badge.style.background=ok>0?'#10b981':'#ef4444';
+    // Auto-dismiss after 4 seconds
+    setTimeout(() => {
+      badge.style.transition = 'opacity 0.8s ease';
+      badge.style.opacity = '0';
+      setTimeout(() => { badge.style.display = 'none'; }, 800);
+    }, 4000);
   }
 }
 
@@ -1038,7 +1044,7 @@ function generateLineups(players, count, lockedNames, excludedNames) {
     const { randomnessPct, numUniques, maxExposurePct } = getOptimizerSettings();
     const lineups = [];
     const usedKeys = new Set();
-    const maxAttempts = count * 80; // more attempts since uniqueness filter is stricter
+    const maxAttempts = Math.max(count * 80, 10000); // minimum 10k simulation passes
     const maxExposureCount = Math.ceil((maxExposurePct / 100) * count);
 
     for (let attempt = 0; attempt < maxAttempts && lineups.length < count; attempt++) {
@@ -1210,7 +1216,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         const typeNoise = type === 'chalk' ? randomnessPct * 0.3
                         : type === 'leverage' ? randomnessPct * 0.7
                         : randomnessPct * 1.2; // tournament gets most variance
-        for (let attempt = 0; attempt < batchCount * 80 && allLineups.filter(l => l._type === type).length < batchCount; attempt++) {
+        for (let attempt = 0; attempt < Math.max(batchCount * 80, 10000) && allLineups.filter(l => l._type === type).length < batchCount; attempt++) {
             // Apply randomness to projections
             let pool = applyRandomness([...players], typeNoise);
             if (type === "chalk") {
@@ -2103,7 +2109,7 @@ function App() {
                                     " players"))) : null;
                         })(),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 4, letterSpacing: 1 } }, "LINEUP COUNT"),
-                        React.createElement("input", { type: "range", min: "1", max: "20", value: lineupCount, onChange: e => setLineupCount(+e.target.value), style: { width: "100%", marginBottom: 4 } }),
+                        React.createElement("input", { type: "range", min: "1", max: "150", value: lineupCount, onChange: e => setLineupCount(+e.target.value), style: { width: "100%", marginBottom: 4 } }),
                         React.createElement("div", { style: { textAlign: "center", color: "#60a5fa", fontWeight: 700, fontSize: 18, marginBottom: 12 } }, lineupCount),
                         React.createElement("div", { style: { background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: "10px 12px", marginBottom: 12 } },
                             React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 } }, "⚙️ OPTIMIZER SETTINGS"),
