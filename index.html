@@ -1865,6 +1865,15 @@ function App() {
             const STAR_TEAM_MAP = { "Giannis Antetokounmpo": "MIL", "Kevin Porter Jr.": "MIL" };
             excludedNames.forEach(n => { if (STAR_TEAM_MAP[n])
                 suppressedTeams.add(STAR_TEAM_MAP[n]); });
+            // ── ROTATION FILTER constants ─────────────────────────────
+            // G-League call-ups / non-rotation players get auto-excluded
+            // unless manually locked. Thresholds match chanzer0 approach.
+            const MIN_SALARY_FD = 4200;   // under this = likely non-rotation
+            const MIN_SALARY_DK = 3800;
+            const MIN_FPPG_ROTATION = 18; // under 18 FPPG = likely non-rotation  
+            const MIN_GP_SEASON = 8;      // under 8 GP = too small a sample
+            const salaryFloor = RULES.name.includes('DraftKings') ? MIN_SALARY_DK : MIN_SALARY_FD;
+
             const eligiblePlayers = players.filter(p => {
                 var _a, _b;
                 const currentOwn = (_b = (_a = ownershipMap[p.name.toLowerCase()]) !== null && _a !== void 0 ? _a : p.ownership) !== null && _b !== void 0 ? _b : 15;
@@ -1874,6 +1883,25 @@ function App() {
                 if (suppressedTeams.has(p.team)) return false;
                 // Game filter — only include players from selected games
                 if (gameFilter && gameFilter.size > 0 && p.game && !gameFilter.has(p.game)) return false;
+
+                // ── ROTATION FILTER ────────────────────────────────────────
+                // Skip if manually locked (always include locked players)
+                if (lockedNames.includes(p.name)) return true;
+
+                // 1. Salary floor — G-League call-ups get min salary
+                if (p.salary < salaryFloor) return false;
+
+                // 2. FPPG floor — non-rotation guys average < 18 FP
+                if (p.fppg < MIN_FPPG_ROTATION) return false;
+
+                // 3. Games played gate — too small a sample = unreliable
+                if (p.played > 0 && p.played < MIN_GP_SEASON) return false;
+
+                // 4. Live availability check — if we have player stats,
+                //    require at least 5 GP in last 10 (active rotation)
+                const liveStats = LIVE_DATA.playerStats[p.name?.toLowerCase()];
+                if (liveStats && liveStats.gp < 5) return false;
+
                 return true;
             });
             const lus = generateLineupsWithStrategy(eligiblePlayers, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
