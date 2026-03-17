@@ -2027,11 +2027,24 @@ function App() {
         setStatMuseMap(newSM);
         rebuildPlayers(csvText, ownershipMap, newSM);
     };
-    const handleFetchVegas = (currentPlayers) => {
+    const handleFetchVegas = async (currentPlayers) => {
         setVegasStatus("loading");
-        setVegasMsg("Loading tonight\'s slate...");
+        setVegasMsg("Fetching live odds...");
+        // Always re-fetch from API first so data is never stale
         try {
-            const { teamMap, gamesList, gamesCount } = getLiveOrHardcodedVegasData();
+            const oddsResp = await fetch('/api/odds');
+            const oddsData = await oddsResp.json();
+            if (oddsData?.gamesList?.length >= 2) {
+                LIVE_DATA.odds.teamMap = oddsData.teamMap;
+                LIVE_DATA.odds.gamesList = oddsData.gamesList;
+                LIVE_DATA.odds.fetchedAt = oddsData.fetchedAt;
+            }
+        } catch(e) { /* use cached */ }
+        try {
+            const { teamMap, gamesList, source } = getLiveOrHardcodedVegasData();
+            const gamesCount = gamesList?.length || 0;
+            const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
+            const srcLabel = source === 'live' ? '📡 Live odds' : '⚠️ Fallback odds';
             setVegasMap(teamMap);
             setVegasGames(gamesList);
             const pool = currentPlayers || players;
@@ -2043,7 +2056,7 @@ function App() {
             setOwnershipMap(newOwnMap);
             rebuildPlayers(csvText, newOwnMap, statMuseMap);
             setVegasStatus("done");
-            setVegasMsg(`✅ ${gamesCount} games loaded · Mar 14 slate · ownership estimated`);
+            setVegasMsg(`✅ ${gamesCount} games loaded · ${srcLabel} · ${today} · ownership estimated`);
         }
         catch (e) {
             setVegasStatus("error");
