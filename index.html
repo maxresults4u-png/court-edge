@@ -817,8 +817,8 @@ function compositeScore(p) {
     // This directly addresses missing Buzelis/Missi/Marshall type plays
     const baseOwnW = RULES.OWN_WEIGHTS[ownershipBucket(p.ownership)];
     const vegasDataOwn = LIVE_DATA.odds.teamMap[p.team] || null;
-    const gameTotal = vegasDataOwn?.total || 225;
-    const isHighTotalGame = gameTotal >= 228;
+    const gameTotalOwn = vegasDataOwn?.total || 225;
+    const isHighTotalGame = gameTotalOwn >= 228;
     const isLowOwn = p.ownership > 0 && p.ownership < 20;
     // Low-own player in a high-total game: flip the penalty to a boost
     // This is the "leverage" signal — differentiated lineup upside
@@ -1945,7 +1945,7 @@ function App() {
                 LIVE_DATA.odds.gamesList = oddsData.gamesList;
                 LIVE_DATA.odds.fetchedAt = oddsData.fetchedAt;
                 // Re-apply fresh ownership estimates
-                const freshText = csvText || text;
+                const freshText = text;
                 const { teamMap: freshMap, gamesList: freshGames } = getLiveOrHardcodedVegasData();
                 const freshPlayers = parsePlayers(freshText, {}, statMuseMap);
                 const freshOwn = {};
@@ -2250,7 +2250,7 @@ function App() {
                                 style:{fontSize:8,background:"transparent",border:"1px solid #1e3040",borderRadius:3,color:"#4a6a80",padding:"2px 6px",cursor:"pointer",marginTop:4,display:"block"}
                             }, "↻ refresh")
                             ))),
-                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } }, g.notes.map((n, i) => (React.createElement("div", { key: i, style: { fontSize: 10, color: n.startsWith("✅") ? "#22c55e" : n.startsWith("⚠️") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" } }, n))))));
+                    React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } }, g.notes.map((n, i) => (React.createElement("div", { key: i, style: { fontSize: 10, color: n.startsWith("✅") ? "#22c55e" : n.startsWith("⚠️") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" } }, n)))));
             })(),
             React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { textAlign: "center", marginBottom: 28 } },
