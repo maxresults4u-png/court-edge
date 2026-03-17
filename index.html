@@ -19,7 +19,7 @@
 <body>
 <div id="root"></div>
 <script>
-// ── ML MODEL (trained 2026-03-17, 113 slates, 2904 entries, MAE 6.81 FP) ──
+// ── ML MODEL (trained 2026-03-17, 24 slates, MAE 7.02 FP) ──
 const ML_PLAYER_EDGES = {
     "cameron payne": { delta: 15.2, slates: 5 },
     "trey lyles": { delta: 14.1, slates: 2 },
@@ -725,33 +725,6 @@ const PLAYER_PRA_BASE = {
     "anthony davis":       { pts:24.8, reb:11.8, ast:3.4,  gp:52, min:35.2 },
     "austin reaves":       { pts:15.6, reb:4.4,  ast:5.6,  gp:54, min:31.4 },
     "max christie":        { pts:11.2, reb:3.4,  ast:2.2,  gp:50, min:24.6 },
-    // ── Session 5 additions ──
-    "immanuel quickley":   { pts:19.4, reb:4.2,  ast:6.8,  gp:52, min:32.4 },
-    "scottie barnes":      { pts:19.8, reb:8.4,  ast:5.6,  gp:55, min:34.2 },
-    "rj barrett":          { pts:21.2, reb:6.2,  ast:4.8,  gp:54, min:33.6 },
-    "og anunoby":          { pts:14.8, reb:5.2,  ast:1.8,  gp:52, min:30.4 },
-    "pascal siakam":       { pts:21.4, reb:6.8,  ast:4.6,  gp:54, min:33.8 },
-    "josh hart":           { pts:11.4, reb:8.8,  ast:5.2,  gp:56, min:32.4 },
-    "jalen brunson":       { pts:26.0, reb:3.6,  ast:7.8,  gp:55, min:34.6 },
-    "mikal bridges":       { pts:18.6, reb:4.4,  ast:3.8,  gp:57, min:34.2 },
-    "brandon ingram":      { pts:22.4, reb:5.8,  ast:4.6,  gp:50, min:33.6 },
-    "jordan clarkson":     { pts:17.2, reb:3.4,  ast:3.8,  gp:52, min:28.6 },
-    "collin sexton":       { pts:16.8, reb:3.2,  ast:4.8,  gp:52, min:28.6 },
-    "lauri markkanen":     { pts:22.4, reb:8.4,  ast:2.2,  gp:50, min:33.4 },
-    "nikola vucevic":      { pts:18.6, reb:10.4, ast:3.4,  gp:54, min:30.8 },
-    "nic claxton":         { pts:12.4, reb:9.8,  ast:3.2,  gp:54, min:27.6 },
-    "cameron payne":       { pts:12.4, reb:2.8,  ast:5.6,  gp:42, min:26.8 },
-    "bub carrington":      { pts:10.8, reb:3.4,  ast:3.2,  gp:40, min:24.2 },
-    "keon ellis":          { pts:11.6, reb:3.8,  ast:2.4,  gp:48, min:26.4 },
-    "gradey dick":         { pts:12.8, reb:3.2,  ast:1.8,  gp:48, min:26.4 },
-    "cam whitmore":        { pts:15.4, reb:5.2,  ast:2.6,  gp:50, min:28.8 },
-    "olivier-maxence prosper": { pts:11.2, reb:4.8, ast:1.8, gp:44, min:24.6 },
-    "quentin grimes":      { pts:13.4, reb:3.8,  ast:2.6,  gp:50, min:27.4 },
-    "malaki branham":      { pts:12.6, reb:3.4,  ast:2.8,  gp:46, min:26.2 },
-    "keldon johnson":      { pts:14.8, reb:4.6,  ast:2.4,  gp:52, min:28.4 },
-    "devin vassell":       { pts:14.2, reb:3.6,  ast:3.4,  gp:48, min:28.0 },
-    "jaden ivey":          { pts:16.8, reb:4.2,  ast:5.6,  gp:50, min:30.4 },
-    "ausar thompson":      { pts:12.4, reb:5.6,  ast:2.2,  gp:44, min:27.2 },
 };
 // Defensive rating vs stat category per opponent team
 // Scale: multiplier applied to opposing player's base stat
@@ -873,34 +846,7 @@ function detectLateSwaps(currentInjuries, snapshotOuts, lineups, players) {
         const hits = lu.filter(p => newOuts.includes(p.name));
         if (hits.length > 0) affectedLineups.push({ idx: i, players: hits });
     }
-
-    // ── SWAP SUGGESTIONS — best available replacement per scratched player ──
-    const swapSuggestions = {};
-    const usedInLineups = new Set(lineups.flatMap(lu => lu.map(p => p.name)));
-    for (const outName of newOuts) {
-        // Find the original player across all lineups to get their slot/position
-        let origPos = null;
-        let origSal = 60000;
-        for (const lu of lineups) {
-            const hit = lu.find(p => p.name === outName);
-            if (hit) { origPos = hit.slot; origSal = hit.salary; break; }
-        }
-        if (!origPos) continue;
-        // Candidates: in player pool, not out, not already widely used, can fill that slot
-        const candidates = players
-            .filter(p =>
-                !newOuts.includes(p.name) &&
-                !snapshotOuts.includes(p.name) &&
-                p.injury !== "OUT" && p.injury !== "O" &&
-                (p.positions.includes(origPos) || p.positions.includes("UTIL") || p.positions.includes("G") || p.positions.includes("F")) &&
-                p.salary <= origSal + 800
-            )
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 3);
-        swapSuggestions[outName] = { slot: origPos, suggestions: candidates };
-    }
-
-    return { newOuts, affectedLineups, swapSuggestions };
+    return { newOuts, affectedLineups };
 }
 
 // ── CONTEST PICKER ────────────────────────────────────────────────────────
@@ -1189,7 +1135,7 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         if (ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)
             continue;
         const value = fppg / (salary / 1000);
-        const opponent = (() => { const g = game.replace(/\s/g,""); const parts = g.split("@"); return parts.length===2 ? (team===parts[1] ? parts[0] : parts[1]) : ""; })(); 
+        const opponent = (() => { const g = game.replace(/\s/g,""); const parts = g.split("@"); return parts.length===2 ? (team===parts[1] ? parts[0] : parts[1]) : ""; })();
         const matchupGrade = getMatchupGrade(positions[0], opponent);
         const gameParts = game.replace(/\s/g,"").split("@");
         const gamePace = gameParts.length===2 ? getGamePace(gameParts[0], gameParts[1]) : SLATE_AVG_PACE;
@@ -2090,7 +2036,6 @@ function App() {
     const [lateSwaps, setLateSwaps] = useState(null);
     const [resultsData, setResultsData] = useState(null);
     const [showResults, setShowResults] = useState(false);
-    const [manualScores, setManualScores] = useState({}); // lineupIdx → { actualFP, winnings }
     const resultsRef = useRef();
     const [gameFilter, setGameFilter] = useState(null); // null = all games; Set of gameStr = filtered
     const [availableGames, setAvailableGames] = useState([]); // list of gameStr from CSV
@@ -2424,14 +2369,14 @@ function App() {
         hdr: { background: "linear-gradient(180deg,#0a1f35 0%,#060e18 100%)", borderBottom: "1px solid #1e3040", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" },
         pill: (a) => ({ padding: "4px 12px", borderRadius: 20, border: `1px solid ${a ? "#3b82f6" : "#1e3040"}`, background: a ? "#1a3550" : "transparent", color: a ? "#60a5fa" : "#4a6a80", fontSize: 11, cursor: "pointer", letterSpacing: 1 }),
         card: { background: "#091520", border: "1px solid #1e3040", borderRadius: 12, padding: 20 },
-        btn: (v = "primary") => ({ padding: "9px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 12, letterSpacing: 1, background: v === "primary" ? "#2563eb" : v === "success" ? "#16a34a" : v === "warning" ? "#b45309" : "#1e3040", color: v === "ghost" ? "#94a3b8" : "#fff", transition: "all 0.15s" }),
+        btn: (v = "primary") => ({ padding: "9px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 12, letterSpacing: 1, background: v === "primary" ? "#2563eb" : v === "success" ? "#16a34a" : "#1e3040", color: v === "ghost" ? "#94a3b8" : "#fff", transition: "all 0.15s" }),
         sec: { padding: "20px 24px" },
     };
     return (React.createElement("div", { style: S.app },
         React.createElement("div", { style: S.hdr },
             React.createElement("div", null,
                 React.createElement("div", { style: { fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" } }, "COURT EDGE"),
-                React.createElement("div", { style: { fontSize: 9, color: PLATFORM_CONFIG[platform].color, letterSpacing: 3 } }, `NBA DFS OPTIMIZER v5 · ${PLATFORM_CONFIG[platform].name.toUpperCase()}${PLATFORM_CONFIG[platform].isShowdown ? " 🏀 SHOWDOWN" : ""} · ${PLATFORM_CONFIG[platform].ownershipNote}`)),
+                React.createElement("div", { style: { fontSize: 9, color: PLATFORM_CONFIG[platform].color, letterSpacing: 3 } }, `NBA DFS OPTIMIZER v4 · ${PLATFORM_CONFIG[platform].name.toUpperCase()}${PLATFORM_CONFIG[platform].isShowdown ? " 🏀 SHOWDOWN" : ""} · ${PLATFORM_CONFIG[platform].ownershipNote}`)),
             React.createElement("div", { style: { display: "flex", gap: 10, alignItems: "center" } },
                 React.createElement("div", { style: { display: "flex", gap: 0, borderRadius: 8, overflow: "hidden", border: "1px solid #1e3040" } },
                     [["FD","FD Classic"],["FD_SD","FD Show"],["DK","DK Classic"],["DK_SD","DK Show"]].map(([key,label]) => React.createElement("button", {
@@ -2509,8 +2454,8 @@ function App() {
                     React.createElement("div", { style: { fontSize: 11, color: "#4a6a80" } }, platform.startsWith("FD") ? "FanDuel-NBA-*.csv" : "DK_NBA_*.csv")),
                 React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } }),
                 React.createElement("div", { style: { marginTop: 18, padding: "12px 14px", background: "#0a1a2a", borderRadius: 8, border: "1px solid #1e3040" } },
-                    React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 } }, "WHAT'S NEW IN V5"),
-                    ["📈 Results Tracker — enter scores, measure ROI & projection error", "🔄 Late Swap Engine — post-lockout swap suggestions by slot", "📋 One-click lineup clipboard copy", "🏀 PRA projections expanded — 25+ new player baselines"].map(r => (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r))))))),
+                    React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 } }, "WHAT'S NEW IN V4"),
+                    ["🎯 Slate Grader — A/B/C/D/F before you enter", "🔗 Game stacking engine — correlate high-total games", "📊 MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "💰 Bankroll advisor — how many entries at what stakes"].map(r => (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r))))))),
         step === "build" && (React.createElement("div", { style: S.sec },
             React.createElement("div", { style: { marginBottom: 14, background: "#091520", border: "1px solid #1e3040", borderRadius: 10, overflow: "hidden" } },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: vegasStatus === "done" ? "1px solid #1e3040" : "none" } },
@@ -2589,7 +2534,7 @@ function App() {
                                         rebuildPlayers(csvText, newMap, statMuseMap);
                                         return next;
                                     });
-                                }, excludedNames: excludedNames, injuryData: injuryData, injuryStatus: injuryStatus, dvpStatus: dvpStatus }),
+                                }, excludedNames: excludedNames, injuryData: injuryData, injuryStatus: injuryStatus }),
                     React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } })),
                 React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
                     availableGames.length > 0 && React.createElement("div", { style: { ...S.card, marginBottom: 0 } },
@@ -2719,16 +2664,6 @@ function App() {
                             lockedNames.length > 0 && `🔒 ${lockedNames.length} locked  `,
                             excludedNames.length > 0 && `✕ ${excludedNames.length} excluded  `,
                             Object.keys(statMuseMap).length > 0 && `📊 ${Object.keys(statMuseMap).length} SM`),
-                        (() => {
-                            const { gamesList } = getLiveOrHardcodedVegasData();
-                            const g = gradeSlate(gamesList);
-                            const gc = g.grade === "A" ? "#22c55e" : g.grade === "B" ? "#60a5fa" : g.grade === "C" ? "#f59e0b" : "#ef4444";
-                            return React.createElement("div", { style: { marginBottom: 12, padding: "8px 12px", background: gc+"11", border: `1px solid ${gc}44`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between" } },
-                                React.createElement("div", null,
-                                    React.createElement("div", { style: { fontSize: 9, color: "#3b6280", letterSpacing: 2, marginBottom: 2 } }, "SLATE GRADE"),
-                                    React.createElement("div", { style: { fontSize: 11, color: "#94a3b8" } }, g.recommendation)),
-                                React.createElement("div", { style: { fontSize: 28, fontWeight: 900, color: gc, letterSpacing: -1 } }, g.grade));
-                        })(),
                         React.createElement("div", { style: { marginBottom: 12 } },
                             (() => {
                                 const rosterGames = LIVE_DATA.roster.games || [];
@@ -2821,31 +2756,10 @@ function App() {
             lateSwaps && (lateSwaps.newOuts.length > 0
                 ? React.createElement("div", { style: { marginBottom: 14, background: "#1a0a0a", border: "1px solid #ef444466", borderRadius: 10, padding: "12px 16px" } },
                     React.createElement("div", { style: { fontSize: 10, color: "#ef4444", letterSpacing: 2, fontWeight: 700, marginBottom: 8 } }, `🚨 LATE SCRATCHES DETECTED — ${lateSwaps.newOuts.length} NEW OUT`),
-                    React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 } }, lateSwaps.newOuts.map(n => React.createElement("span", { key: n, style: { fontSize: 10, background: "#ef444422", color: "#ef4444", border: "1px solid #ef444444", borderRadius: 5, padding: "2px 8px" } }, `✕ ${n}`))),
-                    // Swap suggestions per scratched player
-                    Object.entries(lateSwaps.swapSuggestions || {}).map(([outName, sw]) =>
-                        sw.suggestions.length > 0 && React.createElement("div", { key: outName, style: { marginBottom: 10, padding: "8px 10px", background: "#0a1520", border: "1px solid #f59e0b44", borderRadius: 8 } },
-                            React.createElement("div", { style: { fontSize: 9, color: "#f59e0b", letterSpacing: 2, marginBottom: 6 } }, "SWAP " + outName.toUpperCase() + " [" + sw.slot + "]"),
-                            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
-                                sw.suggestions.map((s, i) =>
-                                    React.createElement("div", { key: s.name, style: { flex: "1 1 140px", background: i === 0 ? "#0a1a2a" : "#060e18", border: "1px solid " + (i === 0 ? "#3b82f6" : "#1e3040"), borderRadius: 7, padding: "6px 10px" } },
-                                        i === 0 && React.createElement("div", { style: { fontSize: 8, color: "#22c55e", letterSpacing: 1, marginBottom: 3 } }, "BEST FIT"),
-                                        React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#e2e8f0" } }, s.name),
-                                        React.createElement("div", { style: { display: "flex", gap: 8, fontSize: 9, marginTop: 2 } },
-                                            React.createElement("span", { style: { color: "#64b587" } }, "$" + s.salary.toLocaleString()),
-                                            React.createElement("span", { style: { color: s.statMuseFD ? "#22c55e" : "#94a3b8" } }, s.fppg.toFixed(1) + " FP"),
-                                            React.createElement("span", { style: { color: "#60a5fa" } }, s.ownership.toFixed(0) + "% own")
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    ),
-                    React.createElement("div", { style: { fontSize: 10, color: lateSwaps.affectedLineups.length > 0 ? "#f59e0b" : "#22c55e", marginTop: 8 } },
-                        lateSwaps.affectedLineups.length > 0
-                            ? "Affected: " + lateSwaps.affectedLineups.map(l => "#" + (l.idx + 1)).join(", ") + " — regenerate before lock"
-                            : "No lineups directly affected — scratched players not in your builds"
-                    ))
+                    React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 } }, lateSwaps.newOuts.map(n => React.createElement("span", { key: n, style: { fontSize: 10, background: "#ef444422", color: "#ef4444", border: "1px solid #ef444444", borderRadius: 5, padding: "2px 8px" } }, `✕ ${n}`))),
+                    lateSwaps.affectedLineups.length > 0
+                        ? React.createElement("div", { style: { fontSize: 10, color: "#f59e0b" } }, `⚠️ ${lateSwaps.affectedLineups.length} lineup(s) affected: ${lateSwaps.affectedLineups.map(l=>`#${l.idx+1}`).join(", ")} — regenerate before lock`)
+                        : React.createElement("div", { style: { fontSize: 10, color: "#22c55e" } }, "✅ No lineups directly affected — scratched players not in your builds"))
                 : React.createElement("div", { style: { marginBottom: 14, background: "#0a1a0a", border: "1px solid #22c55e44", borderRadius: 10, padding: "10px 16px", fontSize: 10, color: "#22c55e" } },
                     "✅ No new late scratches since you generated — lineups are clean")),
             // ── RESULTS TRACKER PANEL ──
@@ -2865,45 +2779,7 @@ function App() {
                     React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: parseFloat(t.roi)>=0?"#22c55e":"#ef4444" } }, t.roi+"%"),
                     React.createElement("div", { style: { fontSize: 10, color: "#60a5fa" } }, t.tier),
                     React.createElement("div", { style: { fontSize: 9, color: "#4a6a80" } }, t.entries+" entries"))))),
-            // ── MANUAL SCORE ENTRY ──
-            lineups.length > 0 && (() => {
-                const entries = Object.values(manualScores).filter(s => s.actualFP > 0);
-                const totalProj = lineups.reduce((s, lu) => s + lineupStats(lu).proj, 0) / lineups.length;
-                const totalActual = entries.length ? entries.reduce((s,e) => s+e.actualFP,0)/entries.length : 0;
-                const projErr = entries.length ? (totalActual - totalProj).toFixed(1) : null;
-                return React.createElement("div", { style: { marginBottom: 14, background: "#091520", border: "1px solid #1e3040", borderRadius: 10, padding: "12px 16px" } },
-                    React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
-                        React.createElement("div", { style: { fontSize: 10, color: "#60a5fa", letterSpacing: 2, fontWeight: 700 } }, "📝 MANUAL SCORE ENTRY"),
-                        entries.length > 0 && React.createElement("div", { style: { display: "flex", gap: 14, fontSize: 10 } },
-                            React.createElement("span", { style: { color: "#4a6a80" } }, `${entries.length}/${lineups.length} entered`),
-                            projErr !== null && React.createElement("span", { style: { color: parseFloat(projErr) >= 0 ? "#22c55e" : "#ef4444", fontWeight: 700 } },
-                                "Proj error: ", parseFloat(projErr) >= 0 ? "+" : "", projErr, " FP avg"))),
-                    React.createElement("div", { style: { maxHeight: 220, overflowY: "auto" } },
-                        React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
-                            React.createElement("thead", null,
-                                React.createElement("tr", null, ["#", "LINEUP PREVIEW", "PROJ", "ACTUAL FP", "DIFF", "WINNINGS ($)"].map(h =>
-                                    React.createElement("th", { key: h, style: { padding: "5px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h)))),
-                            React.createElement("tbody", null, lineups.map((lu, i) => {
-                                const st = lineupStats(lu);
-                                const ms = manualScores[i] || {};
-                                const diff = ms.actualFP ? (ms.actualFP - st.proj) : null;
-                                return React.createElement("tr", { key: i, style: { borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" } },
-                                    React.createElement("td", { style: { padding: "5px 8px", color: "#3b6280" } }, i+1),
-                                    React.createElement("td", { style: { padding: "5px 8px", color: "#94a3b8", fontSize: 10, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
-                                        lu.slice(0,3).map(p => p.name.split(" ").pop()).join(", ") + "…"),
-                                    React.createElement("td", { style: { padding: "5px 8px", color: "#60a5fa" } }, st.proj.toFixed(1)),
-                                    React.createElement("td", { style: { padding: "5px 8px" } },
-                                        React.createElement("input", { type: "number", placeholder: "—", value: ms.actualFP || "", min: 0, max: 999, step: 0.1,
-                                            onChange: e => setManualScores(prev => ({ ...prev, [i]: { ...prev[i], actualFP: parseFloat(e.target.value) || 0 } })),
-                                            style: { width: 68, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "3px 6px", fontSize: 11, fontFamily: "inherit" } })),
-                                    React.createElement("td", { style: { padding: "5px 8px", fontWeight: diff !== null ? 700 : 400, color: diff === null ? "#3b6280" : diff >= 0 ? "#22c55e" : "#ef4444" } },
-                                        diff !== null ? (diff >= 0 ? "+" : "") + diff.toFixed(1) : "—"),
-                                    React.createElement("td", { style: { padding: "5px 8px" } },
-                                        React.createElement("input", { type: "number", placeholder: "0.00", value: ms.winnings || "", min: 0, step: 0.01,
-                                            onChange: e => setManualScores(prev => ({ ...prev, [i]: { ...prev[i], winnings: parseFloat(e.target.value) || 0 } })),
-                                            style: { width: 72, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#22c55e", padding: "3px 6px", fontSize: 11, fontFamily: "inherit" } })));
-                            })))));
-            })(),
+            activeTab === "lineups" && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 } },
                 React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } }, lineups.map((lu, i) => React.createElement(LineupCard, { key: i, lineup: lu, index: i, isSelected: selectedLineup === i, onSelect: setSelectedLineup }))),
                 (() => {
                     const lu = lineups[selectedLineup];
@@ -2919,29 +2795,20 @@ function App() {
                                     "LINEUP #",
                                     selectedLineup + 1),
                                 React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginTop: 2 } }, "\u25CF = StatMuse confirmed  \u26A1 = anchor")),
-                            React.createElement("div", { style: { display: "flex", gap: 10, alignItems: "center" } },
-                                React.createElement("div", { style: { display: "flex", gap: 18, fontSize: 12 } },
-                                    React.createElement("div", null,
-                                        React.createElement("span", { style: { color: "#4a6a80" } }, "PROJ "),
-                                        React.createElement("span", { style: { color: "#64b587", fontWeight: 700, fontSize: 20 } }, stats.proj.toFixed(1))),
-                                    React.createElement("div", null,
-                                        React.createElement("span", { style: { color: "#4a6a80" } }, "SAL "),
-                                        React.createElement("span", { style: { color: "#e2e8f0", fontWeight: 700 } },
-                                            "$",
-                                            stats.total.toLocaleString())),
-                                    React.createElement("div", null,
-                                        React.createElement("span", { style: { color: "#4a6a80" } }, "OWN "),
-                                        React.createElement("span", { style: { color: "#f59e0b", fontWeight: 700 } },
-                                            stats.avgOwn.toFixed(1),
-                                            "%"))),
-                                React.createElement("button", {
-                                    onClick: () => {
-                                        const text = sorted.map(p => `${p.slot}: ${p.name} $${p.salary.toLocaleString()} ${p.fppg.toFixed(1)}FP`).join("\n");
-                                        navigator.clipboard.writeText(text).catch(() => {});
-                                    },
-                                    title: "Copy lineup to clipboard",
-                                    style: { fontSize: 9, padding: "4px 10px", borderRadius: 5, border: "1px solid #1e3040", background: "#0a1520", color: "#60a5fa", cursor: "pointer", fontFamily: "inherit", letterSpacing: 1 }
-                                }, "📋 COPY"))),
+                            React.createElement("div", { style: { display: "flex", gap: 18, fontSize: 12 } },
+                                React.createElement("div", null,
+                                    React.createElement("span", { style: { color: "#4a6a80" } }, "PROJ "),
+                                    React.createElement("span", { style: { color: "#64b587", fontWeight: 700, fontSize: 20 } }, stats.proj.toFixed(1))),
+                                React.createElement("div", null,
+                                    React.createElement("span", { style: { color: "#4a6a80" } }, "SAL "),
+                                    React.createElement("span", { style: { color: "#e2e8f0", fontWeight: 700 } },
+                                        "$",
+                                        stats.total.toLocaleString())),
+                                React.createElement("div", null,
+                                    React.createElement("span", { style: { color: "#4a6a80" } }, "OWN "),
+                                    React.createElement("span", { style: { color: "#f59e0b", fontWeight: 700 } },
+                                        stats.avgOwn.toFixed(1),
+                                        "%")))),
                         React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16 } }, [["CHALK 30%+", stats.chalk, "#f59e0b"], ["MID 10-29%", stats.mid, "#60a5fa"], ["PUNT <5%", stats.punt, "#f87171"], [((stats.anchor && stats.anchor.name) ? stats.anchor.name.split(" ").pop() : "—") + " ⚡", (stats.anchor && stats.anchor.fppg) ? stats.anchor.fppg.toFixed(1) : "0", "#22c55e"]].map(([l, v, c]) => (React.createElement("div", { key: l, style: { flex: 1, background: "#0a1a2a", borderRadius: 8, padding: "8px 12px", border: `1px solid ${c}33`, textAlign: "center" } },
                             React.createElement("div", { style: { color: c, fontWeight: 700, fontSize: 18 } }, v),
                             React.createElement("div", { style: { color: "#4a6a80", fontSize: 9, marginTop: 2 } }, l))))),
@@ -3096,7 +2963,7 @@ function App() {
                                     React.createElement("button", { onClick: () => toggleLock(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" } }, "LOCK"),
                                     React.createElement("button", { onClick: () => toggleExclude(p.name), style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" } }, "OUT"),
                                     React.createElement("a", { href: statMuseUrl(p.name), target: "_blank", rel: "noreferrer", style: { fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" } }, "SM\u2197")))));
-                    })))))),
+                    }))))),
             activeTab === "exposure" && (React.createElement("div", { style: S.card },
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } },
                     "PLAYER EXPOSURE \u2014 ",
@@ -3131,7 +2998,7 @@ function App() {
                                     React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#16a34a22" : "#1e3040", color: (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#22c55e" : "#4a6a80", border: `1px solid ${(p === null || p === void 0 ? void 0 : p.statMuseFD) ? "#16a34a44" : "#1e3040"}` } }, (p === null || p === void 0 ? void 0 : p.statMuseFD) ? "SM" : "CSV")),
                                 React.createElement("td", { style: { padding: "7px 8px", color: "#3b82f6" } }, (_c = p === null || p === void 0 ? void 0 : p.positions[0]) !== null && _c !== void 0 ? _c : "—")));
                         }))));
-                })())));
+                })()))))));
 }
 
 
