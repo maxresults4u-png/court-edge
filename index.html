@@ -993,10 +993,38 @@ function compositeScore(p) {
       ? Math.max(0.92, Math.min(1.10, 0.45 + impliedPts / 220))
       : 1.0;
 
+    // ── ML MODEL BOOSTS ────────────────────────────────────────────
+    // 1. Named player edge — trained delta from 24 historical slates
+    const mlEdgeData = ML_PLAYER_EDGES[p.name?.toLowerCase()];
+    const mlEdgeBoost = mlEdgeData
+        ? 1.0 + Math.min(0.15, Math.max(-0.10, mlEdgeData.delta / 100))
+        : 1.0;
+
+    // 2. Q-network live inference — runs on EVERY player on CSV upload
+    // State matches training: [rem_sal, slots, lineup_fp, sal_norm, fppg_norm, pos_norm, val_norm, pred_fp]
+    // Here we score each player as if it's candidate #1 in a fresh lineup
+    const qState = [
+        1.0,                                          // remaining salary (full cap)
+        0.0,                                          // slots filled (none yet)
+        0.0,                                          // lineup fp so far
+        Math.max(0, Math.min(1, (p.salary - 3500) / (13000 - 3500))),
+        Math.max(0, Math.min(1, (p.fppg - 10) / (70 - 10))),
+        ({'PG':0,'SG':1,'SF':2,'PF':3,'C':4}[p.positions?.[0]] ?? 2) / 4.0,
+        Math.max(0, Math.min(1, (value - 2.0) / (8.0 - 2.0))),
+        Math.max(0, Math.min(1, (p.fppg - 10) / (70 - 10))), // pred_fp proxy
+    ];
+    const qVals = qnetPredict(qState);
+    // Q-value for "add" action — normalize to a 0.94–1.06 multiplier
+    const qAdd  = qVals[1];
+    const qSkip = qVals[0];
+    const qConf = qAdd - qSkip; // positive = model wants this player
+    const qBoost = 1.0 + Math.max(-0.06, Math.min(0.06, qConf * 0.02));
+
     return (p.fppg * finalInj * ownW + value * 0.12 + sampleW * 0.08)
            * statMuseBoost * shootBoost * dvpMult * availMult
            * paceMult2 * matchMult * matchupGradeMult
-           * closeGameBoost * gameTotalMult * vegasMult;
+           * closeGameBoost * gameTotalMult * vegasMult
+           * mlEdgeBoost * qBoost;
 }
 function estimateOwnership(player, teamMap) {
     const v = teamMap[player.team];
