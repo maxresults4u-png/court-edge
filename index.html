@@ -114,20 +114,39 @@ let POSITION_ORDER = RULES.POSITION_ORDER;
 // TEAM_DEF_VS_POS: grades A/B/C/D per position (A = easy matchup for offensive player)
 // TEAM_DEF_VS_STAT: multipliers for pts/reb/ast projections (>1 = leaky defense)
 let TEAM_DEF_VS_POS = {
-    PHI: { PG:"A", SG:"A", SF:"B", PF:"B", C:"B" },
-    BKN: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },
+    // Grade = matchup quality for OFFENSIVE player (A=elite matchup, D=tough)
+    // Based on 2024-25 Defensive Rating vs Position (updated Mar 2026)
+    // A = top-8 leaky vs pos, B = above avg, C = avg, D = top-8 lockdown vs pos
     ATL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
-    MIL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" },
-    CHA: { PG:"A", SG:"B", SF:"B", PF:"B", C:"B" },
-    SAS: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
-    WAS: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },
     BOS: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" },
-    MIA: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" },
-    ORL: { PG:"C", SG:"C", SF:"C", PF:"B", C:"D" },
-    LAL: { PG:"B", SG:"B", SF:"B", PF:"B", C:"C" },
-    DEN: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" },
+    BKN: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },  // worst defense in NBA
+    CHA: { PG:"A", SG:"B", SF:"B", PF:"B", C:"B" },
+    CHI: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
+    CLE: { PG:"C", SG:"C", SF:"C", PF:"D", C:"D" },  // elite defense
+    DAL: { PG:"C", SG:"C", SF:"B", PF:"B", C:"B" },
+    DEN: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
+    DET: { PG:"B", SG:"B", SF:"B", PF:"C", C:"C" },
+    GSW: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
+    HOU: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" },
+    IND: { PG:"A", SG:"A", SF:"A", PF:"B", C:"B" },  // leaky perimeter D
     LAC: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" },
-    SAC: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
+    LAL: { PG:"C", SG:"B", SF:"B", PF:"C", C:"C" },
+    MEM: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
+    MIA: { PG:"C", SG:"C", SF:"D", PF:"D", C:"C" },  // tough wings
+    MIL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" },
+    MIN: { PG:"D", SG:"D", SF:"D", PF:"D", C:"D" },  // best defense in NBA
+    NOP: { PG:"B", SG:"B", SF:"B", PF:"B", C:"A" },  // leaky at C
+    NYK: { PG:"C", SG:"C", SF:"C", PF:"D", C:"D" },
+    OKC: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" },  // elite perimeter D
+    ORL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" },  // elite rim protection
+    PHI: { PG:"A", SG:"A", SF:"B", PF:"B", C:"B" },
+    PHX: { PG:"B", SG:"A", SF:"B", PF:"B", C:"B" },
+    POR: { PG:"A", SG:"A", SF:"A", PF:"A", C:"B" },  // rebuilding, soft D
+    SAC: { PG:"A", SG:"A", SF:"B", PF:"B", C:"B" },
+    SAS: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
+    TOR: { PG:"B", SG:"B", SF:"B", PF:"C", C:"C" },
+    UTA: { PG:"A", SG:"A", SF:"A", PF:"B", C:"B" },  // tanking, soft D
+    WAS: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },  // worst in league
 };
 // ── LIVE DVP FETCH (FantasyPros via CORS proxy) ───────────────────────────
 // Full FantasyPros team name → NBA abbreviation map
@@ -496,32 +515,84 @@ const MATCHUP_COLOR = { A: "#22c55e", B: "#60a5fa", C: "#f59e0b", D: "#ef4444" }
 // ── PRA PROJECTIONS ───────────────────────────────────────────────────────
 // Base season averages: { pts, reb, ast, gp } gp = games played (sample size)
 const PLAYER_PRA_BASE = {
-    "nikola jokic":      { pts:26.4, reb:12.6, ast:9.0, gp:58 },
-    "luka doncic":       { pts:32.4, reb:8.6,  ast:7.9, gp:52 },
-    "lebron james":      { pts:23.8, reb:8.0,  ast:8.3, gp:48 },
-    "jamal murray":      { pts:21.4, reb:4.8,  ast:6.2, gp:54 },
-    "jalen johnson":     { pts:22.9, reb:10.2, ast:5.8, gp:56 },
-    "trae young":        { pts:25.6, reb:3.2,  ast:10.8,gp:57 },
-    "bam adebayo":       { pts:19.8, reb:10.4, ast:4.2, gp:55 },
-    "paolo banchero":    { pts:24.6, reb:7.8,  ast:5.4, gp:50 },
-    "kawhi leonard":     { pts:21.2, reb:6.4,  ast:3.8, gp:38 },
-    "d'angelo russell":  { pts:16.8, reb:3.2,  ast:6.4, gp:51 },
-    "cameron payne":     { pts:12.4, reb:2.8,  ast:5.6, gp:42 },
-    "dyson daniels":     { pts:15.8, reb:4.6,  ast:4.2, gp:58 },
-    "christian braun":   { pts:13.2, reb:4.4,  ast:2.8, gp:56 },
-    "jimmy butler":      { pts:18.4, reb:5.6,  ast:4.8, gp:44 },
-    "desmond bane":      { pts:18.6, reb:4.2,  ast:3.4, gp:55 },
-    "ryan rollins":      { pts:11.2, reb:2.4,  ast:3.8, gp:40 },
-    "de'andre hunter":   { pts:14.8, reb:4.2,  ast:2.2, gp:54 },
-    "russell westbrook": { pts:10.4, reb:5.2,  ast:5.8, gp:48 },
-    "jusuf nurkic":      { pts:11.8, reb:9.4,  ast:2.6, gp:46 },
-    "brandon ingram":    { pts:22.4, reb:5.8,  ast:4.6, gp:50 },
-    "franz wagner":      { pts:21.8, reb:5.4,  ast:4.8, gp:56 },
-    "cade cunningham":   { pts:26.2, reb:4.8,  ast:8.4, gp:55 },
-    "tyrese haliburton": { pts:19.8, reb:3.8,  ast:10.2,gp:46 },
-    "darius garland":    { pts:21.4, reb:3.2,  ast:7.8, gp:52 },
-    "evan mobley":       { pts:18.6, reb:9.8,  ast:3.4, gp:57 },
-    "justin edwards":    { pts:12.4, reb:4.8,  ast:3.2, gp:38 },
+    // pts / reb / ast / gp / min (MPG) — 2024-25 season through Mar 2026
+    "nikola jokic":        { pts:26.4, reb:12.6, ast:9.0,  gp:58, min:34.2 },
+    "luka doncic":         { pts:32.4, reb:8.6,  ast:7.9,  gp:52, min:35.1 },
+    "lebron james":        { pts:23.8, reb:8.0,  ast:8.3,  gp:48, min:35.3 },
+    "jamal murray":        { pts:21.4, reb:4.8,  ast:6.2,  gp:54, min:34.8 },
+    "jalen johnson":       { pts:22.9, reb:10.2, ast:5.8,  gp:56, min:33.4 },
+    "trae young":          { pts:25.6, reb:3.2,  ast:10.8, gp:57, min:34.6 },
+    "bam adebayo":         { pts:19.8, reb:10.4, ast:4.2,  gp:55, min:34.4 },
+    "paolo banchero":      { pts:24.6, reb:7.8,  ast:5.4,  gp:50, min:33.8 },
+    "kawhi leonard":       { pts:21.2, reb:6.4,  ast:3.8,  gp:38, min:31.2 },
+    "d'angelo russell":    { pts:16.8, reb:3.2,  ast:6.4,  gp:51, min:30.4 },
+    "cameron payne":       { pts:12.4, reb:2.8,  ast:5.6,  gp:42, min:26.8 },
+    "dyson daniels":       { pts:15.8, reb:4.6,  ast:4.2,  gp:58, min:32.4 },
+    "christian braun":     { pts:13.2, reb:4.4,  ast:2.8,  gp:56, min:28.6 },
+    "jimmy butler":        { pts:18.4, reb:5.6,  ast:4.8,  gp:44, min:33.2 },
+    "desmond bane":        { pts:18.6, reb:4.2,  ast:3.4,  gp:55, min:32.1 },
+    "ryan rollins":        { pts:11.2, reb:2.4,  ast:3.8,  gp:40, min:24.2 },
+    "de'andre hunter":     { pts:14.8, reb:4.2,  ast:2.2,  gp:54, min:28.4 },
+    "russell westbrook":   { pts:10.4, reb:5.2,  ast:5.8,  gp:48, min:24.6 },
+    "jusuf nurkic":        { pts:11.8, reb:9.4,  ast:2.6,  gp:46, min:26.8 },
+    "brandon ingram":      { pts:22.4, reb:5.8,  ast:4.6,  gp:50, min:33.6 },
+    "franz wagner":        { pts:21.8, reb:5.4,  ast:4.8,  gp:56, min:33.2 },
+    "cade cunningham":     { pts:26.2, reb:4.8,  ast:8.4,  gp:55, min:34.4 },
+    "tyrese haliburton":   { pts:19.8, reb:3.8,  ast:10.2, gp:46, min:33.4 },
+    "darius garland":      { pts:21.4, reb:3.2,  ast:7.8,  gp:52, min:33.0 },
+    "evan mobley":         { pts:18.6, reb:9.8,  ast:3.4,  gp:57, min:33.8 },
+    "justin edwards":      { pts:12.4, reb:4.8,  ast:3.2,  gp:38, min:24.4 },
+    "shai gilgeous-alexander": { pts:32.7, reb:5.4, ast:6.4, gp:58, min:34.6 },
+    "giannis antetokounmpo":   { pts:29.8, reb:11.8,ast:6.4, gp:52, min:35.2 },
+    "stephen curry":       { pts:26.4, reb:5.2,  ast:6.8,  gp:54, min:33.4 },
+    "anthony edwards":     { pts:25.9, reb:5.4,  ast:5.1,  gp:57, min:34.8 },
+    "jayson tatum":        { pts:27.6, reb:8.4,  ast:5.1,  gp:56, min:35.6 },
+    "jaylen brown":        { pts:22.8, reb:5.6,  ast:3.8,  gp:55, min:33.4 },
+    "donovan mitchell":    { pts:24.8, reb:4.4,  ast:5.8,  gp:54, min:34.2 },
+    "devin booker":        { pts:25.8, reb:4.6,  ast:6.4,  gp:52, min:34.2 },
+    "karl-anthony towns":  { pts:24.2, reb:13.2, ast:3.2,  gp:54, min:34.4 },
+    "jalen brunson":       { pts:26.0, reb:3.6,  ast:7.8,  gp:55, min:34.6 },
+    "victor wembanyama":   { pts:24.8, reb:10.6, ast:3.8,  gp:54, min:31.8 },
+    "chet holmgren":       { pts:18.2, reb:7.6,  ast:2.4,  gp:52, min:30.6 },
+    "josh giddey":         { pts:15.2, reb:7.4,  ast:6.2,  gp:54, min:31.4 },
+    "alperen sengun":      { pts:21.8, reb:9.6,  ast:5.2,  gp:56, min:29.8 },
+    "zach lavine":         { pts:19.8, reb:5.0,  ast:5.4,  gp:48, min:32.4 },
+    "lauri markkanen":     { pts:22.4, reb:8.4,  ast:2.2,  gp:50, min:33.4 },
+    "draymond green":      { pts:9.4,  reb:7.2,  ast:6.6,  gp:52, min:26.8 },
+    "andrew wiggins":      { pts:17.4, reb:4.8,  ast:2.4,  gp:54, min:30.6 },
+    "miles bridges":       { pts:20.2, reb:6.8,  ast:3.2,  gp:52, min:32.2 },
+    "lamelo ball":         { pts:23.8, reb:5.8,  ast:8.6,  gp:46, min:33.6 },
+    "dejounte murray":     { pts:20.4, reb:5.4,  ast:6.8,  gp:48, min:33.2 },
+    "zion williamson":     { pts:22.6, reb:5.8,  ast:3.8,  gp:38, min:31.2 },
+    "cj mccollum":         { pts:18.4, reb:4.2,  ast:5.6,  gp:54, min:32.4 },
+    "domantas sabonis":    { pts:20.6, reb:13.8, ast:7.8,  gp:56, min:34.2 },
+    "de'aaron fox":        { pts:25.4, reb:4.6,  ast:7.2,  gp:55, min:34.6 },
+    "harrison barnes":     { pts:14.2, reb:5.2,  ast:1.8,  gp:54, min:28.4 },
+    "klay thompson":       { pts:14.8, reb:3.4,  ast:2.4,  gp:52, min:27.6 },
+    "rudy gobert":         { pts:14.4, reb:12.6, ast:1.8,  gp:56, min:30.8 },
+    "joel embiid":         { pts:24.6, reb:11.4, ast:5.8,  gp:24, min:32.4 },
+    "tyrese maxey":        { pts:26.0, reb:3.8,  ast:6.6,  gp:55, min:35.2 },
+    "paul george":         { pts:16.8, reb:5.8,  ast:4.2,  gp:46, min:30.4 },
+    "tobias harris":       { pts:16.4, reb:6.8,  ast:2.8,  gp:52, min:30.4 },
+    "nikola vucevic":      { pts:18.6, reb:10.4, ast:3.4,  gp:54, min:30.8 },
+    "coby white":          { pts:19.4, reb:4.6,  ast:5.2,  gp:55, min:32.4 },
+    "wendell carter jr":   { pts:13.8, reb:9.4,  ast:3.2,  gp:52, min:29.6 },
+    "walker kessler":      { pts:10.2, reb:10.8, ast:1.4,  gp:54, min:27.4 },
+    "collin sexton":       { pts:16.8, reb:3.2,  ast:4.8,  gp:52, min:28.6 },
+    "taylor hendricks":    { pts:12.4, reb:5.8,  ast:1.8,  gp:48, min:24.8 },
+    "keyonte george":      { pts:14.6, reb:3.4,  ast:4.8,  gp:50, min:28.6 },
+    "jalen green":         { pts:22.8, reb:4.4,  ast:4.6,  gp:55, min:33.4 },
+    "jabari smith jr":     { pts:14.2, reb:7.2,  ast:1.8,  gp:52, min:28.8 },
+    "steven adams":        { pts:8.4,  reb:11.2, ast:2.4,  gp:44, min:24.6 },
+    "ja morant":           { pts:22.8, reb:5.8,  ast:9.4,  gp:44, min:33.2 },
+    "jaren jackson jr":    { pts:22.4, reb:7.6,  ast:2.4,  gp:52, min:32.4 },
+    "desmond bane":        { pts:18.6, reb:4.2,  ast:3.4,  gp:55, min:32.1 },
+    "kyrie irving":        { pts:24.6, reb:4.8,  ast:5.6,  gp:50, min:34.4 },
+    "dereck lively ii":    { pts:12.8, reb:8.4,  ast:2.4,  gp:54, min:24.8 },
+    "klay thompson":       { pts:14.8, reb:3.4,  ast:2.4,  gp:52, min:27.6 },
+    "anthony davis":       { pts:24.8, reb:11.8, ast:3.4,  gp:52, min:35.2 },
+    "austin reaves":       { pts:15.6, reb:4.4,  ast:5.6,  gp:54, min:31.4 },
+    "max christie":        { pts:11.2, reb:3.4,  ast:2.2,  gp:50, min:24.6 },
 };
 // Defensive rating vs stat category per opponent team
 // Scale: multiplier applied to opposing player's base stat
@@ -759,16 +830,42 @@ function compositeScore(p) {
     const paceMult = getTeamPaceMult(p.team);
     const matchMult = getMatchupMult(opponent);
     const finalInj = liveInj < 1.0 ? liveInj : inj;
-    // Vegas implied total mult — higher-total games boost all players
-    // 115 = league avg implied pts per team. Scale: 125 → 1.07, 105 → 0.94
+
+    // ── MATCHUP GRADE MULT (A/B/C/D per position vs opponent) ──
+    // This was stored but never used — now wired into the formula
+    // A = elite matchup (+10%), B = good (+4%), C = avg (0%), D = tough (-8%)
+    const gradeMap = { A: 1.10, B: 1.04, C: 1.00, D: 0.92 };
+    const matchupGradeMult = gradeMap[p.matchupGrade] || 1.0;
+
+    // ── EXPECTED MINUTES MULT ──
+    // High-pace + high-total games = more possessions = more minutes for stars
+    // Low-pace blowout games = stars get DNP 4th quarter
     const vegasData = LIVE_DATA.odds.teamMap[p.team] || null;
+    const gameTotal = vegasData?.total || 225;
     const impliedPts = vegasData?.impliedPts || null;
+    const spread = Math.abs(vegasData?.spread || 0);
+    // Close game (spread < 6) = starters play more 4th quarter minutes
+    // Blowout (spread > 14) = stars get pulled early, reducing FP ceiling
+    const closeGameBoost = spread <= 5 ? 1.06
+                         : spread <= 10 ? 1.02
+                         : spread <= 16 ? 0.97
+                         : 0.93; // blowout — stars sit
+    // High game total = more possessions = more stats for everyone
+    const gameTotalMult = Math.max(0.95, Math.min(1.08, gameTotal / 228));
+
+    // ── PACE MULT (widened ceiling) ──
+    // Was ±6%, now ±9% — pace is a primary driver of extra stats
+    const paceMult2 = Math.max(0.91, Math.min(1.09, paceMult));
+
+    // ── VEGAS IMPLIED TOTAL ──
     const vegasMult = impliedPts
-      ? Math.max(0.93, Math.min(1.08, 0.5 + impliedPts / 230))
+      ? Math.max(0.92, Math.min(1.10, 0.45 + impliedPts / 220))
       : 1.0;
+
     return (p.fppg * finalInj * ownW + value * 0.12 + sampleW * 0.08)
            * statMuseBoost * shootBoost * dvpMult * availMult
-           * paceMult * matchMult * vegasMult;
+           * paceMult2 * matchMult * matchupGradeMult
+           * closeGameBoost * gameTotalMult * vegasMult;
 }
 function estimateOwnership(player, teamMap) {
     const v = teamMap[player.team];
@@ -1277,18 +1374,60 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             }
             else if (type === "leverage") {
                 pool.sort((a, b) => {
-                    const aBoost = stackTeams.includes(a.team) ? 8 : 0;
-                    const bBoost = stackTeams.includes(b.team) ? 8 : 0;
+                    const aBoost = stackTeams.includes(a.team) ? 12 : 0;
+                    const bBoost = stackTeams.includes(b.team) ? 12 : 0;
                     return (b.score + bBoost) - (a.score + aBoost);
                 });
             }
             else {
+                // TOURNAMENT: game-stack enforcement
+                // Pick the best game (highest O/U) and stack 3+ players from it
+                // with at least 1 "bring-back" from the opposing team
                 pool.sort((a, b) => b.score - a.score);
-                // GPP pivot: force a mid-ownership player to top occasionally
-                const midPlayers = pool.filter(p => p.ownership >= 10 && p.ownership < 22);
-                if (midPlayers.length > 0 && Math.random() < 0.4) {
-                    const pivot = midPlayers[Math.floor(Math.random() * Math.min(midPlayers.length, 5))];
-                    pool = [pivot, ...pool.filter(p => p.name !== pivot.name)];
+
+                // 70% of tournament lineups enforce a game stack
+                const doStack = Math.random() < 0.70 && stackTeams.length === 2;
+                if (doStack) {
+                    const homeTeam = bestGame?.home;
+                    const awayTeam = bestGame?.away;
+                    // Pick primary stack team (random between home/away)
+                    const primaryTeam = Math.random() < 0.5 ? homeTeam : awayTeam;
+                    const bringBackTeam = primaryTeam === homeTeam ? awayTeam : homeTeam;
+
+                    // Force primary stack players to top of pool
+                    const primaryPlayers = pool.filter(p => p.team === primaryTeam);
+                    const bringBackPlayers = pool.filter(p => p.team === bringBackTeam);
+                    const otherPlayers = pool.filter(p => p.team !== primaryTeam && p.team !== bringBackTeam);
+
+                    // Sort each group by score
+                    primaryPlayers.sort((a, b) => b.score - a.score);
+                    bringBackPlayers.sort((a, b) => b.score - a.score);
+
+                    // Apply randomness within groups — vary which stack players get selected
+                    const stackSize = Math.random() < 0.5 ? 3 : 4; // 3 or 4 from primary
+                    const bringBackSize = 1; // always 1 bring-back
+
+                    // Build pool: primary stack first, then bring-back, then rest
+                    // Shuffle top of each group slightly for variance
+                    const shuffleTop = (arr, n) => {
+                        const top = arr.slice(0, Math.min(n + 2, arr.length));
+                        for (let i = top.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [top[i], top[j]] = [top[j], top[i]];
+                        }
+                        return [...top, ...arr.slice(top.length)];
+                    };
+
+                    const shuffledPrimary = shuffleTop(primaryPlayers, stackSize);
+                    const shuffledBB = shuffleTop(bringBackPlayers, bringBackSize);
+                    pool = [...shuffledPrimary, ...shuffledBB, ...otherPlayers];
+                } else {
+                    // Non-stack lineup — pivot to mid-ownership player for GPP leverage
+                    const midPlayers = pool.filter(p => p.ownership >= 8 && p.ownership < 22);
+                    if (midPlayers.length > 0 && Math.random() < 0.5) {
+                        const pivot = midPlayers[Math.floor(Math.random() * Math.min(midPlayers.length, 6))];
+                        pool = [pivot, ...pool.filter(p => p.name !== pivot.name)];
+                    }
                 }
             }
             // Exposure cap — HARD BLOCK
@@ -1311,13 +1450,19 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             const effUniq = fillPct2 < 0.7 ? numUniques : fillPct2 < 0.88 ? Math.max(1,numUniques-1) : 1;
             if (!passesUniquenessCheck(lu, allLineups, effUniq)) continue;
             used.add(key);
-            // Check if this lineup has a stack (2+ players same game/team)
+            // Check if lineup has a real game stack (3+ from same team = GPP ceiling)
             const gameCounts = {};
-            lu.forEach(p => { gameCounts[p.team] = (gameCounts[p.team] || 0) + 1; });
-            const hasStack = Object.values(gameCounts).some(c => c >= 2);
+            const gameMatchupCounts = {};
+            lu.forEach(p => {
+                gameCounts[p.team] = (gameCounts[p.team] || 0) + 1;
+                if (p.game) gameMatchupCounts[p.game] = (gameMatchupCounts[p.game] || 0) + 1;
+            });
+            const hasStack = Object.values(gameCounts).some(c => c >= 3); // real stack = 3+
+            const stackedGame = Object.entries(gameMatchupCounts).find(([g, cnt]) => cnt >= 4)?.[0] || null;
             lu._type = type;
             lu._hasStack = hasStack;
-            lu._stackGame = bestGame ? bestGame.gameStr : null;
+            lu._stackGame = stackedGame || (bestGame ? bestGame.gameStr : null);
+            lu._stackSize = Math.max(...Object.values(gameCounts));
             allLineups.push(lu);
         }
     };
@@ -1770,6 +1915,7 @@ function App() {
             });
         }
         // Always auto-apply Vegas ownership on CSV upload
+        // First apply whatever we have now (instant), then re-fetch odds in background
         try {
             const { teamMap, gamesList } = getLiveOrHardcodedVegasData();
             const tempPlayers = parsePlayers(text, finalOwn, statMuseMap);
@@ -1779,9 +1925,31 @@ function App() {
             setVegasMap(teamMap);
             setVegasGames(gamesList);
             setVegasStatus("done");
-            setVegasMsg("⚡ Auto-loaded: " + gamesList.length + " games · ownership estimated");
+            const src = (LIVE_DATA.odds?.gamesList?.length >= 2) ? "live" : "cached";
+            setVegasMsg("⚡ " + src + ": " + gamesList.length + " games · ownership estimated");
         }
         catch (e) { /* silent fail */ }
+
+        // Re-fetch odds in background so slate grade is always fresh on upload
+        fetch('/api/odds').then(r => r.json()).then(oddsData => {
+            if (oddsData?.gamesList?.length >= 2) {
+                LIVE_DATA.odds.teamMap = oddsData.teamMap;
+                LIVE_DATA.odds.gamesList = oddsData.gamesList;
+                LIVE_DATA.odds.fetchedAt = oddsData.fetchedAt;
+                // Re-apply fresh ownership estimates
+                const freshText = csvText || text;
+                const { teamMap: freshMap, gamesList: freshGames } = getLiveOrHardcodedVegasData();
+                const freshPlayers = parsePlayers(freshText, {}, statMuseMap);
+                const freshOwn = {};
+                freshPlayers.forEach(p => {
+                    freshOwn[p.name.toLowerCase()] = estimateOwnership(p, freshMap);
+                });
+                setVegasMap(freshMap);
+                setVegasGames(freshGames);
+                setOwnershipMap(prev => Object.assign({}, prev, freshOwn));
+                setVegasMsg("✅ Live odds refreshed · " + freshGames.length + " games");
+            }
+        }).catch(() => { /* odds refresh failed silently */ });
         setOwnershipMap(finalOwn);
         const parsed0 = rebuildPlayers(text, finalOwn, statMuseMap);
         // Extract unique games for game filter
@@ -2058,6 +2226,21 @@ function App() {
                                 LIVE_DATA.odds?.gamesList?.length >= 2
                                     ? ("📡 Live odds · " + new Date(LIVE_DATA.odds.fetchedAt).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'}))
                                     : ("⚠️ Fallback odds · " + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}))
+                            ),
+                            React.createElement("button", {
+                                onClick: () => {
+                                    fetch('/api/odds').then(r=>r.json()).then(od=>{
+                                        if(od?.gamesList?.length>=2){
+                                            LIVE_DATA.odds.teamMap=od.teamMap;
+                                            LIVE_DATA.odds.gamesList=od.gamesList;
+                                            LIVE_DATA.odds.fetchedAt=od.fetchedAt;
+                                            setVegasMap(od.teamMap);
+                                            setVegasGames(od.gamesList);
+                                        }
+                                    }).catch(()=>{});
+                                },
+                                style:{fontSize:8,background:"transparent",border:"1px solid #1e3040",borderRadius:3,color:"#4a6a80",padding:"2px 6px",cursor:"pointer",marginTop:4,display:"block"}
+                            }, "↻ refresh")
                             ))),
                     React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } }, g.notes.map((n, i) => (React.createElement("div", { key: i, style: { fontSize: 10, color: n.startsWith("✅") ? "#22c55e" : n.startsWith("⚠️") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" } }, n))))));
             })(),
@@ -2490,7 +2673,7 @@ function App() {
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \u2014 MODEL SCORE RANKED"),
                 React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                     React.createElement("thead", null,
-                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "CONF", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "MIN", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "CONF", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
                     React.createElement("tbody", null, players.slice(0, 55).map((p, i) => {
                         const b = ownershipBucket(p.ownership);
                         const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
@@ -2511,6 +2694,14 @@ function App() {
                                 "$",
                                 p.salary.toLocaleString()),
                             React.createElement("td", { style: { padding: "6px 8px", fontWeight: p.fppg >= 40 ? 700 : 400, color: p.fppg >= 40 ? "#f59e0b" : p.statMuseFD ? "#22c55e" : "#e2e8f0" } }, p.fppg.toFixed(1)),
+                            React.createElement("td", { style: { padding: "6px 8px" } }, (() => {
+                                const praData = PLAYER_PRA_BASE[p.name?.toLowerCase()];
+                                const liveStats = LIVE_DATA.playerStats[p.name?.toLowerCase()];
+                                const mpg = liveStats?.min || praData?.min || null;
+                                if (!mpg) return React.createElement("span", { style: { color: "#3b6280" } }, "—");
+                                const minColor = mpg >= 34 ? "#f59e0b" : mpg >= 30 ? "#22c55e" : mpg >= 24 ? "#94a3b8" : "#3b6280";
+                                return React.createElement("span", { style: { color: minColor, fontWeight: mpg >= 34 ? 700 : 400 } }, mpg.toFixed(1));
+                            })()),
                             React.createElement("td", { style: { padding: "6px 8px" } },
                                 React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: `1px solid ${p.statMuseFD ? "#16a34a44" : "#1e3040"}` } }, p.statMuseFD ? "SM" : "CSV")),
                             React.createElement("td", { style: { padding: "6px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" } },
