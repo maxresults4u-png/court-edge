@@ -121,21 +121,21 @@ let TEAM_DEF_VS_POS = {
     BOS: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" },
     BKN: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },  // worst defense in NBA
     CHA: { PG:"A", SG:"B", SF:"B", PF:"B", C:"B" },
-    CHI: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
+    CHI: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },  // leaky everywhere — gave up 132 last night
     CLE: { PG:"C", SG:"C", SF:"C", PF:"D", C:"D" },  // elite defense
     DAL: { PG:"C", SG:"C", SF:"B", PF:"B", C:"B" },
     DEN: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
     DET: { PG:"B", SG:"B", SF:"B", PF:"C", C:"C" },
-    GSW: { PG:"B", SG:"B", SF:"B", PF:"B", C:"B" },
+    GSW: { PG:"A", SG:"B", SF:"B", PF:"B", C:"A" },  // leaky at PG and C slots
     HOU: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" },
     IND: { PG:"A", SG:"A", SF:"A", PF:"B", C:"B" },  // leaky perimeter D
     LAC: { PG:"C", SG:"C", SF:"C", PF:"C", C:"C" },
     LAL: { PG:"C", SG:"B", SF:"B", PF:"C", C:"C" },
-    MEM: { PG:"B", SG:"B", SF:"C", PF:"C", C:"C" },
+    MEM: { PG:"C", SG:"C", SF:"C", PF:"B", C:"B" },  // solid D, not a target matchup
     MIA: { PG:"C", SG:"C", SF:"D", PF:"D", C:"C" },  // tough wings
     MIL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"B" },
     MIN: { PG:"D", SG:"D", SF:"D", PF:"D", C:"D" },  // best defense in NBA
-    NOP: { PG:"B", SG:"B", SF:"B", PF:"B", C:"A" },  // leaky at C
+    NOP: { PG:"A", SG:"A", SF:"A", PF:"A", C:"A" },  // one of worst defenses, gave up 129 to DAL
     NYK: { PG:"C", SG:"C", SF:"C", PF:"D", C:"D" },
     OKC: { PG:"D", SG:"D", SF:"D", PF:"D", C:"C" },  // elite perimeter D
     ORL: { PG:"C", SG:"C", SF:"C", PF:"C", C:"D" },  // elite rim protection
@@ -816,7 +816,18 @@ function ownershipBucket(own) {
 function compositeScore(p) {
     var _a;
     const inj = (_a = { "": 1.0, P: 0.95, Q: 0.72, D: 0.4, O: 0 }[p.injury]) !== null && _a !== void 0 ? _a : 0.72;
-    const ownW = RULES.OWN_WEIGHTS[ownershipBucket(p.ownership)];
+    // In GPP context, low-ownership players in high-total games get a leverage boost
+    // This directly addresses missing Buzelis/Missi/Marshall type plays
+    const baseOwnW = RULES.OWN_WEIGHTS[ownershipBucket(p.ownership)];
+    const vegasDataOwn = LIVE_DATA.odds.teamMap[p.team] || null;
+    const gameTotal = vegasDataOwn?.total || 225;
+    const isHighTotalGame = gameTotal >= 228;
+    const isLowOwn = p.ownership > 0 && p.ownership < 20;
+    // Low-own player in a high-total game: flip the penalty to a boost
+    // This is the "leverage" signal — differentiated lineup upside
+    const ownW = (isLowOwn && isHighTotalGame)
+        ? Math.min(1.08, baseOwnW * 1.20)  // 0.88 → 1.056, significant bump
+        : baseOwnW;
     const value = p.fppg / (p.salary / 1000);
     const sampleW = Math.min(p.played / 55, 1.0);
     // statmuse boost: if we have live FD avg, weight it more heavily
