@@ -993,8 +993,11 @@ function compositeScore(p) {
                          : spread <= 10 ? 1.02
                          : spread <= 16 ? 0.97
                          : 0.93; // blowout — stars sit
-    // High game total = more possessions = more stats for everyone
-    const gameTotalMult = Math.max(0.95, Math.min(1.08, gameTotal / 228));
+    // KEY FIX: use implied team total not raw O/U — MIA@CHA had highest O/U (236.5)
+    // but MIA implied only 115.5 pts (dog) → actual DFS 282 FP. CLE implied 119 → 313 FP.
+    // Calibrated from Mar 17: implied 113-121 → actual range 283-323 DFS avg per stack
+    const impliedForMult = impliedPts || (gameTotal / 2);
+    const gameTotalMult = Math.max(0.93, Math.min(1.10, impliedForMult / 117));
 
     // ── PACE MULT (widened ceiling) ──
     // Was ±6%, now ±9% — pace is a primary driver of extra stats
@@ -1004,6 +1007,14 @@ function compositeScore(p) {
     const vegasMult = impliedPts
       ? Math.max(0.92, Math.min(1.10, 0.45 + impliedPts / 220))
       : 1.0;
+
+    // ── INJURY USAGE BOOST (teammate star is OUT → this player absorbs usage) ──
+    // This was the #1 missed signal last night: SGA with Williams OUT, MIN with PHX missing players
+    // Find how many stars are OUT on this player's own team
+    const teamPlayers = (window._currentPlayers || []).filter(tp => tp.team === p.team && tp.name !== p.name);
+    const injUsageBoost = getInjuryUsageBoost(teamPlayers);
+    // Only apply if this player is active (not themselves injured)
+    const activeInjUsage = (inj >= 0.9) ? injUsageBoost : 1.0;
 
     // ── ML MODEL BOOSTS ────────────────────────────────────────────
     // 1. Named player edge — trained delta from 24 historical slates
@@ -1036,7 +1047,7 @@ function compositeScore(p) {
            * statMuseBoost * shootBoost * dvpMult * availMult
            * paceMult2 * matchMult * matchupGradeMult
            * closeGameBoost * gameTotalMult * vegasMult
-           * mlEdgeBoost * qBoost;
+           * mlEdgeBoost * qBoost * activeInjUsage;
 }
 function estimateOwnership(player, teamMap) {
     const v = teamMap[player.team];
@@ -1164,6 +1175,14 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
             players.push(starP);
         }
     }
+    return players.sort((a, b) => b.score - a.score);
+}
+// ── Re-score with injury usage awareness once full player list is known ───
+// After first-pass scoring, teammates of OUT stars get a second-pass boost
+function rescoreWithInjuryUsage(players) {
+    window._currentPlayers = players; // make available to compositeScore
+    // Re-run compositeScore now that teammates are known
+    players.forEach(p => { p.score = compositeScore(p); });
     return players.sort((a, b) => b.score - a.score);
 }
 // ── CSV EXPORT ───────────────────────────────────────────────────────────
@@ -1490,14 +1509,52 @@ function gradeSlate(gamesList) {
     return { score, grade, notes, recommendation, playIt, highTotalGames, avgTotal, maxImpl };
 }
 // ── STACK ENGINE ──────────────────────────────────────────────────────────
-// Find the best game to stack based on Vegas totals
+// Injury usage boost: when a star is OUT, teammates absorb usage
+// This was the #1 predictor last night (MIN/PHX, OKC/ORL with Williams OUT)
+function getInjuryUsageBoost(teamPlayers) {
+    let boost = 1.0;
+    teamPlayers.forEach(p => {
+        if ((p.injury === 'O' || p.injury === 'D') && p.fppg >= 28) {
+            // Star is out — redistribute ~60% of their usage to remaining players
+            const usageBoost = Math.min(0.18, p.fppg * 0.004); // ~8-12% for 28-35 FPPG star
+            boost += usageBoost;
+        }
+    });
+    return Math.min(1.22, boost); // cap at +22%
+}
+// Find the best game to stack based on implied team totals × pace × injury usage
+// KEY FIX: raw O/U was misleading (MIA@CHA had highest O/U but worst DFS output)
+// The real signal is: implied team total × opponent pace × injury usage multiplier
 function getBestStackGame(gamesList, players) {
     if (!gamesList || gamesList.length === 0)
         return null;
     const scored = gamesList.map(g => {
-        const gamePlayers = players.filter(p => p.team === g.home || p.team === g.away);
-        const topPlayers = gamePlayers.sort((a, b) => b.fppg - a.fppg).slice(0, 6);
-        return Object.assign(Object.assign({}, g), { stackScore: (g.total || 220) * 0.5 + topPlayers.reduce((s, p) => s + p.fppg, 0) * 0.3, topPlayers });
+        const homePlayers = players.filter(p => p.team === g.home);
+        const awayPlayers = players.filter(p => p.team === g.away);
+        const gamePlayers = [...homePlayers, ...awayPlayers];
+        const topPlayers = [...gamePlayers].sort((a, b) => b.fppg - a.fppg).slice(0, 6);
+        // Implied team totals (not raw O/U) — this is what Vegas thinks each team scores
+        const homeImpl = g.homeImpl || (g.total / 2);
+        const awayImpl = g.awayImpl || (g.total / 2);
+        // Pace multiplier: high-pace team matchups = more possessions = more DFS opportunity
+        const homePts = NBA_TEAM_STATS[g.home]?.pts || LEAGUE_AVG_PTS;
+        const awayPts = NBA_TEAM_STATS[g.away]?.pts || LEAGUE_AVG_PTS;
+        const combinedPaceMult = ((homePts + awayPts) / 2) / LEAGUE_AVG_PTS;
+        // Injury usage boost per team
+        const homeInjBoost = getInjuryUsageBoost(homePlayers);
+        const awayInjBoost = getInjuryUsageBoost(awayPlayers);
+        // Score each team separately then take the best
+        const homeScore = homeImpl * combinedPaceMult * homeInjBoost;
+        const awayScore = awayImpl * combinedPaceMult * awayInjBoost;
+        const bestImplied = Math.max(homeImpl, awayImpl);
+        // Stack score: best implied team total × pace × injury usage + player quality
+        const stackScore = Math.max(homeScore, awayScore)
+                         + topPlayers.reduce((s, p) => s + p.fppg, 0) * 0.3;
+        return Object.assign(Object.assign({}, g), {
+            stackScore, topPlayers, bestImplied,
+            homeScore, awayScore, combinedPaceMult,
+            homeInjBoost, awayInjBoost
+        });
     });
     return scored.sort((a, b) => b.stackScore - a.stackScore)[0];
 }
@@ -2056,8 +2113,9 @@ function App() {
     const fileRef = useRef();
     const rebuildPlayers = useCallback((csv, ownMap, smMap) => {
         const parsed = parsePlayers(csv, ownMap, smMap);
-        setPlayers(parsed);
-        return parsed;
+        const rescored = rescoreWithInjuryUsage(parsed); // second pass: injury usage boost
+        setPlayers(rescored);
+        return rescored;
     }, []);
     const handleCSV = useCallback((text) => {
         setCsvText(text);
