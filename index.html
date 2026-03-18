@@ -2287,7 +2287,32 @@ function OwnershipEditor({ players, ownershipMap, onUpdate }) {
             })))));
 }
 // ── LINEUP CARD ──────────────────────────────────────────────────────────
-function LineupCard({ lineup, index, isSelected, onSelect }) {
+// ── LINEUP TYPE FILTER LIST ───────────────────────────────────────────────
+// Wraps the lineup list with type-filter support and forces re-render on filter change
+function LineupTypeFilteredList({ lineups, selectedLineup, setSelectedLineup }) {
+    const [, forceUpdate] = React.useState(0);
+    React.useEffect(() => {
+        window._forceLineupUpdate = () => forceUpdate(n => n + 1);
+        return () => { window._forceLineupUpdate = null; };
+    }, []);
+    const filter = window._lineupTypeFilter || "all";
+    const filtered = filter === "all" ? lineups : lineups.filter(l => l._type === filter);
+    // Keep original index for display (#1, #2...) but filter what's shown
+    const indexed = lineups.map((lu, i) => ({ lu, i }))
+        .filter(({ lu }) => filter === "all" || lu._type === filter);
+    return React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } },
+        indexed.length === 0
+            ? React.createElement("div", { style: { color: "#4a6a80", fontSize: 12, padding: 16, textAlign: "center" } },
+                filter === "injury"
+                    ? "No injury pivot lineups built yet — regenerate with Mixed strategy"
+                    : `No ${filter} lineups found`)
+            : indexed.map(({ lu, i }) => React.createElement(LineupCard, {
+                key: i, lineup: lu, index: i, isSelected: selectedLineup === i,
+                onSelect: setSelectedLineup
+              }))
+    );
+}
+
     const stats = lineupStats(lineup);
     // For showdown, FLEX slots all share the same position name
     const sorted = [...lineup].sort((a, b) => {
@@ -2308,10 +2333,10 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
                     index + 1),
                 lineup._type && (React.createElement("span", { style: {
                         fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 700, letterSpacing: 1,
-                        background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : "#a78bfa22",
-                        color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : "#a78bfa",
-                        border: `1px solid ${lineup._type === "chalk" ? "#f59e0b44" : lineup._type === "leverage" ? "#22c55e44" : "#a78bfa44"}`,
-                    } }, lineup._type === "chalk" ? "📌 CHALK" : lineup._type === "leverage" ? "🔗 LEVERAGE" : "🚀 TOURN")),
+                        background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : lineup._type === "injury" ? "#f8717122" : "#a78bfa22",
+                        color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : lineup._type === "injury" ? "#f87171" : "#a78bfa",
+                        border: `1px solid ${lineup._type === "chalk" ? "#f59e0b44" : lineup._type === "leverage" ? "#22c55e44" : lineup._type === "injury" ? "#f8717144" : "#a78bfa44"}`,
+                    } }, lineup._type === "chalk" ? "📌 CHALK" : lineup._type === "leverage" ? "🔗 LEVERAGE" : lineup._type === "injury" ? "🏥 INJURY" : "🚀 TOURN")),
                 lineup._hasStack && (React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e", border: "1px solid #22c55e44" } }, "STACKED")),
                 (() => { const cs = lineupCorrScore(lineup); return cs.pairs.length > 0 ? React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: CORR_COLOR[cs.grade]+"22", color: CORR_COLOR[cs.grade], border: `1px solid ${CORR_COLOR[cs.grade]}44` } }, `🔗 ${cs.grade}`) : null; })(),
                 React.createElement("span", { style: { color: "#64b587", fontWeight: 600 } }, stats.proj.toFixed(1)),
@@ -3149,7 +3174,31 @@ function App() {
                     React.createElement("div", { style: { fontSize: 10, color: "#60a5fa" } }, t.tier),
                     React.createElement("div", { style: { fontSize: 9, color: "#4a6a80" } }, t.entries+" entries"))))),
             activeTab === "lineups" && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 } },
-                React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } }, lineups.map((lu, i) => React.createElement(LineupCard, { key: i, lineup: lu, index: i, isSelected: selectedLineup === i, onSelect: setSelectedLineup }))),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" } },
+                        [
+                            ["all",      "ALL",      "#60a5fa"],
+                            ["chalk",    "📌 CHALK",  "#f59e0b"],
+                            ["leverage", "🔗 LEVER",  "#22c55e"],
+                            ["tournament","🚀 TOURN", "#a78bfa"],
+                            ["injury",   "🏥 INJURY", "#f87171"],
+                        ].map(([type, label, color]) => {
+                            const count = type === "all" ? lineups.length : lineups.filter(l => l._type === type).length;
+                            const isActive = (window._lineupTypeFilter || "all") === type;
+                            return React.createElement("button", {
+                                key: type,
+                                onClick: () => { window._lineupTypeFilter = type; window._forceLineupUpdate && window._forceLineupUpdate(); },
+                                style: {
+                                    fontSize: 9, padding: "3px 8px", borderRadius: 4, fontWeight: 700,
+                                    letterSpacing: 0.5, cursor: "pointer", border: `1px solid ${color}55`,
+                                    background: isActive ? color + "33" : "#060e18",
+                                    color: isActive ? color : "#4a6a80",
+                                }
+                            }, `${label} (${count})`);
+                        })
+                    ),
+                    React.createElement(LineupTypeFilteredList, { lineups, selectedLineup, setSelectedLineup })
+                ),
                 (() => {
                     const lu = lineups[selectedLineup];
                     if (!lu || !Array.isArray(lu) || lu.length === 0)
