@@ -1806,8 +1806,8 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     }
     else { // mixed — the millionaire way
         chalkCount   = Math.max(1, Math.round(count * 0.20));
-        leverageCount = Math.max(1, Math.round(count * 0.30));
-        injuryCount  = Math.max(1, Math.round(count * 0.15)); // ~15% injury pivot lineups
+        leverageCount = Math.max(1, Math.round(count * 0.25));
+        injuryCount  = Math.max(1, Math.round(count * 0.20)); // 20% injury pivot — UTA is massive
         tournCount   = count - chalkCount - leverageCount - injuryCount;
     }
     const buildBatch = (batchCount, type) => {
@@ -1823,22 +1823,67 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             let pool = applyRandomness([...players], typeNoise);
 
             // ── INJURY PIVOT LINEUPS ──────────────────────────────────────
-            // Builds lineups anchored around usage-spike players instead of expensive stars
-            // These lineups skip Jokic/Luka to afford Collier/Filipowski/Jerome type plays
+            // Strategy: find the team with the MOST usage freed, lock in their
+            // top 2 inheritors together as a mini-stack, then build around them.
+            // This is specifically designed to catch UTA (Collier+Filipowski),
+            // MEM (Jerome+Coward), GS (Porzingis+Podziemski) type situations.
             if (type === 'injury') {
-                // Find all active players with significant usage spike (>20% boost)
-                const injSpikePlayers = pool.filter(p => {
-                    const teamMates = players.filter(tp => tp.team === p.team);
-                    const outStars = teamMates.filter(tp => tp.injury === 'O' && tp.fppg >= 25);
-                    return outStars.length >= 1 && p.injury !== 'O' && p.fppg >= 18 && p.fppg <= 38;
+                // Score each team by total usage freed (sum of OUT stars' FPPG × 0.65)
+                const teamUsageFreed = {};
+                players.forEach(p => {
+                    if (p.injury === 'O' && p.fppg >= 22) {
+                        teamUsageFreed[p.team] = (teamUsageFreed[p.team] || 0) + p.fppg * 0.65;
+                    }
                 });
-                if (injSpikePlayers.length > 0) {
-                    // Pick a random injury pivot player as the lineup anchor
-                    const pivot = injSpikePlayers[Math.floor(Math.random() * Math.min(injSpikePlayers.length, 8))];
-                    // Exclude the most expensive player ($11K+) to make room for value
-                    const expensive = pool.filter(p => p.salary >= 11000).sort((a,b) => b.score - a.score);
-                    const excluded = expensive.length > 0 && Math.random() < 0.6 ? [expensive[0].name] : [];
-                    pool = [pivot, ...pool.filter(p => p.name !== pivot.name && !excluded.includes(p.name))];
+
+                // Rank teams by usage freed — pick from top 3 randomly (weighted by usage)
+                const rankedTeams = Object.entries(teamUsageFreed)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3);
+
+                if (rankedTeams.length > 0) {
+                    // Weighted random pick — bigger usage situations get picked more often
+                    const totalUsage = rankedTeams.reduce((s, [, u]) => s + u, 0);
+                    let rand = Math.random() * totalUsage;
+                    let pivotTeam = rankedTeams[0][0];
+                    for (const [team, usage] of rankedTeams) {
+                        rand -= usage;
+                        if (rand <= 0) { pivotTeam = team; break; }
+                    }
+
+                    // Get top 2 active inheritors on this team (by composite score)
+                    const teamInheritors = pool
+                        .filter(p => p.team === pivotTeam && p.injury !== 'O' && p.fppg >= 16 && p.fppg <= 40)
+                        .sort((a, b) => b.score - a.score)
+                        .slice(0, 2);
+
+                    if (teamInheritors.length >= 1) {
+                        // Always exclude $11K+ players (SGA, Jokic) — they kill salary for UTA stacks
+                        // 80% of the time exclude the top expensive player, 20% keep one for hybrid lineups
+                        const expensive = pool
+                            .filter(p => p.salary >= 11000)
+                            .sort((a, b) => b.score - a.score);
+                        const excludedNames = [];
+                        if (expensive.length > 0 && Math.random() < 0.80) {
+                            excludedNames.push(expensive[0].name);
+                        }
+
+                        // Force both inheritors to front of pool
+                        const anchors = teamInheritors.map(p => p.name);
+                        const rest = pool.filter(p =>
+                            !anchors.includes(p.name) && !excludedNames.includes(p.name)
+                        );
+                        // Sort rest by score but give a +8 bonus to any other player from same team
+                        // to encourage 3-player UTA stacks when salary allows
+                        rest.sort((a, b) => {
+                            const aBonus = (a.team === pivotTeam && a.fppg >= 14) ? 8 : 0;
+                            const bBonus = (b.team === pivotTeam && b.fppg >= 14) ? 8 : 0;
+                            return (b.score + bBonus) - (a.score + aBonus);
+                        });
+                        pool = [...teamInheritors, ...rest];
+                    } else {
+                        pool.sort((a, b) => b.score - a.score);
+                    }
                 } else {
                     pool.sort((a, b) => b.score - a.score);
                 }
@@ -1931,11 +1976,13 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     buildBatch(tournCount, "tournament");
     buildBatch(injuryCount, "injury");
     // Sort ALL lineups by projected FPPG descending — highest ceiling lineups first
-    // This makes the export CSV ordered best-to-worst so you can enter the top N
-    const LINEUP_FPPG_FLOOR = 272; // discard lineups below this projected total
+    // Injury pivot lineups get a lower floor (240) since they sacrifice raw FPPG for upside
+    // Regular lineups still must clear 272 to pass
+    const LINEUP_FPPG_FLOOR = 272;
+    const INJURY_FPPG_FLOOR = 245; // Collier+Filipowski stack will project ~255-265
     const sorted = allLineups
         .map(lu => { lu._proj = lu.reduce((s, p) => s + p.fppg, 0); return lu; })
-        .filter(lu => lu._proj >= LINEUP_FPPG_FLOOR)
+        .filter(lu => lu._type === 'injury' ? lu._proj >= INJURY_FPPG_FLOOR : lu._proj >= LINEUP_FPPG_FLOOR)
         .sort((a, b) => b._proj - a._proj);
     // If floor filter removed too many, relax it and take what we have
     const final = sorted.length >= Math.floor(count * 0.5) ? sorted : allLineups
