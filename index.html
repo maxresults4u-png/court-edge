@@ -127,30 +127,126 @@ function qnetPredict(state) {
 }
 
 function mlScorePlayer(p, remainingSalary, slotsFilledCount, lineupFpSoFar) {
-    // Build state vector matching training features
     const salaryNorm    = (p.salary - 3500) / (13000 - 3500);
     const fppgNorm      = (p.fppg - 10) / (70 - 10);
-    const sampleQ       = Math.min(p.played / 60.0, 1.0);
     const value         = p.fppg / (p.salary / 1000);
     const valueNorm     = (value - 2.0) / (8.0 - 2.0);
-    const posEnc        = {'PG':0,'SG':1,'SF':2,'PF':3,'C':4}[p.positions[0]] ?? 2;
-    const injured       = p.injuryStatus === 'OUT' ? 1 : 0;
-    const salaryTier    = p.salary >= 10000 ? 3 : p.salary >= 7000 ? 2 : p.salary >= 5000 ? 1 : 0;
-    const LINEUP_SIZE   = 9;
-    const SALARY_CAP    = 60000;
+    const posEnc        = {'PG':0,'SG':1,'SF':2,'PF':3,'C':4}[p.positions?.[0]] ?? 2;
+    const LINEUP_SIZE = 9, SALARY_CAP = 60000;
     const state = [
         remainingSalary / SALARY_CAP,
         slotsFilledCount / LINEUP_SIZE,
         lineupFpSoFar / (LINEUP_SIZE * 30 + 1),
-        salaryNorm,
-        fppgNorm,
-        posEnc / 4.0,
-        valueNorm,
-        fppgNorm, // pred_fp proxy — actual pred needs full scaler, use fppg as proxy
+        salaryNorm, fppgNorm, posEnc / 4.0, valueNorm,
+        fppgNorm, // pred_fp proxy
     ];
-    const qVals = qnetPredict(state);
-    // Return Q-value for "add" action — higher = model wants this player
-    return qVals[1];
+    return qnetPredict(state)[1];
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DQN SIMULATION ENGINE
+// Runs real episode rollouts BEFORE building lineups:
+//   1. Samples a random lineup from the player pool (episode)
+//   2. Scores it with compositeScore sum as the reward signal
+//   3. Identifies which players contributed to high/low reward
+//   4. Updates a per-player "sim score" table through many episodes
+//   5. compositeScore then uses this sim-derived adjustment as an additional multiplier
+//
+// This is live DQN inference — the weights are still frozen (offline trained),
+// but the sim scores are generated fresh each slate from actual episode rollouts.
+// ══════════════════════════════════════════════════════════════════════════════
+const DQN_SIM = {
+    scores: {},       // name → { wins: n, appearances: n, avgReward: f }
+    ran: false,
+    episodes: 0,
+};
+
+function dqnBuildEpisodeLineup(players, SALARY_CAP, LINEUP_SIZE, positions) {
+    // Build one valid lineup greedily with noise — simulates one episode
+    const pool = [...players].sort(() => Math.random() - 0.5); // shuffle
+    const lineup = [];
+    const slotsFilled = { PG:0, SG:0, SF:0, PF:0, C:0 };
+    const SLOT_LIMITS = { PG:2, SG:2, SF:2, PF:2, C:1 };
+    let salaryUsed = 0;
+    for (const p of pool) {
+        if (lineup.length >= LINEUP_SIZE) break;
+        if (p.injury === 'O') continue;
+        const canFit = p.positions?.some(pos => (slotsFilled[pos] || 0) < (SLOT_LIMITS[pos] || 0));
+        if (!canFit) continue;
+        if (salaryUsed + p.salary > SALARY_CAP) continue;
+        const openPos = p.positions.find(pos => (slotsFilled[pos] || 0) < (SLOT_LIMITS[pos] || 0));
+        if (!openPos) continue;
+        lineup.push(p);
+        slotsFilled[openPos] = (slotsFilled[openPos] || 0) + 1;
+        salaryUsed += p.salary;
+    }
+    return lineup.length >= 7 ? lineup : null; // require at least 7 players
+}
+
+function runDqnSimulation(players, numEpisodes = 800) {
+    // Reset sim scores for this slate
+    DQN_SIM.scores = {};
+    DQN_SIM.ran = false;
+    DQN_SIM.episodes = 0;
+
+    if (!players || players.length < 9) return;
+
+    // Pre-compute composite scores once (expensive — don't repeat inside loop)
+    const scored = players.filter(p => p.injury !== 'O' && p.fppg > 0);
+    const SALARY_CAP = 60000;
+    const LINEUP_SIZE = 9;
+
+    // Track per-player reward contribution
+    const playerStats = {};
+    scored.forEach(p => { playerStats[p.name] = { totalReward: 0, appearances: 0, wins: 0 }; });
+
+    // Run episodes
+    let validEpisodes = 0;
+    for (let ep = 0; ep < numEpisodes * 3 && validEpisodes < numEpisodes; ep++) {
+        const lineup = dqnBuildEpisodeLineup(scored, SALARY_CAP, LINEUP_SIZE);
+        if (!lineup) continue;
+        validEpisodes++;
+
+        // Reward = sum of composite scores (proxy for projected FP total)
+        const reward = lineup.reduce((s, p) => s + (p.score || p.fppg), 0);
+
+        // Track each player's contribution
+        lineup.forEach(p => {
+            if (!playerStats[p.name]) playerStats[p.name] = { totalReward: 0, appearances: 0, wins: 0 };
+            playerStats[p.name].totalReward += reward;
+            playerStats[p.name].appearances++;
+        });
+    }
+
+    // Normalize: players who appear in high-reward lineups get a positive sim score
+    // Players in low-reward lineups get a negative sim score
+    const allAvgRewards = scored.map(p => {
+        const st = playerStats[p.name];
+        return st?.appearances > 0 ? st.totalReward / st.appearances : 0;
+    }).filter(v => v > 0);
+
+    const globalAvg = allAvgRewards.reduce((a, b) => a + b, 0) / (allAvgRewards.length || 1);
+
+    scored.forEach(p => {
+        const st = playerStats[p.name];
+        if (!st || st.appearances === 0) {
+            DQN_SIM.scores[p.name] = 1.0;
+            return;
+        }
+        const avgR = st.totalReward / st.appearances;
+        // Normalize to ±8% multiplier: player whose avg lineup reward is 5% above global → +4% boost
+        const delta = (avgR - globalAvg) / (globalAvg || 1);
+        DQN_SIM.scores[p.name] = Math.max(0.94, Math.min(1.08, 1.0 + delta * 0.6));
+    });
+
+    DQN_SIM.ran = true;
+    DQN_SIM.episodes = validEpisodes;
+    console.log(`[DQN] ${validEpisodes} episodes | ${scored.length} players scored | global avg reward: ${globalAvg.toFixed(1)}`);
+}
+
+function getDqnSimMult(playerName) {
+    if (!DQN_SIM.ran) return 1.0;
+    return DQN_SIM.scores[playerName] ?? 1.0;
 }
 
 
@@ -436,6 +532,11 @@ const NBA_TEAM_STATS = {
   WAS:{pts:112.4,ast:26.4,tov:15.2,reb:43.2,stl:7.2,blk:4.6,fg_pct:45.4,w:12,l:54},
 };
 const LEAGUE_AVG_PTS = 115.3;
+// Alias FD abbreviations → both keys work in all lookups
+NBA_TEAM_STATS['GS']  = NBA_TEAM_STATS['GSW'];
+NBA_TEAM_STATS['NO']  = NBA_TEAM_STATS['NOP'];
+NBA_TEAM_STATS['SA']  = NBA_TEAM_STATS['SAS'];
+NBA_TEAM_STATS['NY']  = NBA_TEAM_STATS['NYK'];
 function getTeamPaceMult(t) { const d=NBA_TEAM_STATS[t]; if(!d) return 1.0; return Math.max(0.94,Math.min(1.06,d.pts/LEAGUE_AVG_PTS)); }
 
 // ── OPPONENT PTS ALLOWED per 24min (lower = tougher defense) ─────────────
@@ -446,6 +547,9 @@ const TEAM_PTS_ALLOWED = {
   POR:35.8,SAC:24.1,SAS:33.8,TOR:34.2,UTA:35.2,WAS:36.8,
 };
 const LEAGUE_AVG_PTS_ALLOWED = 30.6;
+// Aliases
+const _tpa = (k,v) => TEAM_PTS_ALLOWED[k]=TEAM_PTS_ALLOWED[v];
+_tpa('GS','GSW'); _tpa('NO','NOP'); _tpa('SA','SAS'); _tpa('NY','NYK');
 function getMatchupMult(opp) { const v=TEAM_PTS_ALLOWED[opp]; if(!v) return 1.0; return Math.max(0.94,Math.min(1.08,v/LEAGUE_AVG_PTS_ALLOWED)); }
 
 // ── DEFENSIVE FG% GRADE ──────────────────────────────────────────────────
@@ -456,6 +560,9 @@ const TEAM_DEF_GRADE = {
   POR:47.8,SAC:49.3,SAS:46.8,TOR:47.2,UTA:47.8,WAS:48.4,
 };
 const LEAGUE_AVG_DEF_FG = 46.4;
+// Aliases
+const _tdg = (k,v) => TEAM_DEF_GRADE[k]=TEAM_DEF_GRADE[v];
+_tdg('GS','GSW'); _tdg('NO','NOP'); _tdg('SA','SAS'); _tdg('NY','NYK');
 function getDefMult(opp) { const v=TEAM_DEF_GRADE[opp]; if(!v) return 1.0; return Math.max(0.92,Math.min(1.08,(v-LEAGUE_AVG_DEF_FG)/LEAGUE_AVG_DEF_FG*2+1)); }
 
 // ── PLAYER SHOOTING EFFICIENCY 2024-25 ───────────────────────────────────
@@ -974,54 +1081,44 @@ function compositeScore(p) {
     const matchMult = getMatchupMult(opponent);
     const finalInj = liveInj < 1.0 ? liveInj : inj;
 
-    // ── MATCHUP GRADE MULT (A/B/C/D per position vs opponent) ──
-    // This was stored but never used — now wired into the formula
-    // A = elite matchup (+10%), B = good (+4%), C = avg (0%), D = tough (-8%)
+    // ── MATCHUP GRADE MULT ──
     const gradeMap = { A: 1.10, B: 1.04, C: 1.00, D: 0.92 };
     const matchupGradeMult = gradeMap[p.matchupGrade] || 1.0;
 
-    // ── EXPECTED MINUTES MULT ──
-    // High-pace + high-total games = more possessions = more minutes for stars
-    // Low-pace blowout games = stars get DNP 4th quarter
+    // ── VEGAS / GAME ENVIRONMENT ────────────────────────────────────────────
     const vegasData = LIVE_DATA.odds.teamMap[p.team] || null;
     const gameTotal = vegasData?.total || 225;
     const impliedPts = vegasData?.impliedPts || null;
     const spread = Math.abs(vegasData?.spread || 0);
-    // Close game (spread < 6) = starters play more 4th quarter minutes
-    // Blowout (spread > 14) = stars get pulled early, reducing FP ceiling
-    const closeGameBoost = spread <= 5 ? 1.06
-                         : spread <= 10 ? 1.02
-                         : spread <= 16 ? 0.97
-                         : 0.93; // blowout — stars sit
-    // KEY FIX: use implied team total not raw O/U — MIA@CHA had highest O/U (236.5)
-    // but MIA implied only 115.5 pts (dog) → actual DFS 282 FP. CLE implied 119 → 313 FP.
-    // Calibrated from Mar 17: implied 113-121 → actual range 283-323 DFS avg per stack
+    const closeGameBoost = spread <= 5 ? 1.06 : spread <= 10 ? 1.02
+                         : spread <= 16 ? 0.97 : 0.93;
+    // Single clean Vegas signal — old code applied BOTH gameTotalMult AND vegasMult
+    // using the same impliedPts input, which double-counted the same information
     const impliedForMult = impliedPts || (gameTotal / 2);
-    const gameTotalMult = Math.max(0.93, Math.min(1.10, impliedForMult / 117));
+    const vegasMult = Math.max(0.92, Math.min(1.10, impliedForMult / 117));
 
-    // ── PACE MULT (widened ceiling) ──
-    // Was ±6%, now ±9% — pace is a primary driver of extra stats
-    const paceMult2 = Math.max(0.91, Math.min(1.09, paceMult));
+    // ── PACE MULT (injury-aware) ─────────────────────────────────────────────
+    // Base pace from season team stats; each star missing = faster pace for remaining players
+    // (more open court, shorter rotations, more possessions per active player)
+    const basePaceMult = Math.max(0.91, Math.min(1.09, paceMult));
+    const teamAllPlayers = (window._currentPlayers || []).filter(tp => tp.team === p.team);
+    const teamOutCount = teamAllPlayers.filter(tp => tp.injury === 'O' && tp.fppg >= 22).length;
+    const injuryPaceBoost = Math.min(1.08, 1.0 + teamOutCount * 0.018); // +1.8% per star out
+    const paceMult2 = Math.min(1.14, basePaceMult * injuryPaceBoost);
 
-    // ── VEGAS IMPLIED TOTAL ──
-    const vegasMult = impliedPts
-      ? Math.max(0.92, Math.min(1.10, 0.45 + impliedPts / 220))
-      : 1.0;
+    // ── DEFENSIVE FG% MULT (was dead code — now live) ──────────────────────
+    // Opponent's FG% allowed affects scoring ceiling for all positions
+    const defMult = getDefMult(opponent);
 
     // ── SALARY SURPLUS MULTIPLIER ──────────────────────────────────────────
-    // FD salary-implied value = salary/1000 × 4.0
-    // e.g. $7K player needs 28 FP to "hit value" — if they avg 36 FP that's +8 surplus
-    // Calibrated from tonight's slate: Jokic +10.7, Zubac +9.5, LeBron +8.2
-    // Players consistently outperforming their price = structural edge in GPP
-    // Players below implied value = salary trap, avoid
-    // Block OUT/injured players from getting this boost (they're $3500 floor, fake value)
+    // Min-salary players ($3,500-$4,200) are floor-priced, not market-priced
+    // Their "surplus" is artificial — FD just minimums them, not pricing them correctly
+    // Only apply surplus signal for players with real market salary ($4,500+)
     const fdImplied = (p.salary / 1000) * 4.0;
     const surplus = p.fppg - fdImplied;
-    // Scale: +10 surplus = +8% boost, +5 surplus = +4%, 0 = neutral, -5 = -4% penalty
-    // Cap at ±10% to avoid over-weighting single signal
     const rawSurplusMult = 1.0 + Math.max(-0.10, Math.min(0.10, surplus * 0.008));
-    // Only apply if player is active — OUT players ($3500 floor) have fake surplus
-    const surplusMult = (inj === 0 || finalInj < 0.5) ? 1.0 : rawSurplusMult;
+    const isMinSalary = p.salary <= 4200; // floor-priced players — surplus is noise
+    const surplusMult = (inj === 0 || finalInj < 0.5 || isMinSalary) ? 1.0 : rawSurplusMult;
 
     // ── RECENT FORM MULTIPLIER ─────────────────────────────────────────────
     // FD's FPPG is a rolling season average — it lags fast role changes.
@@ -1072,17 +1169,21 @@ function compositeScore(p) {
         Math.max(0, Math.min(1, (p.fppg - 10) / (70 - 10))), // pred_fp proxy
     ];
     const qVals = qnetPredict(qState);
-    // Q-value for "add" action — normalize to a 0.94–1.06 multiplier
     const qAdd  = qVals[1];
     const qSkip = qVals[0];
-    const qConf = qAdd - qSkip; // positive = model wants this player
+    const qConf = qAdd - qSkip;
     const qBoost = 1.0 + Math.max(-0.06, Math.min(0.06, qConf * 0.02));
+
+    // 3. DQN simulation multiplier — from live episode rollouts run after CSV upload
+    // Players that appear in high-scoring simulated lineups get boosted
+    // Range: 0.94–1.08, neutral 1.0 before simulation runs
+    const dqnSimMult = getDqnSimMult(p.name);
 
     return (p.fppg * finalInj * ownW + value * 0.12 + sampleW * 0.08)
            * statMuseBoost * shootBoost * dvpMult * availMult
            * paceMult2 * matchMult * matchupGradeMult
-           * closeGameBoost * gameTotalMult * vegasMult
-           * mlEdgeBoost * qBoost * activeInjUsage
+           * closeGameBoost * vegasMult * defMult
+           * mlEdgeBoost * qBoost * dqnSimMult * activeInjUsage
            * surplusMult * recentFormMult;
 }
 function estimateOwnership(player, teamMap) {
@@ -1090,23 +1191,41 @@ function estimateOwnership(player, teamMap) {
     if (!v)
         return 15;
     let base = 8;
-    if (v.impliedPts >= 122)
-        base = 24;
-    else if (v.impliedPts >= 118)
-        base = 20;
-    else if (v.impliedPts >= 114)
-        base = 17;
-    else if (v.impliedPts >= 110)
-        base = 14;
-    else if (v.impliedPts >= 106)
-        base = 11;
+    if (v.impliedPts >= 122) base = 24;
+    else if (v.impliedPts >= 118) base = 20;
+    else if (v.impliedPts >= 114) base = 17;
+    else if (v.impliedPts >= 110) base = 14;
+    else if (v.impliedPts >= 106) base = 11;
     const salaryTier = player.salary >= 11000 ? 1.7 : player.salary >= 9000 ? 1.4
         : player.salary >= 7500 ? 1.2 : player.salary >= 6000 ? 1.05
             : player.salary >= 4500 ? 0.9 : 0.75;
     const fppgTier = player.fppg >= 50 ? 1.5 : player.fppg >= 42 ? 1.3
         : player.fppg >= 34 ? 1.15 : player.fppg >= 26 ? 1.0 : 0.85;
     const valueTier = player.value >= 7 ? 1.25 : player.value >= 5.5 ? 1.1 : 1.0;
-    return Math.min(65, Math.max(2, +(base * salaryTier * fppgTier * valueTier).toFixed(1)));
+    let raw = base * salaryTier * fppgTier * valueTier;
+
+    // ── INJURY OWNERSHIP SURGE ─────────────────────────────────────────────
+    // When a star is out, the public rushes the usage inheritors
+    // Primary inheritor (#1 by FPPG on team) gets significant ownership bump
+    // This is especially important for contrarian GPP strategy — knowing WHO the
+    // public will pile on lets us pivot to secondary/tertiary plays instead
+    if (player.injury !== 'O') {
+        const allTeamPlayers = window._currentPlayers || [];
+        const teamRoster = allTeamPlayers.filter(tp => tp.team === player.team);
+        const outStars = teamRoster.filter(tp => tp.injury === 'O' && tp.fppg >= 25);
+        if (outStars.length > 0) {
+            const active = teamRoster
+                .filter(tp => tp.injury !== 'O' && tp.fppg > 0)
+                .sort((a, b) => b.fppg - a.fppg);
+            const myRank = active.findIndex(tp => tp.name === player.name);
+            // Public overweights the obvious primary inheritor
+            // Primary: +40% ownership boost | Secondary: +20% | Tertiary: +8%
+            if (myRank === 0) raw *= 1.40;
+            else if (myRank === 1) raw *= 1.20;
+            else if (myRank === 2) raw *= 1.08;
+        }
+    }
+    return Math.min(65, Math.max(2, +raw.toFixed(1)));
 }
 function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
     var _a;
@@ -1133,7 +1252,10 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         const injury = get("injuryindicator") || "";
         const played = parseInt(get("played")) || 0;
         // FD: Team | DK: TeamAbbrev
-        const team = get("team") || get("teamabbrev");
+        // Normalize FD abbreviations → match static table keys (GS→GSW, NO→NOP)
+        const TEAM_NORMALIZE = { 'GS':'GSW', 'NO':'NOP', 'SA':'SAS', 'NY':'NYK', 'GSD':'GSW' };
+        const teamRaw = get("team") || get("teamabbrev");
+        const team = TEAM_NORMALIZE[teamRaw] || teamRaw;
         // FD: Game | DK: Game Info ("SAC@LAC 03/14/2026 10:30PM ET" → strip to "SAC@LAC")
         const gameRaw = get("game") || get("gameinfo") || get("game info") || "";
         const game = gameRaw.split(" ")[0]; // strip date/time, keep "AWAY@HOME"
@@ -1672,26 +1794,21 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     const bestGame = getBestStackGame(gamesList, players);
     const stackTeams = bestGame ? [bestGame.home, bestGame.away] : [];
     // Split count by strategy
-    let chalkCount, leverageCount, tournCount;
+    let chalkCount, leverageCount, tournCount, injuryCount;
     if (strategy === "chalk") {
-        chalkCount = count;
-        leverageCount = 0;
-        tournCount = 0;
+        chalkCount = count; leverageCount = 0; tournCount = 0; injuryCount = 0;
     }
     else if (strategy === "leverage") {
-        chalkCount = 0;
-        leverageCount = count;
-        tournCount = 0;
+        chalkCount = 0; leverageCount = count; tournCount = 0; injuryCount = 0;
     }
     else if (strategy === "tournament") {
-        chalkCount = 0;
-        leverageCount = 0;
-        tournCount = count;
+        chalkCount = 0; leverageCount = 0; tournCount = count; injuryCount = 0;
     }
     else { // mixed — the millionaire way
-        chalkCount = Math.max(1, Math.round(count * 0.3));
-        leverageCount = Math.max(1, Math.round(count * 0.4));
-        tournCount = count - chalkCount - leverageCount;
+        chalkCount   = Math.max(1, Math.round(count * 0.20));
+        leverageCount = Math.max(1, Math.round(count * 0.30));
+        injuryCount  = Math.max(1, Math.round(count * 0.15)); // ~15% injury pivot lineups
+        tournCount   = count - chalkCount - leverageCount - injuryCount;
     }
     const buildBatch = (batchCount, type) => {
         const { randomnessPct, numUniques, maxExposurePct } = getOptimizerSettings();
@@ -1699,11 +1816,33 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         // Per-type randomness scaling
         const typeNoise = type === 'chalk' ? randomnessPct * 0.3
                         : type === 'leverage' ? randomnessPct * 0.7
+                        : type === 'injury' ? randomnessPct * 1.0  // injury pivots get medium variance
                         : randomnessPct * 1.2; // tournament gets most variance
         for (let attempt = 0; attempt < Math.max(batchCount * 200, 15000) && allLineups.filter(l => l._type === type).length < batchCount; attempt++) {
             // Apply randomness to projections
             let pool = applyRandomness([...players], typeNoise);
-            if (type === "chalk") {
+
+            // ── INJURY PIVOT LINEUPS ──────────────────────────────────────
+            // Builds lineups anchored around usage-spike players instead of expensive stars
+            // These lineups skip Jokic/Luka to afford Collier/Filipowski/Jerome type plays
+            if (type === 'injury') {
+                // Find all active players with significant usage spike (>20% boost)
+                const injSpikePlayers = pool.filter(p => {
+                    const teamMates = players.filter(tp => tp.team === p.team);
+                    const outStars = teamMates.filter(tp => tp.injury === 'O' && tp.fppg >= 25);
+                    return outStars.length >= 1 && p.injury !== 'O' && p.fppg >= 18 && p.fppg <= 38;
+                });
+                if (injSpikePlayers.length > 0) {
+                    // Pick a random injury pivot player as the lineup anchor
+                    const pivot = injSpikePlayers[Math.floor(Math.random() * Math.min(injSpikePlayers.length, 8))];
+                    // Exclude the most expensive player ($11K+) to make room for value
+                    const expensive = pool.filter(p => p.salary >= 11000).sort((a,b) => b.score - a.score);
+                    const excluded = expensive.length > 0 && Math.random() < 0.6 ? [expensive[0].name] : [];
+                    pool = [pivot, ...pool.filter(p => p.name !== pivot.name && !excluded.includes(p.name))];
+                } else {
+                    pool.sort((a, b) => b.score - a.score);
+                }
+            } else if (type === "chalk") {
                 pool.sort((a, b) => b.score - a.score);
             }
             else if (type === "leverage") {
@@ -1715,8 +1854,6 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             }
             else {
                 // TOURNAMENT: game-stack enforcement
-                // Pick the best game (highest O/U) and stack 3+ players from it
-                // with at least 1 "bring-back" from the opposing team
                 pool.sort((a, b) => b.score - a.score);
 
                 // 70% of tournament lineups enforce a game stack
@@ -1724,25 +1861,14 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                 if (doStack) {
                     const homeTeam = bestGame?.home;
                     const awayTeam = bestGame?.away;
-                    // Pick primary stack team (random between home/away)
                     const primaryTeam = Math.random() < 0.5 ? homeTeam : awayTeam;
                     const bringBackTeam = primaryTeam === homeTeam ? awayTeam : homeTeam;
-
-                    // Force primary stack players to top of pool
                     const primaryPlayers = pool.filter(p => p.team === primaryTeam);
                     const bringBackPlayers = pool.filter(p => p.team === bringBackTeam);
                     const otherPlayers = pool.filter(p => p.team !== primaryTeam && p.team !== bringBackTeam);
-
-                    // Sort each group by score
                     primaryPlayers.sort((a, b) => b.score - a.score);
                     bringBackPlayers.sort((a, b) => b.score - a.score);
-
-                    // Apply randomness within groups — vary which stack players get selected
-                    const stackSize = Math.random() < 0.5 ? 3 : 4; // 3 or 4 from primary
-                    const bringBackSize = 1; // always 1 bring-back
-
-                    // Build pool: primary stack first, then bring-back, then rest
-                    // Shuffle top of each group slightly for variance
+                    const stackSize = Math.random() < 0.5 ? 3 : 4;
                     const shuffleTop = (arr, n) => {
                         const top = arr.slice(0, Math.min(n + 2, arr.length));
                         for (let i = top.length - 1; i > 0; i--) {
@@ -1751,12 +1877,10 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                         }
                         return [...top, ...arr.slice(top.length)];
                     };
-
                     const shuffledPrimary = shuffleTop(primaryPlayers, stackSize);
-                    const shuffledBB = shuffleTop(bringBackPlayers, bringBackSize);
+                    const shuffledBB = shuffleTop(bringBackPlayers, 1);
                     pool = [...shuffledPrimary, ...shuffledBB, ...otherPlayers];
                 } else {
-                    // Non-stack lineup — pivot to mid-ownership player for GPP leverage
                     const midPlayers = pool.filter(p => p.ownership >= 8 && p.ownership < 22);
                     if (midPlayers.length > 0 && Math.random() < 0.5) {
                         const pivot = midPlayers[Math.floor(Math.random() * Math.min(midPlayers.length, 6))];
@@ -1764,14 +1888,16 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                     }
                 }
             }
-            // Exposure cap — HARD BLOCK
+            // ── EXPOSURE CAP — HARD BLOCK, no fallback for dominant players ──
             if (allLineups.length >= 2) {
                 const expMap = getExposureMap(allLineups);
                 const hardFiltered = pool.filter(p =>
                     lockedNames.includes(p.name) ||
                     (expMap[p.name] || 0) < maxExpCount
                 );
-                if (hardFiltered.length >= RULES.LINEUP_SIZE + 3) {
+                // Only fall back to full pool if we truly can't build — not just because 1 star is capped
+                // Require at least 2× lineup size to ensure real diversity
+                if (hardFiltered.length >= RULES.LINEUP_SIZE * 2) {
                     pool = hardFiltered;
                 }
             }
@@ -1803,6 +1929,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     buildBatch(chalkCount, "chalk");
     buildBatch(leverageCount, "leverage");
     buildBatch(tournCount, "tournament");
+    buildBatch(injuryCount, "injury");
     // Sort ALL lineups by projected FPPG descending — highest ceiling lineups first
     // This makes the export CSV ordered best-to-worst so you can enter the top N
     const LINEUP_FPPG_FLOOR = 272; // discard lineups below this projected total
@@ -2226,6 +2353,16 @@ function App() {
     const rebuildPlayers = useCallback((csv, ownMap, smMap) => {
         const parsed = parsePlayers(csv, ownMap, smMap);
         const rescored = rescoreWithInjuryUsage(parsed); // second pass: injury usage boost
+        // ── DQN SIMULATION — runs 800 episode rollouts on this slate's player pool ──
+        // Identifies which players consistently appear in high-scoring lineup combinations
+        // Runs async so it doesn't block the UI — scores update when complete
+        setTimeout(() => {
+            runDqnSimulation(rescored, 800);
+            // Third pass rescore with DQN sim multipliers now populated
+            const dqnRescored = rescoreWithInjuryUsage(rescored);
+            setPlayers(dqnRescored);
+            console.log(`[DQN] Rescore complete — ${DQN_SIM.episodes} episodes ran`);
+        }, 50);
         setPlayers(rescored);
         return rescored;
     }, []);
@@ -2631,6 +2768,11 @@ function App() {
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: vegasStatus === "done" ? "1px solid #1e3040" : "none" } },
                     React.createElement("button", { onClick: () => handleFetchVegas(players), disabled: vegasStatus === "loading" || players.length === 0, style: Object.assign(Object.assign({}, S.btn("primary")), { padding: "7px 18px", fontSize: 11, letterSpacing: 1, background: vegasStatus === "done" ? "#16a34a" : "#2563eb", whiteSpace: "nowrap" }) }, vegasStatus === "loading" ? "⏳ FETCHING..." : vegasStatus === "done" ? "✅ VEGAS LIVE" : "⚡ FETCH VEGAS INTEL"),
                     vegasMsg && (React.createElement("span", { style: { fontSize: 11, color: vegasStatus === "error" ? "#f87171" : vegasStatus === "done" ? "#22c55e" : "#94a3b8" } }, vegasMsg)),
+                    players.length > 0 && React.createElement("span", { style: { fontSize: 10, color: DQN_SIM.ran ? "#22c55e" : "#f59e0b", marginLeft: 8, whiteSpace: "nowrap" } },
+                        DQN_SIM.ran
+                            ? `🧠 DQN: ${DQN_SIM.episodes} sim runs ✅`
+                            : players.length > 0 ? "🧠 DQN: running..." : ""
+                    ),
                     vegasStatus === "done" && (React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" } }, Object.entries(vegasMap).slice(0, 8).map(([team, v]) => (React.createElement("span", { key: team, style: { color: v.impliedPts >= 115 ? "#f59e0b" : "#60a5fa" } },
                         React.createElement("span", { style: { color: "#4a6a80" } },
                             team,
