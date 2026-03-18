@@ -1823,10 +1823,10 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             let pool = applyRandomness([...players], typeNoise);
 
             // ── INJURY PIVOT LINEUPS ──────────────────────────────────────
-            // Strategy: find the team with the MOST usage freed, lock in their
-            // top 2 inheritors together as a mini-stack, then build around them.
-            // This is specifically designed to catch UTA (Collier+Filipowski),
-            // MEM (Jerome+Coward), GS (Porzingis+Podziemski) type situations.
+            // Strategy: find the team with the MOST usage freed, HARD LOCK their
+            // top 2 inheritors into every injury pivot lineup.
+            // This guarantees Collier+Filipowski, Jerome+Coward etc actually appear.
+            let injuryLockedNames = [...lockedNames]; // start with user locks
             if (type === 'injury') {
                 // Score each team by total usage freed (sum of OUT stars' FPPG × 0.65)
                 const teamUsageFreed = {};
@@ -1836,7 +1836,6 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                     }
                 });
 
-                // Rank teams by usage freed — pick from top 3 randomly (weighted by usage)
                 const rankedTeams = Object.entries(teamUsageFreed)
                     .sort((a, b) => b[1] - a[1])
                     .slice(0, 3);
@@ -1858,29 +1857,49 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                         .slice(0, 2);
 
                     if (teamInheritors.length >= 1) {
-                        // Always exclude $11K+ players (SGA, Jokic) — they kill salary for UTA stacks
-                        // 80% of the time exclude the top expensive player, 20% keep one for hybrid lineups
-                        const expensive = pool
-                            .filter(p => p.salary >= 11000)
-                            .sort((a, b) => b.score - a.score);
-                        const excludedNames = [];
+                        // HARD LOCK inheritors — they WILL appear in this lineup
+                        injuryLockedNames = [...lockedNames, ...teamInheritors.map(p => p.name)];
+
+                        // Always exclude $11K+ players (SGA, Jokic) — they destroy salary room for UTA stacks
+                        // Use a temp variable so we don't shadow the outer excludedNames param
+                        const injExcluded = [...excludedNames];
+                        const expensive = pool.filter(p => p.salary >= 11000).sort((a, b) => b.score - a.score);
                         if (expensive.length > 0 && Math.random() < 0.80) {
-                            excludedNames.push(expensive[0].name);
+                            injExcluded.push(expensive[0].name);
                         }
 
-                        // Force both inheritors to front of pool
-                        const anchors = teamInheritors.map(p => p.name);
+                        // Sort rest — give +8 bonus to 3rd player from same team for stacking
                         const rest = pool.filter(p =>
-                            !anchors.includes(p.name) && !excludedNames.includes(p.name)
+                            !injuryLockedNames.includes(p.name) && !injExcluded.includes(p.name)
                         );
-                        // Sort rest by score but give a +8 bonus to any other player from same team
-                        // to encourage 3-player UTA stacks when salary allows
                         rest.sort((a, b) => {
                             const aBonus = (a.team === pivotTeam && a.fppg >= 14) ? 8 : 0;
                             const bBonus = (b.team === pivotTeam && b.fppg >= 14) ? 8 : 0;
                             return (b.score + bBonus) - (a.score + aBonus);
                         });
                         pool = [...teamInheritors, ...rest];
+
+                        // Build the lineup with hard locks and local excludes
+                        const lu = buildLineup(pool, injuryLockedNames, injExcluded);
+                        if (!lu) continue;
+                        const key = lu.map(p => p.name).sort().join("|");
+                        if (used.has(key)) continue;
+                        const fillPct2 = allLineups.filter(l=>l._type===type).length / batchCount;
+                        const effUniq = fillPct2 < 0.7 ? numUniques : fillPct2 < 0.88 ? Math.max(1,numUniques-1) : 1;
+                        if (!passesUniquenessCheck(lu, allLineups, effUniq)) continue;
+                        used.add(key);
+                        const gameCounts = {};
+                        const gameMatchupCounts = {};
+                        lu.forEach(p => {
+                            gameCounts[p.team] = (gameCounts[p.team] || 0) + 1;
+                            if (p.game) gameMatchupCounts[p.game] = (gameMatchupCounts[p.game] || 0) + 1;
+                        });
+                        lu._type = 'injury';
+                        lu._hasStack = Object.values(gameCounts).some(c => c >= 3);
+                        lu._stackGame = Object.entries(gameMatchupCounts).find(([g, cnt]) => cnt >= 4)?.[0] || null;
+                        lu._stackSize = Math.max(...Object.values(gameCounts));
+                        allLineups.push(lu);
+                        continue; // skip the normal buildLineup below
                     } else {
                         pool.sort((a, b) => b.score - a.score);
                     }
@@ -1976,10 +1995,11 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     buildBatch(tournCount, "tournament");
     buildBatch(injuryCount, "injury");
     // Sort ALL lineups by projected FPPG descending — highest ceiling lineups first
-    // Injury pivot lineups get a lower floor (240) since they sacrifice raw FPPG for upside
-    // Regular lineups still must clear 272 to pass
-    const LINEUP_FPPG_FLOOR = 272;
-    const INJURY_FPPG_FLOOR = 245; // Collier+Filipowski stack will project ~255-265
+    // Injury pivot lineups get a lower floor since they sacrifice raw FPPG for upside
+    // Regular lineups use the slider value (default 272)
+    const settings = getOptimizerSettings();
+    const LINEUP_FPPG_FLOOR = settings.lineupFloor || 272;
+    const INJURY_FPPG_FLOOR = Math.min(245, LINEUP_FPPG_FLOOR - 20); // always 20 pts lower than regular floor
     const sorted = allLineups
         .map(lu => { lu._proj = lu.reduce((s, p) => s + p.fppg, 0); return lu; })
         .filter(lu => lu._type === 'injury' ? lu._proj >= INJURY_FPPG_FLOOR : lu._proj >= LINEUP_FPPG_FLOOR)
@@ -2288,23 +2308,14 @@ function OwnershipEditor({ players, ownershipMap, onUpdate }) {
 }
 // ── LINEUP CARD ──────────────────────────────────────────────────────────
 // ── LINEUP TYPE FILTER LIST ───────────────────────────────────────────────
-// Wraps the lineup list with type-filter support and forces re-render on filter change
-function LineupTypeFilteredList({ lineups, selectedLineup, setSelectedLineup }) {
-    const [, forceUpdate] = React.useState(0);
-    React.useEffect(() => {
-        window._forceLineupUpdate = () => forceUpdate(n => n + 1);
-        return () => { window._forceLineupUpdate = null; };
-    }, []);
-    const filter = window._lineupTypeFilter || "all";
-    const filtered = filter === "all" ? lineups : lineups.filter(l => l._type === filter);
-    // Keep original index for display (#1, #2...) but filter what's shown
+function LineupTypeFilteredList({ lineups, selectedLineup, setSelectedLineup, filter = "all" }) {
     const indexed = lineups.map((lu, i) => ({ lu, i }))
         .filter(({ lu }) => filter === "all" || lu._type === filter);
     return React.createElement("div", { style: { maxHeight: "80vh", overflowY: "auto", paddingRight: 4 } },
         indexed.length === 0
             ? React.createElement("div", { style: { color: "#4a6a80", fontSize: 12, padding: 16, textAlign: "center" } },
                 filter === "injury"
-                    ? "No injury pivot lineups built yet — regenerate with Mixed strategy"
+                    ? "No injury pivot lineups — make sure strategy is set to 🎯 MIXED, then regenerate"
                     : `No ${filter} lineups found`)
             : indexed.map(({ lu, i }) => React.createElement(LineupCard, {
                 key: i, lineup: lu, index: i, isSelected: selectedLineup === i,
@@ -2396,6 +2407,7 @@ function App() {
     const [activeTab, setActiveTab] = useState("lineups");
     const [rightTab, setRightTab] = useState("ownership");
     const [lineupStrategy, setLineupStrategy] = useState("mixed");
+    const [lineupTypeFilter, setLineupTypeFilter] = useState("all");
     const [bankroll, setBankroll] = useState("");
     const [injuryData, setInjuryData] = useState(TONIGHT_INJURIES);
     const [injuryStatus, setInjuryStatus] = useState("idle"); // idle | loading | done | error
@@ -2703,6 +2715,7 @@ function App() {
             const lus = generateLineupsWithStrategy(eligiblePlayers, lineupCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
             setLineups(lus);
             setSelectedLineup(0);
+            setLineupTypeFilter("all"); // reset filter so user sees all lineups fresh
             setStep("results");
             setActiveTab("lineups");
             setLastGenTime(new Date());
@@ -2967,7 +2980,7 @@ function App() {
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "GENERATE"),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 6, letterSpacing: 1 } }, "LINEUP STRATEGY"),
                         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 14 } }, [
-                            ["mixed", "🎯 MIXED", "30% chalk · 40% leverage · 30% tourn"],
+                            ["mixed", "🎯 MIXED", "20% chalk · 25% leverage · 35% tourn · 20% injury"],
                             ["chalk", "📌 CHALK", "Safe, high-ownership — cash games"],
                             ["leverage", "🔗 LEVERAGE", "Game-stacked, correlated builds"],
                             ["tournament", "🚀 TOURNAMENT", "Contrarian pivots — GPP only"],
@@ -3025,7 +3038,7 @@ function App() {
                                 React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 3 } },
                                     React.createElement("span", null, "📈 Min Lineup Proj Total"),
                                     React.createElement("span", { style: { color: "#34d399", fontWeight: 700 } }, React.createElement("span", { id: "lineup-floor-val" }, "272"), " FP")),
-                                React.createElement("input", { id: "lineup-floor-slider", type: "range", min: "250", max: "295", step: "1", defaultValue: "272", onChange: e => { document.getElementById('lineup-floor-val').textContent = e.target.value; }, style: { width: "100%", accentColor: "#34d399" } })),
+                                React.createElement("input", { id: "lineup-floor-slider", type: "range", min: "240", max: "295", step: "1", defaultValue: "272", onChange: e => { document.getElementById('lineup-floor-val').textContent = e.target.value; }, style: { width: "100%", accentColor: "#34d399" } })),
                             React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 8 } },
                                 React.createElement("button", { onClick: () => { setRandomness(5); setNumUniques(1); setMaxExposure(60); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#0d2010", border: "1px solid #16a34a44", borderRadius: 5, color: "#22c55e", cursor: "pointer" } }, "💵 CASH"),
                                 React.createElement("button", { onClick: () => { setRandomness(15); setNumUniques(2); setMaxExposure(40); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#1a1000", border: "1px solid #f59e0b44", borderRadius: 5, color: "#f59e0b", cursor: "pointer" } }, "⚖️ BALANCED"),
@@ -3185,10 +3198,10 @@ function App() {
                             ["injury",   "🏥 INJURY", "#f87171"],
                         ].map(([type, label, color]) => {
                             const count = type === "all" ? lineups.length : lineups.filter(l => l._type === type).length;
-                            const isActive = (window._lineupTypeFilter || "all") === type;
+                            const isActive = lineupTypeFilter === type;
                             return React.createElement("button", {
                                 key: type,
-                                onClick: () => { window._lineupTypeFilter = type; window._forceLineupUpdate && window._forceLineupUpdate(); },
+                                onClick: () => setLineupTypeFilter(type),
                                 style: {
                                     fontSize: 9, padding: "3px 8px", borderRadius: 4, fontWeight: 700,
                                     letterSpacing: 0.5, cursor: "pointer", border: `1px solid ${color}55`,
@@ -3198,7 +3211,7 @@ function App() {
                             }, `${label} (${count})`);
                         })
                     ),
-                    React.createElement(LineupTypeFilteredList, { lineups, selectedLineup, setSelectedLineup })
+                    React.createElement(LineupTypeFilteredList, { lineups, selectedLineup, setSelectedLineup, filter: lineupTypeFilter })
                 ),
                 (() => {
                     const lu = lineups[selectedLineup];
