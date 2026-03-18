@@ -1008,7 +1008,40 @@ function compositeScore(p) {
       ? Math.max(0.92, Math.min(1.10, 0.45 + impliedPts / 220))
       : 1.0;
 
-    // ── INJURY USAGE BOOST (teammate star is OUT → this player absorbs usage) ──
+    // ── SALARY SURPLUS MULTIPLIER ──────────────────────────────────────────
+    // FD salary-implied value = salary/1000 × 4.0
+    // e.g. $7K player needs 28 FP to "hit value" — if they avg 36 FP that's +8 surplus
+    // Calibrated from tonight's slate: Jokic +10.7, Zubac +9.5, LeBron +8.2
+    // Players consistently outperforming their price = structural edge in GPP
+    // Players below implied value = salary trap, avoid
+    // Block OUT/injured players from getting this boost (they're $3500 floor, fake value)
+    const fdImplied = (p.salary / 1000) * 4.0;
+    const surplus = p.fppg - fdImplied;
+    // Scale: +10 surplus = +8% boost, +5 surplus = +4%, 0 = neutral, -5 = -4% penalty
+    // Cap at ±10% to avoid over-weighting single signal
+    const rawSurplusMult = 1.0 + Math.max(-0.10, Math.min(0.10, surplus * 0.008));
+    // Only apply if player is active — OUT players ($3500 floor) have fake surplus
+    const surplusMult = (inj === 0 || finalInj < 0.5) ? 1.0 : rawSurplusMult;
+
+    // ── RECENT FORM MULTIPLIER ─────────────────────────────────────────────
+    // FD's FPPG is a rolling season average — it lags fast role changes.
+    // A player hot the last 10 games looks same-priced as a cold player at same salary.
+    // Signal hierarchy:
+    //   1. StatMuse live FD avg (p.smAvg) — actual recent FD pts, most accurate
+    //   2. PLAYER_FORM table (manually kept last5 vs season)
+    //   3. No signal → neutral 1.0
+    // Scale: last5 20% above season = +8% boost, 20% below = -8% penalty (capped)
+    let recentFormMult = 1.0;
+    if (p.smAvg && p.smAvg > 0 && p.fppg > 0) {
+        const recentVsSeason = (p.smAvg - p.fppg) / p.fppg;
+        recentFormMult = 1.0 + Math.max(-0.08, Math.min(0.08, recentVsSeason * 0.4));
+    } else if (p.formData && p.formData.last5 && p.formData.season) {
+        const formDelta = (p.formData.last5 - p.formData.season) / p.formData.season;
+        recentFormMult = 1.0 + Math.max(-0.08, Math.min(0.08, formDelta * 0.4));
+    }
+    // Don't apply form boost to injured/questionable players — small recent sample is noise
+    if (finalInj < 0.8) recentFormMult = 1.0;
+
     // This was the #1 missed signal last night: SGA with Williams OUT, MIN with PHX missing players
     // Find how many stars are OUT on this player's own team
     const teamPlayers = (window._currentPlayers || []).filter(tp => tp.team === p.team && tp.name !== p.name);
@@ -1047,7 +1080,8 @@ function compositeScore(p) {
            * statMuseBoost * shootBoost * dvpMult * availMult
            * paceMult2 * matchMult * matchupGradeMult
            * closeGameBoost * gameTotalMult * vegasMult
-           * mlEdgeBoost * qBoost * activeInjUsage;
+           * mlEdgeBoost * qBoost * activeInjUsage
+           * surplusMult * recentFormMult;
 }
 function estimateOwnership(player, teamMap) {
     const v = teamMap[player.team];
