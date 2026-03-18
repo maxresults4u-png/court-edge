@@ -197,7 +197,7 @@ const PLATFORM_CONFIG = {
         name: "FanDuel", short: "FD", color: "#1493ff",
         SALARY_CAP: 60000, MIN_SALARY_USED: 58000,
         NEVER_PLAY_OWN_THRESHOLD: 7.0, DNP_BLOCK_THRESHOLD: 1.0,
-        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 10,
+        ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 20,
         POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
         POSITION_ORDER: ["PG", "SG", "SF", "PF", "C"],
         LINEUP_SIZE: 9,
@@ -1318,6 +1318,10 @@ function buildLineup(players, lockedNames = [], excludedNames = []) {
 }
 // ── OPTIMIZER SETTINGS (read from UI sliders) ────────────────────────────
 function getOptimizerSettings() {
+    const fppgFloor = parseFloat(document.getElementById('fppg-floor-slider')?.value ?? 20);
+    const lineupFloor = parseFloat(document.getElementById('lineup-floor-slider')?.value ?? 272);
+    // Dynamically update FPPG floor so parsePlayers respects it
+    if (RULES) RULES.FLOOR_FPPG_MIN = fppgFloor;
     return {
         // randomness: 0-25 — how much projection variance to inject
         // 0 = pure chalk, 25 = high GPP variance
@@ -1327,6 +1331,10 @@ function getOptimizerSettings() {
         numUniques: parseInt(document.getElementById('uniques-slider')?.value ?? 2),
         // maxExposure: max % of lineups any single player can appear in
         maxExposurePct: parseFloat(document.getElementById('exposure-slider')?.value ?? 40),
+        // lineupFloor: minimum projected FPPG total for a lineup to be kept
+        lineupFloor,
+        // fppgFloor: minimum individual player FPPG to enter pool
+        fppgFloor,
     };
 }
 
@@ -1697,12 +1705,18 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     buildBatch(chalkCount, "chalk");
     buildBatch(leverageCount, "leverage");
     buildBatch(tournCount, "tournament");
-    // Flatten — chalk first, then leverage, then tournament
-    return [
-        ...allLineups.filter(l => l._type === "chalk"),
-        ...allLineups.filter(l => l._type === "leverage"),
-        ...allLineups.filter(l => l._type === "tournament"),
-    ];
+    // Sort ALL lineups by projected FPPG descending — highest ceiling lineups first
+    // This makes the export CSV ordered best-to-worst so you can enter the top N
+    const LINEUP_FPPG_FLOOR = 272; // discard lineups below this projected total
+    const sorted = allLineups
+        .map(lu => { lu._proj = lu.reduce((s, p) => s + p.fppg, 0); return lu; })
+        .filter(lu => lu._proj >= LINEUP_FPPG_FLOOR)
+        .sort((a, b) => b._proj - a._proj);
+    // If floor filter removed too many, relax it and take what we have
+    const final = sorted.length >= Math.floor(count * 0.5) ? sorted : allLineups
+        .map(lu => { lu._proj = lu._proj || lu.reduce((s, p) => s + p.fppg, 0); return lu; })
+        .sort((a, b) => b._proj - a._proj);
+    return final;
 }
 // Bankroll entry strategy
 function getEntryStrategy(bankroll, slateGrade) {
@@ -2689,6 +2703,16 @@ function App() {
                                     React.createElement("span", null, "📊 Max Exposure"),
                                     React.createElement("span", { style: { color: "#a78bfa", fontWeight: 700 } }, maxExposure, "%")),
                                 React.createElement("input", { id: "exposure-slider", type: "range", min: "20", max: "100", step: "5", value: maxExposure, onChange: e => setMaxExposure(+e.target.value), style: { width: "100%", accentColor: "#a78bfa" } })),
+                            React.createElement("div", { style: { marginTop: 8 } },
+                                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 3 } },
+                                    React.createElement("span", null, "🎯 FPPG Floor (player)"),
+                                    React.createElement("span", { style: { color: "#f97316", fontWeight: 700 } }, React.createElement("span", { id: "fppg-floor-val" }, "20"), " FPPG")),
+                                React.createElement("input", { id: "fppg-floor-slider", type: "range", min: "10", max: "28", step: "1", defaultValue: "20", onChange: e => { document.getElementById('fppg-floor-val').textContent = e.target.value; }, style: { width: "100%", accentColor: "#f97316" } })),
+                            React.createElement("div", { style: { marginTop: 8 } },
+                                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 3 } },
+                                    React.createElement("span", null, "📈 Min Lineup Proj Total"),
+                                    React.createElement("span", { style: { color: "#34d399", fontWeight: 700 } }, React.createElement("span", { id: "lineup-floor-val" }, "272"), " FP")),
+                                React.createElement("input", { id: "lineup-floor-slider", type: "range", min: "250", max: "295", step: "1", defaultValue: "272", onChange: e => { document.getElementById('lineup-floor-val').textContent = e.target.value; }, style: { width: "100%", accentColor: "#34d399" } })),
                             React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 8 } },
                                 React.createElement("button", { onClick: () => { setRandomness(5); setNumUniques(1); setMaxExposure(60); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#0d2010", border: "1px solid #16a34a44", borderRadius: 5, color: "#22c55e", cursor: "pointer" } }, "💵 CASH"),
                                 React.createElement("button", { onClick: () => { setRandomness(15); setNumUniques(2); setMaxExposure(40); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#1a1000", border: "1px solid #f59e0b44", borderRadius: 5, color: "#f59e0b", cursor: "pointer" } }, "⚖️ BALANCED"),
