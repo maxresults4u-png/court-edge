@@ -1232,6 +1232,7 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
     const lines = csvText.trim().split("\n");
     const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, ""));
     const players = [];
+    window._outPlayers = []; // reset OUT player tracking for this CSV
     for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(",");
         if (cols.length < 8)
@@ -1285,8 +1286,16 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
                 positions.push("UTIL");
             }
         }
-        if (!name || !salary || !csvFppg || injury === "O")
+        if (!name || !salary || !csvFppg || injury === "O") {
+            // Track OUT players so injury pivot engine can find usage situations
+            if (injury === "O" && name && csvFppg >= 20) {
+                if (!window._outPlayers) window._outPlayers = [];
+                const TEAM_NORM2 = { 'GS':'GSW', 'NO':'NOP', 'SA':'SAS', 'NY':'NYK', 'GSD':'GSW' };
+                const outTeam = TEAM_NORM2[teamRaw] || teamRaw;
+                window._outPlayers.push({ name, team: outTeam, fppg: csvFppg, injury: 'O' });
+            }
             continue;
+        }
         // In showdown mode, CPT rows get 1.5x fppg projection (already have 1.5x salary)
         // FLEX rows use base fppg. For FD Showdown, we create 3 variants below.
         const smData = statMuseMap[name.toLowerCase()];
@@ -1828,10 +1837,11 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
             // This guarantees Collier+Filipowski, Jerome+Coward etc actually appear.
             let injuryLockedNames = [...lockedNames]; // start with user locks
             if (type === 'injury') {
-                // Score each team by total usage freed (sum of OUT stars' FPPG × 0.65)
+                // Use _outPlayers tracked during CSV parse (players array has no OUTs)
+                const outPlayers = window._outPlayers || [];
                 const teamUsageFreed = {};
-                players.forEach(p => {
-                    if (p.injury === 'O' && p.fppg >= 22) {
+                outPlayers.forEach(p => {
+                    if (p.fppg >= 22) {
                         teamUsageFreed[p.team] = (teamUsageFreed[p.team] || 0) + p.fppg * 0.65;
                     }
                 });
