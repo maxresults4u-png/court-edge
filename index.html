@@ -2313,6 +2313,7 @@ function LineupTypeFilteredList({ lineups, selectedLineup, setSelectedLineup }) 
     );
 }
 
+function LineupCard({ lineup, index, isSelected, onSelect }) {
     const stats = lineupStats(lineup);
     // For showdown, FLEX slots all share the same position name
     const sorted = [...lineup].sort((a, b) => {
