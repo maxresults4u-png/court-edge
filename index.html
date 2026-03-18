@@ -1042,10 +1042,12 @@ function compositeScore(p) {
     // Don't apply form boost to injured/questionable players — small recent sample is noise
     if (finalInj < 0.8) recentFormMult = 1.0;
 
-    // This was the #1 missed signal last night: SGA with Williams OUT, MIN with PHX missing players
-    // Find how many stars are OUT on this player's own team
-    const teamPlayers = (window._currentPlayers || []).filter(tp => tp.team === p.team && tp.name !== p.name);
-    const injUsageBoost = getInjuryUsageBoost(teamPlayers);
+    // ── INJURY USAGE SPIKE (role-weighted, not flat team boost) ──────────────
+    // Identifies primary/secondary usage inheritors and gives concentrated boost
+    // e.g. Utah tonight: Collier (+35%) >> Filipowski (+25%) >> Sensabaugh (+18%)
+    // vs old code that gave everyone the same flat ~9% boost
+    const teamPlayers = (window._currentPlayers || []).filter(tp => tp.team === p.team);
+    const injUsageBoost = getPlayerUsageSpike(p, teamPlayers);
     // Only apply if this player is active (not themselves injured)
     const activeInjUsage = (inj >= 0.9) ? injUsageBoost : 1.0;
 
@@ -1553,16 +1555,78 @@ function gradeSlate(gamesList) {
 // ── STACK ENGINE ──────────────────────────────────────────────────────────
 // Injury usage boost: when a star is OUT, teammates absorb usage
 // This was the #1 predictor last night (MIN/PHX, OKC/ORL with Williams OUT)
-function getInjuryUsageBoost(teamPlayers) {
-    let boost = 1.0;
-    teamPlayers.forEach(p => {
-        if ((p.injury === 'O' || p.injury === 'D') && p.fppg >= 28) {
-            // Star is out — redistribute ~60% of their usage to remaining players
-            const usageBoost = Math.min(0.18, p.fppg * 0.004); // ~8-12% for 28-35 FPPG star
-            boost += usageBoost;
-        }
+// ── INJURY USAGE SPIKE ENGINE ────────────────────────────────────────────
+// Previous: flat % boost applied equally to ALL teammates → wrong
+// Fix: calculate total freed usage, distribute by FPPG share to active players
+// The #1 and #2 usage inheritors get concentrated boost, bench players get almost nothing
+//
+// Key situations tonight:
+//   UTA: 5 stars OUT (George/Markkanen/Jackson/Kessler/Nurkic) → +74% for Collier/Filipowski
+//   MEM: Morant/Edey/Aldama OUT → Ty Jerome, Coward, Lovering step into huge roles
+//   GS:  Curry/Butler OUT → Podziemski, Melton primary beneficiaries
+//   MIN: Edwards OUT → Randle/Gobert/DiVincenzo absorb usage
+function getTeamInjuryContext(teamPlayers) {
+    // Find all OUT/D stars on this team
+    const outStars = teamPlayers.filter(p =>
+        (p.injury === 'O' || p.injury === 'D') && p.fppg >= 22
+    );
+    if (outStars.length === 0) return { hasInjury: false, totalFreed: 0, outStars: [] };
+
+    // Total usage freed = sum of (outStar.fppg × 0.65) — ~65% redistributes, 35% goes to opponent pace
+    const totalFreed = outStars.reduce((s, p) => s + p.fppg * 0.65, 0);
+
+    // Active players sorted by fppg descending (the ones who will absorb usage)
+    const active = teamPlayers
+        .filter(p => p.injury !== 'O' && p.fppg > 0)
+        .sort((a, b) => b.fppg - a.fppg);
+
+    return { hasInjury: true, totalFreed, outStars, active };
+}
+
+function getPlayerUsageSpike(player, teamPlayers) {
+    const ctx = getTeamInjuryContext(teamPlayers);
+    if (!ctx.hasInjury || ctx.totalFreed === 0) return 1.0;
+    if (player.injury === 'O') return 1.0; // OUT themselves
+
+    const { totalFreed, active } = ctx;
+
+    // Weight distribution: top player gets 35%, 2nd gets 25%, 3rd gets 18%, rest share 22%
+    // This reflects real-world usage concentration — stars absorb more, not evenly split
+    const weights = active.map((p, i) => {
+        if (i === 0) return 0.35;
+        if (i === 1) return 0.25;
+        if (i === 2) return 0.18;
+        // Remaining players split the last 22% proportionally by fppg
+        const restTotal = active.slice(3).reduce((s, x) => s + x.fppg, 0);
+        return restTotal > 0 ? 0.22 * (p.fppg / restTotal) : 0.01;
     });
-    return Math.min(1.22, boost); // cap at +22%
+
+    const playerIdx = active.findIndex(p => p.name === player.name);
+    if (playerIdx < 0) return 1.0;
+
+    const myWeight = weights[playerIdx] || 0.01;
+    const fpAbsorbed = totalFreed * myWeight;
+    const boostPct = fpAbsorbed / player.fppg;
+
+    // Cap individual boost: top inheritor max +35%, others max +20%
+    const maxBoost = playerIdx === 0 ? 0.35 : playerIdx <= 2 ? 0.25 : 0.15;
+    const clampedBoost = Math.min(maxBoost, boostPct);
+
+    return 1.0 + clampedBoost;
+}
+
+// Legacy function kept for getBestStackGame team-level scoring
+function getInjuryUsageBoost(teamPlayers) {
+    const outStars = teamPlayers.filter(p =>
+        (p.injury === 'O' || p.injury === 'D') && p.fppg >= 28
+    );
+    if (outStars.length === 0) return 1.0;
+    const totalFreed = outStars.reduce((s, p) => s + p.fppg * 0.65, 0);
+    const activeAvgFppg = teamPlayers
+        .filter(p => p.injury !== 'O' && p.fppg > 0)
+        .reduce((s, p, _, a) => s + p.fppg / a.length, 0);
+    const teamBoost = totalFreed / Math.max(1, activeAvgFppg * 5);
+    return Math.min(1.30, 1.0 + Math.min(0.30, teamBoost));
 }
 // Find the best game to stack based on implied team totals × pace × injury usage
 // KEY FIX: raw O/U was misleading (MIA@CHA had highest O/U but worst DFS output)
