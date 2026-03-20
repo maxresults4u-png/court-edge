@@ -2071,16 +2071,31 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                 });
             }
             else {
-                // TOURNAMENT: game-stack enforcement
+                // TOURNAMENT: ceiling-anchored game-stack enforcement
                 pool.sort((a, b) => b.score - a.score);
 
-                // 70% of tournament lineups enforce a game stack
-                const doStack = Math.random() < 0.70 && stackTeams.length === 2;
-                if (doStack) {
-                    const homeTeam = bestGame?.home;
-                    const awayTeam = bestGame?.away;
-                    const primaryTeam = Math.random() < 0.5 ? homeTeam : awayTeam;
-                    const bringBackTeam = primaryTeam === homeTeam ? awayTeam : homeTeam;
+                // Find the highest-ceiling player on the slate (not just best game)
+                // This catches Luka-in-pace-up-spot situations
+                const ceilingAnchor = pool.find(p => p.fppg >= 45 && p.injury !== 'O');
+                const anchorGame = ceilingAnchor?.game || null;
+
+                // 80% of tournament lineups enforce a game stack
+                const doStack = Math.random() < 0.80;
+                if (doStack && (stackTeams.length === 2 || anchorGame)) {
+                    // Prefer to stack around the ceiling anchor's game when available
+                    let primaryTeam, bringBackTeam;
+                    if (anchorGame && Math.random() < 0.60) {
+                        // Ceiling anchor game stack: e.g. Luka's LAL@HOU game
+                        const gameParts = anchorGame.replace(/\s/g,'').split('@');
+                        primaryTeam = ceilingAnchor.team;
+                        bringBackTeam = gameParts.find(t => t !== primaryTeam && t.length >= 2);
+                    } else {
+                        // Fallback: highest-total game stack
+                        const homeTeam = bestGame?.home;
+                        const awayTeam = bestGame?.away;
+                        primaryTeam = Math.random() < 0.5 ? homeTeam : awayTeam;
+                        bringBackTeam = primaryTeam === homeTeam ? awayTeam : homeTeam;
+                    }
                     const primaryPlayers = pool.filter(p => p.team === primaryTeam);
                     const bringBackPlayers = pool.filter(p => p.team === bringBackTeam);
                     const otherPlayers = pool.filter(p => p.team !== primaryTeam && p.team !== bringBackTeam);
@@ -2096,7 +2111,9 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                         return [...top, ...arr.slice(top.length)];
                     };
                     const shuffledPrimary = shuffleTop(primaryPlayers, stackSize);
-                    const shuffledBB = shuffleTop(bringBackPlayers, 1);
+                    // Bring back 1-2 players from opposing team for correlation
+                    const bringBackCount = Math.random() < 0.4 ? 2 : 1;
+                    const shuffledBB = shuffleTop(bringBackPlayers, bringBackCount);
                     pool = [...shuffledPrimary, ...shuffledBB, ...otherPlayers];
                 } else {
                     const midPlayers = pool.filter(p => p.ownership >= 8 && p.ownership < 22);
@@ -2107,14 +2124,23 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                 }
             }
             // ── EXPOSURE CAP — HARD BLOCK, no fallback for dominant players ──
+            // Ceiling players in elite pace-up spots (implied 120+, pace top 20%) 
+            // get elevated exposure cap since they are true GPP differentiators
             if (allLineups.length >= 2) {
                 const expMap = getExposureMap(allLineups);
-                const hardFiltered = pool.filter(p =>
-                    lockedNames.includes(p.name) ||
-                    (expMap[p.name] || 0) < maxExpCount
-                );
-                // Only fall back to full pool if we truly can't build — not just because 1 star is capped
-                // Require at least 2× lineup size to ensure real diversity
+                const hardFiltered = pool.filter(p => {
+                    if (lockedNames.includes(p.name)) return true;
+                    const curExp = expMap[p.name] || 0;
+                    // Ceiling player check: high FPPG + elite Vegas implied + pace-up
+                    const vegasP = LIVE_DATA.odds.teamMap[p.team];
+                    const impliedPts = vegasP?.impliedPts || 0;
+                    const isCeilingSpot = p.fppg >= 45 && impliedPts >= 120 && p.paceUp;
+                    // Ceiling players in elite spots: allow up to 40% exposure regardless of slider
+                    const effectiveCap = isCeilingSpot
+                        ? Math.max(maxExpCount, Math.ceil(count * 0.40))
+                        : maxExpCount;
+                    return curExp < effectiveCap;
+                });
                 if (hardFiltered.length >= RULES.LINEUP_SIZE * 2) {
                     pool = hardFiltered;
                 }
@@ -2148,20 +2174,37 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     buildBatch(leverageCount, "leverage");
     buildBatch(tournCount, "tournament");
     buildBatch(injuryCount, "injury");
-    // Sort ALL lineups by projected FPPG descending — highest ceiling lineups first
-    // Injury pivot lineups get a lower floor since they sacrifice raw FPPG for upside
-    // Regular lineups use the slider value (default 272)
+    // Sort ALL lineups by CEILING-ADJUSTED projected FPPG descending
+    // Pure raw FPPG caps at 267 on salary-compressed slates.
+    // The score signal encodes matchup/pace/injury/DQN context that raw FPPG ignores.
+    // Ceiling proj = fppg * (score/fppg)^0.35 — partial credit for signal, avoids inflation
+    // E.g. Jokic: fppg=62.3, score=138 → ratio=2.21 → ^0.35=1.296 → ceil_proj=80.8
+    // A high-signal player in a great spot projects meaningfully higher than raw FPPG
     const settings = getOptimizerSettings();
     const LINEUP_FPPG_FLOOR = settings.lineupFloor || 272;
-    const INJURY_FPPG_FLOOR = Math.min(245, LINEUP_FPPG_FLOOR - 20); // always 20 pts lower than regular floor
+    const INJURY_FPPG_FLOOR = Math.min(245, LINEUP_FPPG_FLOOR - 20);
+
+    function ceilProj(p) {
+        if (!p.fppg || !p.score) return p.fppg || 0;
+        const ratio = p.score / Math.max(p.fppg, 1);
+        // Partial credit: ratio^0.35 blends signal without over-inflating
+        // ratio=1.0 → 1.0 (no change), ratio=2.0 → 1.26, ratio=0.5 → 0.79
+        const blend = Math.pow(Math.max(0.5, Math.min(3.0, ratio)), 0.35);
+        return +(p.fppg * blend).toFixed(2);
+    }
+
     const sorted = allLineups
-        .map(lu => { lu._proj = lu.reduce((s, p) => s + p.fppg, 0); return lu; })
+        .map(lu => {
+            lu._proj = lu.reduce((s, p) => s + p.fppg, 0);          // raw (for display)
+            lu._ceilProj = lu.reduce((s, p) => s + ceilProj(p), 0); // signal-adjusted (for sorting)
+            return lu;
+        })
         .filter(lu => lu._type === 'injury' ? lu._proj >= INJURY_FPPG_FLOOR : lu._proj >= LINEUP_FPPG_FLOOR)
-        .sort((a, b) => b._proj - a._proj);
+        .sort((a, b) => b._ceilProj - a._ceilProj); // sort by ceiling, display raw
     // If floor filter removed too many, relax it and take what we have
     const final = sorted.length >= Math.floor(count * 0.5) ? sorted : allLineups
         .map(lu => { lu._proj = lu._proj || lu.reduce((s, p) => s + p.fppg, 0); return lu; })
-        .sort((a, b) => b._proj - a._proj);
+        .sort((a, b) => (b._ceilProj || b._proj) - (a._ceilProj || a._proj));
     return final;
 }
 // Bankroll entry strategy
