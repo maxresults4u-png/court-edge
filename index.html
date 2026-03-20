@@ -2039,11 +2039,11 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                         const lu = buildLineup(pool, injuryLockedNames, injExcluded);
                         if (!lu) continue;
                         const key = lu.map(p => p.name).sort().join("|");
-                        if (used.has(key)) continue;
+                        if (usedByType.injury.has(key)) continue;
                         const fillPct2 = allLineups.filter(l=>l._type===type).length / batchCount;
                         const effUniq = fillPct2 < 0.7 ? numUniques : fillPct2 < 0.88 ? Math.max(1,numUniques-1) : 1;
-                        if (!passesUniquenessCheck(lu, allLineups, effUniq)) continue;
-                        used.add(key);
+                        if (!passesUniquenessCheck(lu, allLineups.filter(l=>l._type==='injury'), effUniq)) continue;
+                        usedByType.injury.add(key);
                         const gameCounts = {};
                         const gameMatchupCounts = {};
                         lu.forEach(p => {
