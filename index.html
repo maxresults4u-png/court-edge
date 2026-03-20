@@ -2063,17 +2063,20 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
                     pool.sort((a, b) => b.score - a.score);
                 }
             } else if (type === "chalk") {
-                // Chalk = highest ownership players — sorted by ownership-weighted score
+                // Chalk = highest ownership players — ownership-weighted score, descending
                 pool.sort((a, b) => {
-                    const aScore = b.score * (1 + (b.ownership / 100) * 0.3);
-                    const bScore = a.score * (1 + (a.ownership / 100) * 0.3);
-                    return aScore - bScore;
+                    const aScore = a.score * (1 + (a.ownership / 100) * 0.3);
+                    const bScore = b.score * (1 + (b.ownership / 100) * 0.3);
+                    return bScore - aScore;
                 });
             }
             else if (type === "leverage") {
                 // Leverage = game-stack teams get a big score bonus
-                const aBoostFn = (p) => stackTeams.includes(p.team) ? 15 : 0;
-                pool.sort((a, b) => (b.score + aBoostFn(b)) - (a.score + aBoostFn(a)));
+                pool.sort((a, b) => {
+                    const aBoost = stackTeams.includes(a.team) ? 15 : 0;
+                    const bBoost = stackTeams.includes(b.team) ? 15 : 0;
+                    return (b.score + bBoost) - (a.score + aBoost);
+                });
             }
             else {
                 // TOURNAMENT: ceiling-anchored game-stack enforcement
