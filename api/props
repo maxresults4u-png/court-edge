@@ -1,0 +1,201 @@
+// /api/props.js — Vercel serverless function
+// Fetches NBA player PRA (points+rebounds+assists) prop lines from The Odds API
+// Called by Court Edge frontend ~3.5s after CSV upload
+// Batches top-30 players only to conserve API quota (~10 requests per call)
+
+const ODDS_API_KEY = process.env.ODDS_API_KEY || 'c9714976cf423a8ed53bc334799e71b5';
+const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
+
+// Cache props for 8 minutes — lines don't move that fast pregame
+let _cache = null;
+let _cacheTime = 0;
+const CACHE_TTL = 8 * 60 * 1000;
+
+// Normalize player names from sportsbook format to match our CSV names
+// Sportsbooks use various formats: "LeBron James", "L. James", "Nikola Jokić" etc.
+function normalizePlayerName(name) {
+    if (!name) return '';
+    return name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // strip accents: Jokić → Jokic
+        .replace(/[^a-z\s'.-]/g, '')
+        .trim();
+}
+
+async function fetchTodaysNBAEvents() {
+    const url = `${ODDS_API_BASE}/sports/basketball_nba/events?apiKey=${ODDS_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Events fetch failed: ${res.status}`);
+    const events = await res.json();
+    
+    // Filter to today's games only (within next 24 hours)
+    const now = Date.now();
+    const cutoff = now + 24 * 60 * 60 * 1000;
+    return (events || []).filter(e => {
+        const t = new Date(e.commence_time).getTime();
+        return t >= now - 3600000 && t <= cutoff; // allow 1hr back for live games
+    });
+}
+
+async function fetchPropsForEvent(eventId) {
+    const url = `${ODDS_API_BASE}/sports/basketball_nba/events/${eventId}/odds?` +
+        `apiKey=${ODDS_API_KEY}&regions=us&markets=player_points_rebounds_assists&oddsFormat=american`;
+    
+    const res = await fetch(url);
+    if (!res.ok) {
+        console.warn(`Props fetch failed for event ${eventId}: ${res.status}`);
+        return [];
+    }
+    
+    const data = await res.json();
+    const props = [];
+    
+    // Parse bookmaker lines — use DraftKings first, fall back to FanDuel, then any
+    const PREFERRED_BOOKS = ['draftkings', 'fanduel', 'betmgm', 'caesars', 'pointsbet'];
+    const bookmakers = data.bookmakers || [];
+    
+    // Build a map: playerName → best available line
+    const playerLines = {};
+    
+    // Try preferred books first
+    for (const bookPref of PREFERRED_BOOKS) {
+        const book = bookmakers.find(b => b.key === bookPref || b.title?.toLowerCase().includes(bookPref));
+        if (!book) continue;
+        
+        for (const market of (book.markets || [])) {
+            if (market.key !== 'player_points_rebounds_assists') continue;
+            
+            for (const outcome of (market.outcomes || [])) {
+                const player = normalizePlayerName(outcome.description || outcome.name);
+                if (!player) continue;
+                
+                if (!playerLines[player]) {
+                    playerLines[player] = {
+                        player,
+                        line: outcome.point,
+                        over_odds: null,
+                        under_odds: null,
+                        book: book.title,
+                    };
+                }
+                
+                // Set over/under odds
+                if (outcome.name === 'Over') {
+                    playerLines[player].over_odds = outcome.price;
+                } else if (outcome.name === 'Under') {
+                    playerLines[player].under_odds = outcome.price;
+                }
+            }
+        }
+        
+        // If we got lines from this book, stop looking
+        if (Object.keys(playerLines).length > 5) break;
+    }
+    
+    // If preferred books had nothing, try any book
+    if (Object.keys(playerLines).length === 0) {
+        for (const book of bookmakers) {
+            for (const market of (book.markets || [])) {
+                if (market.key !== 'player_points_rebounds_assists') continue;
+                for (const outcome of (market.outcomes || [])) {
+                    const player = normalizePlayerName(outcome.description || outcome.name);
+                    if (!player || playerLines[player]) continue;
+                    playerLines[player] = {
+                        player,
+                        line: outcome.point,
+                        over_odds: outcome.name === 'Over' ? outcome.price : null,
+                        under_odds: outcome.name === 'Under' ? outcome.price : null,
+                        book: book.title,
+                    };
+                }
+            }
+            if (Object.keys(playerLines).length > 5) break;
+        }
+    }
+    
+    return Object.values(playerLines);
+}
+
+module.exports = async function handler(req, res) {
+    // CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    
+    // Serve cache if fresh
+    if (_cache && (Date.now() - _cacheTime) < CACHE_TTL) {
+        return res.status(200).json({
+            props: _cache,
+            count: _cache.length,
+            cached: true,
+            cachedAt: new Date(_cacheTime).toISOString(),
+        });
+    }
+    
+    try {
+        // Step 1: Get today's NBA event IDs
+        const events = await fetchTodaysNBAEvents();
+        
+        if (events.length === 0) {
+            return res.status(200).json({
+                props: [],
+                count: 0,
+                message: 'No NBA games found today',
+            });
+        }
+        
+        // Step 2: Fetch props for each event (limit to 6 games to stay within quota)
+        const targetEvents = events.slice(0, 6);
+        const allProps = [];
+        
+        for (const event of targetEvents) {
+            try {
+                const eventProps = await fetchPropsForEvent(event.id);
+                allProps.push(...eventProps);
+            } catch (e) {
+                console.warn(`Skipping event ${event.id}:`, e.message);
+            }
+        }
+        
+        // Deduplicate by player name (keep first occurrence = best book)
+        const seen = new Set();
+        const deduped = allProps.filter(p => {
+            if (seen.has(p.player)) return false;
+            seen.add(p.player);
+            return true;
+        });
+        
+        // Update cache
+        _cache = deduped;
+        _cacheTime = Date.now();
+        
+        return res.status(200).json({
+            props: deduped,
+            count: deduped.length,
+            events: targetEvents.length,
+            cached: false,
+            fetchedAt: new Date().toISOString(),
+        });
+        
+    } catch (error) {
+        console.error('Props API error:', error);
+        
+        // Return cached data if available even if stale
+        if (_cache) {
+            return res.status(200).json({
+                props: _cache,
+                count: _cache.length,
+                cached: true,
+                stale: true,
+                error: error.message,
+            });
+        }
+        
+        return res.status(500).json({
+            props: [],
+            count: 0,
+            error: error.message,
+        });
+    }
+};
