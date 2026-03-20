@@ -602,6 +602,7 @@ const LIVE_DATA = {
   playerStats:{}, dvp:{}, leagueAvgDvp:{}, games:[], injuries:{},
   odds:{ teamMap:{}, gamesList:[], fetchedAt:null },
   roster:{ probables:{}, games:[], counts:{}, fetchedAt:null },
+  props:{ lines:{}, fetchedAt:null, status:'idle' }, // PRA prop lines keyed by player name lowercase
   fetchedAt:null, status:'idle',
 };
 function fdPosToNba(fdPos) {
@@ -868,6 +869,127 @@ function calcPRAProjection(playerName, opponentTeam, gamePace, injuryStatus) {
     return { pts, reb, ast, pra, conf, delta, basePRA };
 }
 const CONF_COLOR = { HIGH:"#22c55e", MED:"#f59e0b", LOW:"#ef4444" };
+
+// ── PRA PROP ENGINE ───────────────────────────────────────────────────────
+// Fetches live PRA over/under lines from The Odds API for top 30 players
+// then combines with our Q-network composite score and matchup signals
+// to generate BOOM / LEAN OVER / NEUTRAL / LEAN UNDER / BUST classifications
+
+async function fetchPRAProps(players) {
+    try {
+        LIVE_DATA.props.status = 'loading';
+        // Only fetch for top 30 by FPPG to conserve API quota
+        const top30 = [...players]
+            .sort((a, b) => b.fppg - a.fppg)
+            .slice(0, 30)
+            .map(p => p.name);
+
+        const res = await fetch('/api/props?market=player_points_rebounds_assists&limit=30');
+        if (!res.ok) throw new Error('props fetch failed');
+        const data = await res.json();
+
+        // data.props = [{ player, line, over_odds, under_odds }, ...]
+        const lines = {};
+        (data.props || []).forEach(prop => {
+            const key = prop.player?.toLowerCase()?.trim();
+            if (key) {
+                lines[key] = {
+                    line: prop.line,
+                    overOdds: prop.over_odds,
+                    underOdds: prop.under_odds,
+                    fetchedAt: Date.now()
+                };
+            }
+        });
+        LIVE_DATA.props.lines = lines;
+        LIVE_DATA.props.fetchedAt = Date.now();
+        LIVE_DATA.props.status = 'done';
+        console.log(`PRA props loaded: ${Object.keys(lines).length} players`);
+        return lines;
+    } catch(e) {
+        LIVE_DATA.props.status = 'error';
+        console.warn('PRA props fetch failed:', e.message);
+        return {};
+    }
+}
+
+// Generate PRA signal from prop line + our composite signals
+// Returns { signal, confidence, edge, label, color, bgColor }
+function getPRASignal(player) {
+    const key = player.name?.toLowerCase();
+    const propData = LIVE_DATA.props.lines[key];
+    const praProj = player.praProj;
+
+    // If no prop line fetched yet, fall back to pure projection signal
+    if (!propData || !propData.line) {
+        if (!praProj) return null;
+        // Use our projection vs season baseline as signal
+        const edge = praProj.delta;
+        if (edge >= 4.0)  return { signal: 'BOOM',       label: '🔥 BOOM',       color: '#22c55e', bgColor: '#22c55e18', edge, source: 'proj' };
+        if (edge >= 1.5)  return { signal: 'LEAN OVER',  label: '📈 LEAN +',     color: '#4ade80', bgColor: '#4ade8012', edge, source: 'proj' };
+        if (edge <= -4.0) return { signal: 'BUST',       label: '💀 BUST',       color: '#ef4444', bgColor: '#ef444418', edge, source: 'proj' };
+        if (edge <= -1.5) return { signal: 'LEAN UNDER', label: '📉 LEAN −',     color: '#f87171', bgColor: '#f8717112', edge, source: 'proj' };
+        return { signal: 'NEUTRAL', label: '⟷ NEUTRAL', color: '#64748b', bgColor: '#64748b10', edge, source: 'proj' };
+    }
+
+    const line = propData.line;
+    const ourPRA = praProj?.pra || (player.fppg * 0.72); // fallback: 72% of FPPG is rough PRA
+
+    // Edge = how much we think the player exceeds or misses the prop line
+    const rawEdge = +(ourPRA - line).toFixed(1);
+
+    // Confidence booster: composite score signal
+    // High composite score relative to FPPG = we think player outperforms
+    const scoreRatio = player.score / Math.max(player.fppg, 1);
+    const scoreBoost = scoreRatio > 1.15 ? 1.5 : scoreRatio > 1.05 ? 0.8 : scoreRatio < 0.90 ? -1.2 : 0;
+
+    // Injury usage spike boost — if player has injury spike, they get extra PRA upside
+    const injSpike = (player.injuryUsageBoost || 1.0) - 1.0; // 0.0 to 0.35
+    const injBoost = injSpike > 0.25 ? 2.5 : injSpike > 0.15 ? 1.5 : injSpike > 0.05 ? 0.8 : 0;
+
+    // Pace boost — fast game means more counting stats
+    const paceBoost = (player.gamePace || 100) > 103 ? 0.8 : (player.gamePace || 100) > 101 ? 0.4 : 0;
+
+    // DVP boost — does opponent give up PRA to this position?
+    const defData = TEAM_DEF_VS_STAT[player.opponent] || { pts:1.0, reb:1.0, ast:1.0 };
+    const defAvg = (defData.pts + defData.reb + defData.ast) / 3;
+    const defBoost = defAvg > 1.06 ? 1.2 : defAvg > 1.02 ? 0.6 : defAvg < 0.96 ? -1.0 : 0;
+
+    // DQN sim boost — if simulation consistently placed player in winning lineups
+    const dqnMult = (window._dqnMultipliers?.[player.name] || 1.0) - 1.0;
+    const dqnBoost = dqnMult > 0.05 ? 1.0 : dqnMult < -0.03 ? -0.8 : 0;
+
+    // Final adjusted edge
+    const adjEdge = +(rawEdge + scoreBoost + injBoost + paceBoost + defBoost + dqnBoost).toFixed(1);
+
+    // Odds implied probability — if sportsbook heavily shades one side, respect it
+    const overOdds = propData.overOdds || -110;
+    const underOdds = propData.underOdds || -110;
+    const oddsImpliedOver = overOdds < 0 ? Math.abs(overOdds) / (Math.abs(overOdds) + 100) : 100 / (overOdds + 100);
+    const oddsImpliedUnder = underOdds < 0 ? Math.abs(underOdds) / (Math.abs(underOdds) + 100) : 100 / (underOdds + 100);
+    // If sportsbook heavily favors under (implied >58%), penalize our edge
+    const oddsAdjust = oddsImpliedUnder > 0.58 ? -1.5 : oddsImpliedOver > 0.58 ? 1.5 : 0;
+    const finalEdge = +(adjEdge + oddsAdjust).toFixed(1);
+
+    // Classify
+    let signal, label, color, bgColor;
+    if (finalEdge >= 5.0)      { signal='BOOM';       label=`🔥 BOOM +${finalEdge}`;  color='#22c55e'; bgColor='#22c55e18'; }
+    else if (finalEdge >= 2.5) { signal='LEAN OVER';  label=`📈 +${finalEdge}`;       color='#4ade80'; bgColor='#4ade8012'; }
+    else if (finalEdge >= 0.5) { signal='SLIGHT OVER';label=`↗ +${finalEdge}`;        color='#86efac'; bgColor='#86efac0d'; }
+    else if (finalEdge <= -5.0){ signal='BUST';       label=`💀 BUST ${finalEdge}`;   color='#ef4444'; bgColor='#ef444418'; }
+    else if (finalEdge <= -2.5){ signal='LEAN UNDER'; label=`📉 ${finalEdge}`;        color='#f87171'; bgColor='#f8717112'; }
+    else if (finalEdge <= -0.5){ signal='SLIGHT UNDER';label=`↘ ${finalEdge}`;       color='#fca5a5'; bgColor='#fca5a50d'; }
+    else                        { signal='NEUTRAL';   label=`⟷ ${line}`;             color='#64748b'; bgColor='#64748b10'; }
+
+    return {
+        signal, label, color, bgColor,
+        edge: finalEdge, rawEdge,
+        line, ourPRA,
+        breakdown: { scoreBoost, injBoost, paceBoost, defBoost, dqnBoost, oddsAdjust },
+        source: 'live'
+    };
+}
+
 const CONF_BG    = { HIGH:"#0a1a0a", MED:"#1a1200", LOW:"#1a0a0a" };
 const MATCHUP_BG    = { A: "#0a1a0a", B: "#0a1228", C: "#1a1200", D: "#1a0a0a" };
 
@@ -2214,6 +2336,14 @@ function InjuryPanel({ onExclude, excludedNames, injuryData, injuryStatus, dvpSt
         : dvpStatus === "error"
         ? React.createElement("span", { style: { fontSize: 9, color: "#ef4444", marginLeft: 8 } }, "⚠️ DVP unavailable — using hardcoded")
         : null;
+    const propCount = Object.keys(LIVE_DATA.props.lines || {}).length;
+    const propsBadge = LIVE_DATA.props.status === "loading"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#a78bfa", marginLeft: 8 } }, "⏳ Props fetching...")
+        : LIVE_DATA.props.status === "done"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#a78bfa", marginLeft: 8 } }, `🎯 ${propCount} PRA props live`)
+        : LIVE_DATA.props.status === "error"
+        ? React.createElement("span", { style: { fontSize: 9, color: "#f59e0b", marginLeft: 8 } }, "⚠️ Props unavailable — projection-only signals")
+        : null;
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", display: "flex", alignItems: "center" } },
@@ -2224,7 +2354,7 @@ function InjuryPanel({ onExclude, excludedNames, injuryData, injuryStatus, dvpSt
                 " Q · ",
                 data.filter(p => p.status === "UP").length,
                 " boosters",
-                statusBadge, dvpBadge),
+                statusBadge, dvpBadge, propsBadge),
             React.createElement("div", { style: { display: "flex", gap: 5 } }, ["ALL", "OUT", "Q", "UP"].map(f => (React.createElement("button", { key: f, onClick: () => setFilter(f), style: { fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter === f ? statusColor[f] || "#3b82f6" : "#1e3040"}`, background: filter === f ? (statusBg[f] || "#0d1e2e") : "transparent", color: filter === f ? (statusColor[f] || "#60a5fa") : "#4a6a80", cursor: "pointer" } }, f === "UP" ? "🔥 BOOST" : f))))),
         React.createElement("div", { style: { maxHeight: 360, overflowY: "auto" } }, filtered.map((p, i) => (React.createElement("div", { key: p.name, style: { display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` } },
             React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 28, textAlign: "center", border: `1px solid ${statusColor[p.status]}44` } }, p.status),
@@ -2571,6 +2701,20 @@ function App() {
                 setDvpStatus("error");
             }
         }).catch(() => setDvpStatus("error"));
+        // ── AUTO-FETCH PRA PROPS ──────────────────────────────────────────
+        // Fires after DVP so we have matchup data for signal calculation
+        // Only fetches top 30 players by FPPG to conserve API quota
+        setTimeout(() => {
+            const currentPlayers = window._currentPlayers || [];
+            if (currentPlayers.length === 0) return;
+            fetchPRAProps(currentPlayers).then(lines => {
+                if (Object.keys(lines).length > 0) {
+                    // Trigger rescore so prop signals appear on players
+                    rebuildPlayers(text, finalOwn, statMuseMap);
+                    if (typeof window._onPropsReady === 'function') window._onPropsReady();
+                }
+            });
+        }, 3500); // fire after DVP (~2-3s) finishes
     }, [rebuildPlayers, vegasMap, statMuseMap]);
     const handleFile = (e) => {
         const file = e.target.files[0];
@@ -3312,7 +3456,7 @@ function App() {
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \u2014 MODEL SCORE RANKED"),
                 React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                     React.createElement("thead", null,
-                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "MIN", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "CONF", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "MIN", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "CONF", "PRA SIGNAL", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: h === "PRA SIGNAL" ? "#a78bfa" : "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
                     React.createElement("tbody", null, players.slice(0, 55).map((p, i) => {
                         const b = ownershipBucket(p.ownership);
                         const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
@@ -3388,6 +3532,28 @@ function App() {
                                 p.praProj
                                     ? React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: CONF_BG[p.praProj.conf], color: CONF_COLOR[p.praProj.conf], border: `1px solid ${CONF_COLOR[p.praProj.conf]}44` } }, p.praProj.conf)
                                     : React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—")),
+                            // ── PRA SIGNAL CELL ──
+                            React.createElement("td", { style: { padding: "6px 8px" } }, (() => {
+                                const sig = getPRASignal(p);
+                                if (!sig) return React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—");
+                                const propLine = LIVE_DATA.props.lines[p.name?.toLowerCase()];
+                                const tooltip = propLine
+                                    ? `Line: ${propLine.line} | Our PRA: ${sig.ourPRA} | Edge: ${sig.edge > 0 ? '+' : ''}${sig.edge} | Source: live odds`
+                                    : `Our projection edge vs baseline: ${sig.edge > 0 ? '+' : ''}${sig.edge}`;
+                                return React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
+                                    React.createElement("span", {
+                                        title: tooltip,
+                                        style: {
+                                            fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                                            background: sig.bgColor, color: sig.color,
+                                            border: `1px solid ${sig.color}44`, cursor: 'default',
+                                            whiteSpace: 'nowrap'
+                                        }
+                                    }, sig.label),
+                                    propLine && React.createElement("span", { style: { fontSize: 8, color: "#4a6a80" } },
+                                        `line: ${propLine.line}`)
+                                );
+                            })()),
                             React.createElement("td", { style: { padding: "6px 8px" } },
                             React.createElement("span", { style: { color: "#60a5fa", fontWeight: 600 } }, p.score.toFixed(2)),
                             (() => {
