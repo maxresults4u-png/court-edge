@@ -878,33 +878,55 @@ const CONF_COLOR = { HIGH:"#22c55e", MED:"#f59e0b", LOW:"#ef4444" };
 async function fetchPRAProps(players) {
     try {
         LIVE_DATA.props.status = 'loading';
-        // Only fetch for top 30 by FPPG to conserve API quota
-        const top30 = [...players]
-            .sort((a, b) => b.fppg - a.fppg)
-            .slice(0, 30)
-            .map(p => p.name);
 
-        const res = await fetch('/api/props?market=player_points_rebounds_assists&limit=30');
-        if (!res.ok) throw new Error('props fetch failed');
+        const res = await fetch('/api/props');
+        if (!res.ok) throw new Error('props fetch failed: ' + res.status);
         const data = await res.json();
 
-        // data.props = [{ player, line, over_odds, under_odds }, ...]
+        // data.props = [{ player (normalized lowercase), line, over_odds, under_odds, book }, ...]
         const lines = {};
         (data.props || []).forEach(prop => {
-            const key = prop.player?.toLowerCase()?.trim();
-            if (key) {
+            const key = prop.player?.trim();
+            if (key && prop.line != null) {
                 lines[key] = {
                     line: prop.line,
                     overOdds: prop.over_odds,
                     underOdds: prop.under_odds,
+                    book: prop.book,
                     fetchedAt: Date.now()
                 };
             }
         });
+
+        // Also try to match by partial name (sportsbooks sometimes use shortened names)
+        // e.g. "nikola jokic" matches "n. jokic" or "jokic"
+        const playerNames = players.map(p => p.name.toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+        
+        Object.keys(lines).forEach(propKey => {
+            // Check if propKey matches any of our player names
+            const match = playerNames.find(pn => {
+                if (pn === propKey) return true;
+                // Last name match for unique last names
+                const lastName = pn.split(' ').pop();
+                const propLastName = propKey.split(' ').pop();
+                if (lastName.length > 4 && lastName === propLastName) {
+                    // Verify first initial matches
+                    const firstInitial = pn[0];
+                    const propFirstInitial = propKey[0];
+                    return firstInitial === propFirstInitial;
+                }
+                return false;
+            });
+            if (match && match !== propKey) {
+                lines[match] = lines[propKey]; // alias to our canonical name
+            }
+        });
+
         LIVE_DATA.props.lines = lines;
         LIVE_DATA.props.fetchedAt = Date.now();
         LIVE_DATA.props.status = 'done';
-        console.log(`PRA props loaded: ${Object.keys(lines).length} players`);
+        console.log(`PRA props loaded: ${Object.keys(lines).length} players from ${data.events || 0} games`);
         return lines;
     } catch(e) {
         LIVE_DATA.props.status = 'error';
