@@ -1960,7 +1960,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     else { // mixed — the millionaire way
         chalkCount   = Math.max(1, Math.round(count * 0.20));
         leverageCount = Math.max(1, Math.round(count * 0.25));
-        injuryCount  = Math.max(1, Math.round(count * 0.20)); // 20% injury pivot — UTA is massive
+        injuryCount  = Math.max(1, Math.round(count * 0.15)); // 15% injury — enough to catch situations without crowding out chalk
         tournCount   = count - chalkCount - leverageCount - injuryCount;
     }
     const buildBatch = (batchCount, type) => {
@@ -2201,11 +2201,21 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         })
         .filter(lu => lu._type === 'injury' ? lu._proj >= INJURY_FPPG_FLOOR : lu._proj >= LINEUP_FPPG_FLOOR)
         .sort((a, b) => b._ceilProj - a._ceilProj); // sort by ceiling, display raw
-    // If floor filter removed too many, relax it and take what we have
-    const final = sorted.length >= Math.floor(count * 0.5) ? sorted : allLineups
-        .map(lu => { lu._proj = lu._proj || lu.reduce((s, p) => s + p.fppg, 0); return lu; })
-        .sort((a, b) => (b._ceilProj || b._proj) - (a._ceilProj || a._proj));
-    return final;
+
+    // If floor filter cut too many (below 70% of requested count), relax progressively
+    if (sorted.length < Math.floor(count * 0.70)) {
+        // Step 1: try relaxing 5 FP
+        const relaxed = allLineups
+            .map(lu => { lu._proj = lu._proj || lu.reduce((s, p) => s + p.fppg, 0); return lu; })
+            .filter(lu => lu._type === 'injury' ? lu._proj >= INJURY_FPPG_FLOOR - 5 : lu._proj >= LINEUP_FPPG_FLOOR - 5)
+            .sort((a, b) => (b._ceilProj || b._proj) - (a._ceilProj || a._proj));
+        if (relaxed.length >= Math.floor(count * 0.70)) return relaxed;
+        // Step 2: no floor at all — take everything sorted by ceiling
+        return allLineups
+            .map(lu => { lu._proj = lu._proj || lu.reduce((s, p) => s + p.fppg, 0); return lu; })
+            .sort((a, b) => (b._ceilProj || b._proj) - (a._ceilProj || a._proj));
+    }
+    return sorted;
 }
 // Bankroll entry strategy
 function getEntryStrategy(bankroll, slateGrade) {
@@ -3199,7 +3209,7 @@ function App() {
                         React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 } }, "GENERATE"),
                         React.createElement("div", { style: { fontSize: 10, color: "#4a6a80", marginBottom: 6, letterSpacing: 1 } }, "LINEUP STRATEGY"),
                         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 14 } }, [
-                            ["mixed", "🎯 MIXED", "20% chalk · 25% leverage · 35% tourn · 20% injury"],
+                            ["mixed", "🎯 MIXED", "20% chalk · 25% leverage · 40% tourn · 15% injury"],
                             ["chalk", "📌 CHALK", "Safe, high-ownership — cash games"],
                             ["leverage", "🔗 LEVERAGE", "Game-stacked, correlated builds"],
                             ["tournament", "🚀 TOURNAMENT", "Contrarian pivots — GPP only"],
@@ -3256,8 +3266,8 @@ function App() {
                             React.createElement("div", { style: { marginTop: 8 } },
                                 React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 3 } },
                                     React.createElement("span", null, "📈 Min Lineup Proj Total"),
-                                    React.createElement("span", { style: { color: "#34d399", fontWeight: 700 } }, React.createElement("span", { id: "lineup-floor-val" }, "272"), " FP")),
-                                React.createElement("input", { id: "lineup-floor-slider", type: "range", min: "240", max: "295", step: "1", defaultValue: "272", onChange: e => { document.getElementById('lineup-floor-val').textContent = e.target.value; }, style: { width: "100%", accentColor: "#34d399" } })),
+                                    React.createElement("span", { style: { color: "#34d399", fontWeight: 700 } }, React.createElement("span", { id: "lineup-floor-val" }, "262"), " FP")),
+                                React.createElement("input", { id: "lineup-floor-slider", type: "range", min: "240", max: "295", step: "1", defaultValue: "262", onChange: e => { document.getElementById('lineup-floor-val').textContent = e.target.value; }, style: { width: "100%", accentColor: "#34d399" } })),
                             React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 8 } },
                                 React.createElement("button", { onClick: () => { setRandomness(5); setNumUniques(1); setMaxExposure(60); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#0d2010", border: "1px solid #16a34a44", borderRadius: 5, color: "#22c55e", cursor: "pointer" } }, "💵 CASH"),
                                 React.createElement("button", { onClick: () => { setRandomness(15); setNumUniques(2); setMaxExposure(40); }, style: { flex: 1, fontSize: 9, padding: "4px 0", background: "#1a1000", border: "1px solid #f59e0b44", borderRadius: 5, color: "#f59e0b", cursor: "pointer" } }, "⚖️ BALANCED"),
