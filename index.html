@@ -3478,7 +3478,7 @@ function App() {
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \u2014 MODEL SCORE RANKED"),
                 React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                     React.createElement("thead", null,
-                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "MIN", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "CONF", "PRA SIGNAL", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: h === "PRA SIGNAL" ? "#a78bfa" : "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "MIN", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "PRA TOTAL", "CONF", "PRA SIGNAL", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: h === "PRA SIGNAL" ? "#a78bfa" : h === "PRA TOTAL" ? "#f59e0b" : "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
                     React.createElement("tbody", null, players.slice(0, 55).map((p, i) => {
                         const b = ownershipBucket(p.ownership);
                         const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
@@ -3550,6 +3550,25 @@ function App() {
                                         p.praProj.delta !== 0 && React.createElement("span", { style: { fontSize: 9, color: p.praProj.delta > 0 ? "#22c55e" : "#ef4444", marginLeft: 3 } },
                                             (p.praProj.delta > 0 ? "+" : "") + p.praProj.delta))
                                     : React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—")),
+                            // ── PRA TOTAL CELL ──
+                            React.createElement("td", { style: { padding: "6px 8px" } }, (() => {
+                                if (!p.praProj) return React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—");
+                                const total = p.praProj.pra;
+                                const propLine = LIVE_DATA.props.lines[p.name?.toLowerCase()];
+                                const line = propLine?.line;
+                                // Color: green if we project over the line, red if under, yellow if no line
+                                const totalColor = line
+                                    ? (total >= line + 2 ? "#22c55e" : total <= line - 2 ? "#ef4444" : "#f59e0b")
+                                    : "#f59e0b";
+                                const totalWeight = total >= 40 ? 700 : 400;
+                                return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 1 } },
+                                    React.createElement("span", {
+                                        title: line ? `Proj ${total} vs line ${line} (${total >= line ? "OVER" : "UNDER"} by ${Math.abs(total - line).toFixed(1)})` : `Projected PRA total`,
+                                        style: { fontSize: 13, fontWeight: totalWeight, color: totalColor, cursor: "default" }
+                                    }, total.toFixed(1)),
+                                    line && React.createElement("span", { style: { fontSize: 8, color: "#4a6a80" } }, `/ ${line} line`)
+                                );
+                            })()),
                             React.createElement("td", { style: { padding: "6px 8px" } },
                                 p.praProj
                                     ? React.createElement("span", { style: { fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: CONF_BG[p.praProj.conf], color: CONF_COLOR[p.praProj.conf], border: `1px solid ${CONF_COLOR[p.praProj.conf]}44` } }, p.praProj.conf)
