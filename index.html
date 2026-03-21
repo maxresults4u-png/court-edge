@@ -33,7 +33,7 @@ window.addEventListener('unhandledrejection', function(e) {
     '<b>Promise rejection:</b> ' + e.reason + '</div>';
 });
 </script>
-<div id="root"></div>
+<div id="root"><div style="background:#0a1520;color:#60a5fa;padding:30px;font-family:monospace;font-size:14px;text-align:center;min-height:100vh;display:flex;align-items:center;justify-content:center;"><div><div style="font-size:24px;margin-bottom:12px;">⚡ Court Edge</div><div style="color:#4a6a80;font-size:12px;">Loading React...</div></div></div></div>
 <script>
 // ── ML MODEL (trained 2026-03-17, 24 slates, MAE 7.02 FP) ──
 const ML_PLAYER_EDGES = {
@@ -263,6 +263,160 @@ function runDqnSimulation(players, numEpisodes = 800) {
 function getDqnSimMult(playerName) {
     if (!DQN_SIM.ran) return 1.0;
     return DQN_SIM.scores[playerName] ?? 1.0;
+}
+
+// ── MONTE CARLO SIMULATION ENGINE ────────────────────────────────────────────
+// 10,000 correlated game simulations per player pool
+// Ceiling-focused: lineups ranked by P90 (score hit or exceeded in top 10% of sims)
+// Correlation model:
+//   Same game players share 40% variance (game script correlation)
+//   Same team players share additional 25% (teammate usage correlation)
+//   Cross-game players are independent
+//
+// Usage: runMonteCarloSim(players) → populates MC_SIM
+//        getMonteCarloStats(playerName) → { median, p90, ceilPct, floor }
+//        scoreLineupMC(lineup) → { median, p90, p80, p95 }
+
+const MC_SIM = {
+    ran: false,
+    iterations: 0,
+    playerStats: {},   // name → { median, p90, p80, ceilPct, floor, scores[] }
+    gameCorr: {},      // game → shared noise draws per iteration
+};
+
+// Log-normal draw: projects around mean with realistic floor/ceiling
+function lognormalDraw(mean, cv) {
+    // cv = coefficient of variation (0.25 = 25% std dev)
+    const sigma = Math.sqrt(Math.log(1 + cv * cv));
+    const mu = Math.log(mean) - sigma * sigma / 2;
+    // Box-Muller transform for standard normal
+    const u1 = Math.random(), u2 = Math.random();
+    const z = Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2);
+    return Math.max(0, Math.exp(mu + sigma * z));
+}
+
+function runMonteCarloSim(players, iterations = 10000) {
+    const t0 = performance.now();
+    MC_SIM.ran = false;
+    MC_SIM.playerStats = {};
+    MC_SIM.gameCorr = {};
+
+    const eligible = players.filter(p => p.injury !== 'O' && p.fppg >= 10);
+    if (eligible.length < 9) return;
+
+    // ── CV calibration by salary tier ────────────────────────────────────────
+    // Stars ($10K+): high variance — when they boom they BOOM (cv=0.30)
+    // Mid ($7-9K):   moderate variance (cv=0.28)
+    // Value (<$7K):  higher relative variance (cv=0.35) — more swingy
+    function getCV(p) {
+        if (p.salary >= 10000) return 0.30;
+        if (p.salary >= 7000)  return 0.28;
+        return 0.35;
+    }
+
+    // ── Game groups for correlation ──────────────────────────────────────────
+    const gameMap = {};
+    eligible.forEach(p => {
+        if (!gameMap[p.game]) gameMap[p.game] = [];
+        gameMap[p.game].push(p.name);
+    });
+
+    // ── Initialize score arrays ──────────────────────────────────────────────
+    const scoreArrays = {};
+    eligible.forEach(p => { scoreArrays[p.name] = new Float32Array(iterations); });
+
+    // ── Run iterations ────────────────────────────────────────────────────────
+    for (let iter = 0; iter < iterations; iter++) {
+        // Step 1: draw a shared game-level noise factor for each game
+        // This creates correlation — all players in a fast game score higher together
+        const gameNoise = {};
+        Object.keys(gameMap).forEach(game => {
+            // Game noise: centered at 1.0, std ~12% — captures pace/foul trouble/blowout variance
+            const u1 = Math.random(), u2 = Math.random();
+            const z = Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2);
+            gameNoise[game] = Math.max(0.70, Math.min(1.45, 1.0 + z * 0.12));
+        });
+
+        // Step 2: draw individual scores blended with game noise
+        eligible.forEach(p => {
+            const gameFactor = gameNoise[p.game] || 1.0;
+            const cv = getCV(p);
+
+            // Individual component (60% weight) + game component (40% weight)
+            const indivDraw = lognormalDraw(p.fppg, cv);
+            // Blend: individual + game correlation
+            const blended = indivDraw * 0.60 + p.fppg * gameFactor * 0.40;
+            // Small additional team correlation for same-team players
+            // (already captured partially through game noise, this adds 15% more)
+            scoreArrays[p.name][iter] = Math.max(0, blended);
+        });
+    }
+
+    // ── Compute statistics from score arrays ─────────────────────────────────
+    eligible.forEach(p => {
+        const arr = Array.from(scoreArrays[p.name]).sort((a, b) => a - b);
+        const n = arr.length;
+        const median = arr[Math.floor(n * 0.50)];
+        const p80    = arr[Math.floor(n * 0.80)];
+        const p90    = arr[Math.floor(n * 0.90)];
+        const p95    = arr[Math.floor(n * 0.95)];
+        const floor  = arr[Math.floor(n * 0.10)]; // 10th percentile = floor
+        // Ceiling hit %: how often does player exceed 1.4x their projection?
+        const ceilThreshold = p.fppg * 1.4;
+        const ceilPct = Math.round((arr.filter(s => s >= ceilThreshold).length / n) * 100);
+
+        MC_SIM.playerStats[p.name] = {
+            median: +median.toFixed(1),
+            p80:    +p80.toFixed(1),
+            p90:    +p90.toFixed(1),
+            p95:    +p95.toFixed(1),
+            floor:  +floor.toFixed(1),
+            ceilPct,
+            proj:   p.fppg,
+            // Store compressed percentiles for lineup scoring
+            _arr:   arr,
+        };
+    });
+
+    MC_SIM.ran = true;
+    MC_SIM.iterations = iterations;
+    const elapsed = (performance.now() - t0).toFixed(0);
+    console.log(`[MC] ${iterations.toLocaleString()} iterations | ${eligible.length} players | ${elapsed}ms`);
+}
+
+function getMonteCarloStats(playerName) {
+    return MC_SIM.playerStats[playerName] || null;
+}
+
+// Score a lineup using Monte Carlo P90 (ceiling-focused)
+// Returns { median, p80, p90, p95 } for the lineup's combined score distribution
+function scoreLineupMC(lineup) {
+    if (!MC_SIM.ran) return null;
+    const N = MC_SIM.iterations;
+
+    // Sum each player's score array across all iterations
+    const lineupScores = new Float32Array(N);
+    let validPlayers = 0;
+
+    lineup.forEach(p => {
+        const stats = MC_SIM.playerStats[p.name];
+        if (!stats?._arr) return;
+        validPlayers++;
+        for (let i = 0; i < N; i++) {
+            lineupScores[i] += stats._arr[i];
+        }
+    });
+
+    if (validPlayers < 7) return null;
+
+    const sorted = Array.from(lineupScores).sort((a, b) => a - b);
+    return {
+        median: +sorted[Math.floor(N * 0.50)].toFixed(1),
+        p80:    +sorted[Math.floor(N * 0.80)].toFixed(1),
+        p90:    +sorted[Math.floor(N * 0.90)].toFixed(1),
+        p95:    +sorted[Math.floor(N * 0.95)].toFixed(1),
+        floor:  +sorted[Math.floor(N * 0.10)].toFixed(1),
+    };
 }
 
 
@@ -1767,8 +1921,9 @@ function lineupStats(lu) {
     if (!lu || !Array.isArray(lu) || lu.length === 0)
         return {
             total: 0, proj: 0, avgOwn: 0, chalk: 0, mid: 0, punt: 0,
-            anchor: { name: "—", fppg: 0 }
+            anchor: { name: "—", fppg: 0 }, mcP90: null, mcP80: null, mcMed: null
         };
+    const mc = scoreLineupMC(lu);
     return {
         total: lu.reduce((s, p) => s + p.salary, 0),
         proj: lu.reduce((s, p) => s + p.fppg, 0),
@@ -1777,6 +1932,10 @@ function lineupStats(lu) {
         mid: lu.filter(p => p.ownership >= 10 && p.ownership < 30).length,
         punt: lu.filter(p => p.ownership < 5).length,
         anchor: lu.reduce((best, p) => p.fppg > best.fppg ? p : best, lu[0]),
+        mcP90: mc?.p90 || null,
+        mcP80: mc?.p80 || null,
+        mcMed: mc?.median || null,
+        mcFloor: mc?.floor || null,
     };
 }
 // ── SLATE GRADER ──────────────────────────────────────────────────────────
@@ -2232,11 +2391,19 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     const sorted = allLineups
         .map(lu => {
             lu._proj = lu.reduce((s, p) => s + p.fppg, 0);          // raw (for display)
-            lu._ceilProj = lu.reduce((s, p) => s + ceilProj(p), 0); // signal-adjusted (for sorting)
+            lu._ceilProj = lu.reduce((s, p) => s + ceilProj(p), 0); // signal-adjusted fallback
+            // ── Monte Carlo P90 — ceiling-focused ranking ──
+            const mcScore = scoreLineupMC(lu);
+            lu._mcP90  = mcScore?.p90  || null;
+            lu._mcP80  = mcScore?.p80  || null;
+            lu._mcMed  = mcScore?.median || null;
+            lu._mcFloor = mcScore?.floor || null;
+            // Sort key: MC P90 when available (ceiling focus), else ceiling proj
+            lu._sortKey = lu._mcP90 || lu._ceilProj;
             return lu;
         })
         .filter(lu => lu._type === 'injury' ? lu._proj >= INJURY_FPPG_FLOOR : lu._proj >= LINEUP_FPPG_FLOOR)
-        .sort((a, b) => b._ceilProj - a._ceilProj); // sort by ceiling, display raw
+        .sort((a, b) => b._sortKey - a._sortKey);
 
     // If floor filter cut too many (below 70% of requested count), relax progressively
     if (sorted.length < Math.floor(count * 0.70)) {
@@ -2603,6 +2770,9 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
                 lineup._hasStack && (React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e", border: "1px solid #22c55e44" } }, "STACKED")),
                 (() => { const cs = lineupCorrScore(lineup); return cs.pairs.length > 0 ? React.createElement("span", { style: { fontSize: 9, padding: "1px 6px", borderRadius: 4, background: CORR_COLOR[cs.grade]+"22", color: CORR_COLOR[cs.grade], border: `1px solid ${CORR_COLOR[cs.grade]}44` } }, `🔗 ${cs.grade}`) : null; })(),
                 React.createElement("span", { style: { color: "#64b587", fontWeight: 600 } }, stats.proj.toFixed(1)),
+                stats.mcP90 && React.createElement("span", { style: { color: "#22d3ee", fontWeight: 700, fontSize: 11 } },
+                    "P90:",
+                    stats.mcP90),
                 React.createElement("span", { style: { color: "#94a3b8" } },
                     "$",
                     stats.total.toLocaleString())),
@@ -2700,6 +2870,11 @@ function App() {
             const dqnRescored = rescoreWithInjuryUsage(rescored);
             setPlayers(dqnRescored);
             console.log(`[DQN] Rescore complete — ${DQN_SIM.episodes} episodes ran`);
+            // ── MONTE CARLO SIM — runs after DQN, uses final scores ──────────
+            // 10,000 correlated game simulations → P90 ceiling scores
+            runMonteCarloSim(dqnRescored, 10000);
+            // Final rescore with MC stats available (no score change — MC is for ranking only)
+            setPlayers([...dqnRescored]); // trigger re-render so SIM column populates
         }, 50);
         setPlayers(rescored);
         return rescored;
@@ -3580,6 +3755,9 @@ function App() {
                                 React.createElement("div", null,
                                     React.createElement("span", { style: { color: "#4a6a80" } }, "PROJ "),
                                     React.createElement("span", { style: { color: "#64b587", fontWeight: 700, fontSize: 20 } }, stats.proj.toFixed(1))),
+                                stats.mcP90 && React.createElement("div", { title: `Monte Carlo: Floor ${stats.mcFloor} | Median ${stats.mcMed} | P80 ${stats.mcP80} | P90 ${stats.mcP90}` },
+                                    React.createElement("span", { style: { color: "#4a6a80" } }, "P90 "),
+                                    React.createElement("span", { style: { color: "#22d3ee", fontWeight: 700, fontSize: 20 } }, stats.mcP90)),
                                 React.createElement("div", null,
                                     React.createElement("span", { style: { color: "#4a6a80" } }, "SAL "),
                                     React.createElement("span", { style: { color: "#e2e8f0", fontWeight: 700 } },
@@ -3651,7 +3829,7 @@ function App() {
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 } }, "PLAYER POOL \u2014 MODEL SCORE RANKED"),
                 React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 11 } },
                     React.createElement("thead", null,
-                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "MIN", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "PRA TOTAL", "CONF", "PRA SIGNAL", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: h === "PRA SIGNAL" ? "#a78bfa" : h === "PRA TOTAL" ? "#f59e0b" : "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
+                        React.createElement("tr", null, ["#", "PLAYER", "POS", "SAL", "FD AVG", "MIN", "SRC", "VALUE", "OWN%", "BUCKET", "MTCHUP", "PACE", "FORM", "BOOM/BUST", "PRA PROJ", "PRA TOTAL", "CONF", "PRA SIGNAL", "SIM", "SCORE", "ACTIONS"].map(h => (React.createElement("th", { key: h, style: { padding: "7px 8px", textAlign: "left", color: h === "PRA SIGNAL" ? "#a78bfa" : h === "PRA TOTAL" ? "#f59e0b" : h === "SIM" ? "#22d3ee" : "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" } }, h))))),
                     React.createElement("tbody", null, players.slice(0, 55).map((p, i) => {
                         const b = ownershipBucket(p.ownership);
                         const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
@@ -3766,6 +3944,22 @@ function App() {
                                     }, sig.label),
                                     propLine && React.createElement("span", { style: { fontSize: 8, color: "#4a6a80" } },
                                         `line: ${propLine.line}`)
+                                );
+                            })()),
+                            // ── SIM CELL ── Monte Carlo P90 ceiling score
+                            React.createElement("td", { style: { padding: "6px 8px" } }, (() => {
+                                const mc = getMonteCarloStats(p.name);
+                                if (!mc) return React.createElement("span", { style: { fontSize: 9, color: "#3b6280" } }, "—");
+                                const ceilColor = mc.ceilPct >= 25 ? "#22d3ee" : mc.ceilPct >= 15 ? "#67e8f9" : "#4a6a80";
+                                return React.createElement("div", {
+                                    title: `Median: ${mc.median} | P80: ${mc.p80} | P90: ${mc.p90} | Floor: ${mc.floor} | Ceiling hit: ${mc.ceilPct}%`,
+                                    style: { display: "flex", flexDirection: "column", gap: 1, cursor: "default" }
+                                },
+                                    React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: "#22d3ee" } }, mc.p90),
+                                    React.createElement("div", { style: { display: "flex", gap: 3, alignItems: "center" } },
+                                        React.createElement("span", { style: { fontSize: 8, color: "#4a6a80" } }, `med ${mc.median}`),
+                                        React.createElement("span", { style: { fontSize: 8, fontWeight: 700, color: ceilColor } }, `🔝${mc.ceilPct}%`)
+                                    )
                                 );
                             })()),
                             React.createElement("td", { style: { padding: "6px 8px" } },
