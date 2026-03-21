@@ -17,6 +17,22 @@
 </style>
 </head>
 <body>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  document.body.innerHTML = '<div style="background:#1a0000;color:#ff6b6b;padding:20px;font-family:monospace;font-size:14px;">' +
+    '<h2>⚠️ Court Edge Load Error</h2>' +
+    '<p><b>Message:</b> ' + msg + '</p>' +
+    '<p><b>Line:</b> ' + line + ' Col: ' + col + '</p>' +
+    '<p><b>Source:</b> ' + src + '</p>' +
+    (err ? '<p><b>Stack:</b><pre>' + err.stack + '</pre></p>' : '') +
+    '</div>';
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e) {
+  document.body.innerHTML += '<div style="background:#1a0a00;color:#ffa500;padding:20px;font-family:monospace;">' +
+    '<b>Promise rejection:</b> ' + e.reason + '</div>';
+});
+</script>
 <div id="root"></div>
 <script>
 // ── ML MODEL (trained 2026-03-17, 24 slates, MAE 7.02 FP) ──
@@ -2757,6 +2773,7 @@ function App() {
         };
         reader.readAsText(file);
     };
+    const handleCSV = useCallback((text) => {
         setCsvText(text);
         const defaultOwn = {};
         text.trim().split("\n").slice(1).forEach(line => {
