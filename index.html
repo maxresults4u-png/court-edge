@@ -1448,9 +1448,13 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         const slotMult = (RULES.isShowdown && isCPTRow && RULES.cptMult && !RULES.starMult) ? RULES.cptMult : 1.0;
         const fppg = +(baseFppg * slotMult).toFixed(2);
         const statMuseFD = !!smData;
+        const isDFF = smData?.source === 'DFF';
         if (fppg < RULES.FLOOR_FPPG_MIN)
             continue;
-        const ownership = (_a = ownershipMap[name.toLowerCase()]) !== null && _a !== void 0 ? _a : 15;
+        // Use DFF ownership projection if available, otherwise ownershipMap
+        const dffOwn = smData?.ownProj;
+        const ownership = dffOwn != null ? dffOwn
+            : ((_a = ownershipMap[name.toLowerCase()]) !== null && _a !== void 0 ? _a : 15);
         // 🚨 DNP block: under 1% = likely inactive
         if (ownership < RULES.DNP_BLOCK_THRESHOLD)
             continue;
@@ -1468,9 +1472,14 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}) {
         const p = {
             name, id, fppg, csvFppg, salary, injury, played, team, game,
             positions, ownership, value, statMuseFD,
-            smLast: smData === null || smData === void 0 ? void 0 : smData.lastGame,
-            smAvg: smData === null || smData === void 0 ? void 0 : smData.fdAvg,
-            smTrend: smData === null || smData === void 0 ? void 0 : smData.trend,
+            smLast: smData?.lastGame,
+            smAvg: smData?.fdAvg,
+            smTrend: smData?.trend,
+            dffProj: smData?.dffProj || null,
+            dffL5: smData?.l5 || null,
+            dffOwn: smData?.ownProj || null,
+            dvpRank: smData?.dvpRank || null,
+            isDFF,
             opponent, matchupGrade, gamePace, paceUp, formData, boomBust, praProj,
         };
         if (RULES.isShowdown) p._baseName = name; // used for unique-player dedup
@@ -2619,6 +2628,8 @@ function App() {
     const [players, setPlayers] = useState([]);
     const [ownershipMap, setOwnershipMap] = useState({});
     const [statMuseMap, setStatMuseMap] = useState({});
+    const [dffStatus, setDffStatus] = useState('idle'); // idle | done
+    const [dffCount, setDffCount] = useState(0);
     const [lineups, setLineups] = useState([]);
     const [selectedLineup, setSelectedLineup] = useState(0);
     const [lockedNames, setLockedNames] = useState([]);
@@ -2677,7 +2688,75 @@ function App() {
         setPlayers(rescored);
         return rescored;
     }, []);
-    const handleCSV = useCallback((text) => {
+    // ── DFF CSV PARSER ────────────────────────────────────────────────────
+    // Parses Daily Fantasy Fuel cheatsheet CSV and merges into statMuseMap
+    // DFF columns: first_name, last_name, ppg_projection, L5_fppg_avg, 
+    //              L10_fppg_avg, szn_fppg_avg, ownership_projection, injury_status
+    const parseDFFCsv = useCallback((text) => {
+        const lines = text.trim().split('\n');
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const get = (cols, key) => (cols[headers.indexOf(key)] || '').trim();
+        const dffMap = {};
+        let count = 0;
+        for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',');
+            const first = get(cols, 'first_name');
+            const last = get(cols, 'last_name');
+            if (!first || !last) continue;
+            const name = `${first} ${last}`.toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // strip accents
+            const proj = parseFloat(get(cols, 'ppg_projection')) || 0;
+            const l5 = parseFloat(get(cols, 'l5_fppg_avg')) || 0;
+            const l10 = parseFloat(get(cols, 'l10_fppg_avg')) || 0;
+            const szn = parseFloat(get(cols, 'szn_fppg_avg')) || 0;
+            const ownProj = parseFloat(get(cols, 'ownership_projection')) || null;
+            const inj = get(cols, 'injury_status');
+            const dvpRank = parseInt(get(cols, 'l5_dvp_rank')) || null;
+            if (proj > 0 || l5 > 0) {
+                // Use DFF projection as primary, L5 as secondary signal
+                // DFF proj already accounts for matchup/injury — trust it over season avg
+                dffMap[name] = {
+                    fdAvg: proj || l5 || szn, // primary: DFF same-day projection
+                    l5: l5,
+                    l10: l10,
+                    szn: szn,
+                    dffProj: proj,
+                    ownProj: ownProj,
+                    injStatus: inj,
+                    dvpRank: dvpRank,
+                    source: 'DFF',
+                };
+                count++;
+            }
+        }
+        console.log(`DFF: loaded ${count} player projections`);
+        return dffMap;
+    }, []);
+
+    const dffFileRef = React.useRef();
+    const handleDFFFile = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const dffData = parseDFFCsv(ev.target.result);
+            // Merge DFF into statMuseMap — DFF takes priority over manual SM entries
+            // but doesn't overwrite if user has manually entered SM data
+            setStatMuseMap(prev => {
+                const merged = { ...dffData };
+                // Keep manual SM entries where they exist
+                Object.entries(prev).forEach(([key, val]) => {
+                    if (val.source !== 'DFF') merged[key] = val;
+                });
+                return merged;
+            });
+            setDffStatus('done');
+            setDffCount(Object.keys(dffData).length);
+            // Rebuild with fresh DFF projections
+            if (csvText) rebuildPlayers(csvText, ownershipMap, { ...statMuseMap, ...dffData });
+        };
+        reader.readAsText(file);
+    };
         setCsvText(text);
         const defaultOwn = {};
         text.trim().split("\n").slice(1).forEach(line => {
@@ -3086,6 +3165,19 @@ function App() {
                     React.createElement("div", { style: { fontSize: 13, color: "#60a5fa", marginBottom: 4 } }, "Click to select CSV"),
                     React.createElement("div", { style: { fontSize: 11, color: "#4a6a80" } }, platform.startsWith("FD") ? "FanDuel-NBA-*.csv" : "DK_NBA_*.csv")),
                 React.createElement("input", { ref: fileRef, type: "file", accept: ".csv", onChange: handleFile, style: { display: "none" } }),
+                React.createElement("div", {
+                    onClick: () => dffFileRef.current.click(),
+                    style: { border: `2px dashed ${dffStatus === 'done' ? '#22c55e' : '#1e3040'}`, borderRadius: 10, padding: "16px 20px", textAlign: "center", cursor: "pointer", marginTop: 10 },
+                    onMouseOver: e => e.currentTarget.style.borderColor = "#22c55e",
+                    onMouseOut: e => e.currentTarget.style.borderColor = dffStatus === 'done' ? '#22c55e' : '#1e3040'
+                },
+                    dffStatus === 'done'
+                        ? React.createElement("div", { style: { fontSize: 13, color: "#22c55e" } }, `✅ DFF loaded — ${dffCount} projections`)
+                        : React.createElement("div", null,
+                            React.createElement("div", { style: { fontSize: 13, color: "#22c55e", marginBottom: 4 } }, "📊 Optional: DFF Cheatsheet CSV"),
+                            React.createElement("div", { style: { fontSize: 11, color: "#4a6a80" } }, "dailyfantasyfuel.com → Download CSV → Upload here")),
+                ),
+                React.createElement("input", { ref: dffFileRef, type: "file", accept: ".csv", onChange: handleDFFFile, style: { display: "none" } }),
                 React.createElement("div", { style: { marginTop: 18, padding: "12px 14px", background: "#0a1a2a", borderRadius: 8, border: "1px solid #1e3040" } },
                     React.createElement("div", { style: { fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 } }, "WHAT'S NEW IN V4"),
                     ["🎯 Slate Grader — A/B/C/D/F before you enter", "🔗 Game stacking engine — correlate high-total games", "📊 MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "💰 Bankroll advisor — how many entries at what stakes"].map(r => (React.createElement("div", { key: r, style: { fontSize: 11, color: "#60a5fa", marginBottom: 3 } }, r))))))),
@@ -3516,7 +3608,7 @@ function App() {
                                         p.salary.toLocaleString()),
                                     React.createElement("td", { style: { padding: "9px 8px", fontWeight: 600, color: p.statMuseFD ? "#22c55e" : "#e2e8f0" } }, p.fppg.toFixed(1)),
                                     React.createElement("td", { style: { padding: "9px 8px" } },
-                                        React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: `1px solid ${p.statMuseFD ? "#16a34a44" : "#1e3040"}` } }, p.statMuseFD ? "SM" : "CSV")),
+                                        React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.isDFF ? "#0a2a1a" : p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.isDFF ? "#22c55e" : p.statMuseFD ? "#4ade80" : "#4a6a80", border: `1px solid ${p.isDFF ? "#22c55e44" : p.statMuseFD ? "#16a34a44" : "#1e3040"}` } }, p.isDFF ? "DFF" : p.statMuseFD ? "SM" : "CSV")),
                                     React.createElement("td", { style: { padding: "9px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" } },
                                         p.value.toFixed(2),
                                         "x"),
@@ -3572,7 +3664,7 @@ function App() {
                                 return React.createElement("span", { style: { color: minColor, fontWeight: mpg >= 34 ? 700 : 400 } }, mpg.toFixed(1));
                             })()),
                             React.createElement("td", { style: { padding: "6px 8px" } },
-                                React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: `1px solid ${p.statMuseFD ? "#16a34a44" : "#1e3040"}` } }, p.statMuseFD ? "SM" : "CSV")),
+                                React.createElement("span", { style: { fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.isDFF ? "#0a2a1a" : p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.isDFF ? "#22c55e" : p.statMuseFD ? "#4ade80" : "#4a6a80", border: `1px solid ${p.isDFF ? "#22c55e44" : p.statMuseFD ? "#16a34a44" : "#1e3040"}` } }, p.isDFF ? "DFF" : p.statMuseFD ? "SM" : "CSV")),
                             React.createElement("td", { style: { padding: "6px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" } },
                                 p.value.toFixed(2),
                                 "x"),
