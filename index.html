@@ -186,7 +186,7 @@
         <div class="mini-stats">
           <div class="mini-stat"><strong>Local</strong><span>Single-file architecture</span></div>
           <div class="mini-stat"><strong>CSV</strong><span>FanDuel upload parsing</span></div>
-          <div class="mini-stat"><strong>20</strong><span>Lineups per run default</span></div>
+          <div class="mini-stat"><strong>150</strong><span>Lineups per run max</span></div>
           <div class="mini-stat"><strong>Stable</strong><span>No script CDN reliance</span></div>
         </div>
       </div>
@@ -224,6 +224,24 @@
       </div>
       <div id="uploadStatus" class="drop-note">No file loaded yet.</div>
       <div id="uploadError" class="error-box hidden"></div>
+      <div class="feature-grid" style="margin-top:18px; grid-template-columns: repeat(3, 1fr);">
+        <div class="feature-item">
+          <h3>Projection upload</h3>
+          <p>Drop a projection CSV here later to override base FPPG values.</p>
+          <input id="projectionFile" type="file" accept=".csv" style="margin-top:10px; width:100%;" />
+        </div>
+        <div class="feature-item">
+          <h3>Ownership upload</h3>
+          <p>Upload ownership percentages to feed the lineup engine more intelligently.</p>
+          <input id="ownershipFile" type="file" accept=".csv" style="margin-top:10px; width:100%;" />
+        </div>
+        <div class="feature-item">
+          <h3>Injury / news upload</h3>
+          <p>Use a CSV or text export later so we can parse scratches and usage boosts.</p>
+          <input id="injuryFile" type="file" accept=".csv,.txt" style="margin-top:10px; width:100%;" />
+        </div>
+      </div>
+
     </section>
 
     <section id="screen-build" class="hidden">
@@ -232,8 +250,8 @@
           <div class="panel-head"><div><h3 style="margin:0;">Build rules</h3><p class="tiny muted" style="margin:4px 0 0;">Core controls for a stable first architecture.</p></div></div>
           <div class="field">
             <label>Lineups to generate</label>
-            <input id="lineupCount" type="range" min="1" max="20" value="10" />
-            <div id="lineupCountText" class="tiny muted" style="margin-top:6px;">10 lineups</div>
+            <input id="lineupCount" type="range" min="1" max="150" value="20" />
+            <div id="lineupCountText" class="tiny muted" style="margin-top:6px;">20 lineups</div>
           </div>
           <div class="field">
             <label>Strategy</label>
@@ -291,6 +309,7 @@
           <div class="subcard">
             <div class="tiny muted">Generator notes</div>
             <div id="generatorNotes" class="drop-note">Upload a file, then generate.</div>
+          <div class="drop-note" id="brainDataStatus" style="margin-top:10px;">Projection file: none · Ownership file: none · Injury file: none</div>
           </div>
         </aside>
       </div>
@@ -336,7 +355,7 @@
       <div class="feature-grid">
         <div class="feature-item"><h3>No fragile React CDN chain</h3><p>This architecture runs as plain HTML, CSS, and JavaScript.</p></div>
         <div class="feature-item"><h3>Clear state flow</h3><p>Upload → Build → Results is explicit and easier to maintain.</p></div>
-        <div class="feature-item"><h3>Expandable brain</h3><p>You can now keep uploading source files and we can wire in more intelligence.</p></div>
+        <div class="feature-item"><h3>Expandable brain</h3><p>You can now keep uploading source files and we can wire in more intelligence, including projection models, ownership data, and injury parsers.</p></div>
       </div>
     </section>
 
@@ -507,24 +526,48 @@
     }
 
     function generateLineups() {
-      const desired = Number(el('lineupCount').value || 10);
+      const desired = Number(el('lineupCount').value || 20);
       const pool = STATE.players.filter(p => !STATE.excludes.has(p.id) && (STATE.ownershipMap[p.id] ?? p.ownership) >= RULES.NEVER_PLAY_OWN_THRESHOLD)
         .map(p => ({ ...p, ownership: STATE.ownershipMap[p.id] ?? p.ownership }));
 
       const lineups = [];
       const seen = new Set();
       let attempts = 0;
-      while (lineups.length < desired && attempts < desired * 80) {
+      const maxAttempts = Math.max(1200, desired * 250);
+      while (lineups.length < desired && attempts < maxAttempts) {
         attempts++;
-        const lu = buildLineup(pool);
+        // increase randomness as we go so we don't collapse into the same lineup
+        const shuffled = [...pool].sort((a, b) => scorePlayer(b) - scorePlayer(a) + (Math.random() - 0.5) * (8 + attempts / 18));
+        if (attempts > 10 && shuffled.length > 12) {
+          const bumpCount = Math.min(4, Math.floor(attempts / 40) + 1);
+          for (let i = 0; i < bumpCount; i++) {
+            const idx = Math.floor(Math.random() * Math.min(18, shuffled.length));
+            const moved = shuffled.splice(idx, 1)[0];
+            const insertAt = Math.floor(shuffled.length * (0.25 + Math.random() * 0.5));
+            shuffled.splice(insertAt, 0, moved);
+          }
+        }
+        const lu = buildLineup(shuffled);
         if (!lu) continue;
         const key = lu.map(p => p.id).sort().join('|');
         if (seen.has(key)) continue;
         seen.add(key);
         lineups.push(lu);
       }
+      // fallback: if uniqueness is exhausted, keep building best-effort extras instead of returning only one lineup
+      if (lineups.length < desired) {
+        let fallbackAttempts = 0;
+        while (lineups.length < desired && fallbackAttempts < desired * 40) {
+          fallbackAttempts++;
+          const shuffled = [...pool].sort((a, b) => scorePlayer(b) - scorePlayer(a) + (Math.random() - 0.5) * 22);
+          const lu = buildLineup(shuffled);
+          if (!lu) continue;
+          lineups.push(lu);
+        }
+      }
       STATE.lineups = lineups;
       STATE.selectedLineup = 0;
+      renderBuildStatus();
       renderResults();
       setStep('results');
     }
@@ -723,6 +766,27 @@
       STATE.locks.clear();
       STATE.excludes.clear();
       renderPool();
+    });
+
+    ['projectionFile','ownershipFile','injuryFile'].forEach((id) => {
+      const node = el(id);
+      if (!node) return;
+      node.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        const parts = {
+          projectionFile: 'Projection file',
+          ownershipFile: 'Ownership file',
+          injuryFile: 'Injury file'
+        };
+        const label = parts[id];
+        const status = el('brainDataStatus');
+        if (!status) return;
+        status.textContent = [
+          'Projection file: ' + (el('projectionFile').files[0]?.name || 'none'),
+          'Ownership file: ' + (el('ownershipFile').files[0]?.name || 'none'),
+          'Injury file: ' + (el('injuryFile').files[0]?.name || 'none')
+        ].join(' · ');
+      });
     });
 
     // init
