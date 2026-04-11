@@ -3,14 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Court Edge — NBA DFS Optimizer</title>
+  <title>Court Edge — Rebuilt</title>
   <style>
     :root {
       --bg: #07111b;
-      --panel: rgba(12, 22, 35, 0.88);
-      --panel-2: rgba(10, 18, 28, 0.88);
-      --line: rgba(120, 170, 255, 0.15);
-      --line-strong: rgba(120, 170, 255, 0.28);
+      --bg-2: #0a1320;
+      --bg-3: #060d16;
+      --panel: rgba(12, 22, 35, 0.92);
+      --panel-2: rgba(10, 18, 28, 0.92);
+      --line: rgba(120, 170, 255, 0.16);
+      --line-strong: rgba(120, 170, 255, 0.32);
       --text: #eaf2ff;
       --muted: #8ea5c6;
       --accent: #47a4ff;
@@ -21,18 +23,18 @@
       --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
       --radius: 22px;
     }
-
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    html, body { margin: 0; padding: 0; }
     body {
+      min-height: 100vh;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:
         radial-gradient(circle at 50% 0%, rgba(71,164,255,0.18), transparent 28%),
         radial-gradient(circle at 100% 15%, rgba(109,255,207,0.12), transparent 22%),
-        linear-gradient(180deg, #07111b 0%, #0a1320 52%, #060d16 100%);
-      min-height: 100vh;
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 52%, var(--bg-3) 100%);
     }
-
-    .grid-bg::before {
+    body::before {
       content: "";
       position: fixed;
       inset: 0;
@@ -43,80 +45,13 @@
       background-size: 48px 48px;
       mask-image: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.12));
     }
-
     .app {
-      max-width: 1440px;
+      max-width: 1460px;
       margin: 0 auto;
       padding: 22px;
       position: relative;
       z-index: 1;
     }
-
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 22px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-    }
-
-    .brand-mark {
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      box-shadow: 0 0 0 6px rgba(71,164,255,0.08), 0 14px 30px rgba(71,164,255,0.18);
-      display: grid;
-      place-items: center;
-      color: #03101c;
-      font-size: 20px;
-    }
-
-    .brand small {
-      display: block;
-      color: var(--muted);
-      font-weight: 600;
-      font-size: 12px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-    }
-
-    .nav-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .btn, .pill, select {
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
-      border-radius: 14px;
-      padding: 11px 14px;
-      font-weight: 650;
-    }
-
-    .btn.primary {
-      background: linear-gradient(135deg, rgba(71,164,255,0.2), rgba(109,255,207,0.18));
-      border-color: rgba(109,255,207,0.35);
-      box-shadow: 0 14px 30px rgba(71,164,255,0.12);
-    }
-
-    .hero {
-      display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 22px;
-      margin-bottom: 22px;
-    }
-
     .card {
       background: linear-gradient(180deg, rgba(17,28,43,0.92), rgba(10,18,28,0.92));
       border: 1px solid var(--line);
@@ -124,564 +59,674 @@
       box-shadow: var(--shadow);
       backdrop-filter: blur(18px);
     }
-
-    .hero-main {
-      padding: 30px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero-main::after {
-      content: "";
-      position: absolute;
-      width: 320px;
-      height: 320px;
-      right: -70px;
-      top: -70px;
-      background: radial-gradient(circle, rgba(71,164,255,0.22), transparent 60%);
-      pointer-events: none;
-    }
-
-    .eyebrow {
-      display: inline-flex;
+    .topbar {
+      display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 8px;
-      border: 1px solid rgba(109,255,207,0.24);
-      color: var(--accent-2);
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      margin-bottom: 16px;
-      background: rgba(109,255,207,0.06);
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(34px, 5vw, 60px);
-      line-height: 0.96;
-      letter-spacing: -0.04em;
-      max-width: 760px;
-    }
-
-    .hero-copy {
-      color: var(--muted);
-      font-size: 17px;
-      line-height: 1.6;
-      max-width: 760px;
-      margin: 18px 0 24px;
-    }
-
-    .hero-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 22px;
-    }
-
-    .mini-stats {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-    }
-
-    .mini-stat {
-      padding: 16px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-    }
-
-    .mini-stat strong {
-      display: block;
-      font-size: 24px;
-      margin-bottom: 5px;
-    }
-
-    .mini-stat span {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .hero-side {
-      padding: 22px;
-      display: flex;
-      flex-direction: column;
       gap: 14px;
+      margin-bottom: 18px;
+      padding: 16px 18px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
-
-    .status-block {
-      padding: 18px;
-      border-radius: 18px;
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand-mark {
+      width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #03101c; font-weight: 900;
+      box-shadow: 0 0 0 6px rgba(71,164,255,0.08), 0 14px 30px rgba(71,164,255,0.18);
+    }
+    .brand h1 { margin: 0; font-size: 20px; }
+    .brand small { color: var(--muted); text-transform: uppercase; letter-spacing: .16em; }
+    .nav-actions, .tab-row, .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    button, input, select, textarea {
+      font: inherit;
+      color: var(--text);
+    }
+    button {
       border: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-    }
-
-    .status-label {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      margin-bottom: 8px;
-    }
-
-    .status-value {
-      font-size: 22px;
-      font-weight: 800;
-      margin-bottom: 6px;
-    }
-
-    .workflow {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 22px;
-    }
-
-    .step {
-      padding: 18px;
-      position: relative;
-    }
-
-    .step-num {
-      width: 34px;
-      height: 34px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: rgba(71,164,255,0.12);
-      border: 1px solid rgba(71,164,255,0.25);
-      margin-bottom: 12px;
-      font-weight: 800;
-    }
-
-    .step h3, .section h2, .panel h3 { margin: 0 0 6px; }
-    .step p, .section p, .panel p { margin: 0; color: var(--muted); line-height: 1.55; }
-
-    .optimizer-shell {
-      display: grid;
-      grid-template-columns: 320px minmax(0, 1fr) 360px;
-      gap: 22px;
-      align-items: start;
-    }
-
-    .panel {
-      padding: 20px;
-    }
-
-    .panel-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-
-    .muted { color: var(--muted); }
-    .tiny { font-size: 12px; }
-
-    .field {
-      margin-bottom: 14px;
-    }
-
-    .field label {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 7px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-    }
-
-    .input, .select, .slider-box {
-      width: 100%;
-      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.03);
       border-radius: 14px;
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
-      padding: 12px 14px;
+      padding: 10px 14px;
+      cursor: pointer;
     }
-
-    .chip-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
+    button.primary {
+      background: linear-gradient(135deg, rgba(71,164,255,0.22), rgba(109,255,207,0.18));
+      border-color: rgba(109,255,207,0.35);
+      box-shadow: 0 14px 30px rgba(71,164,255,0.12);
     }
-
-    .chip {
-      padding: 9px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 700;
+    button.success { background: rgba(81,224,141,0.12); border-color: rgba(81,224,141,0.28); color: var(--success); }
+    button.warn { background: rgba(255,184,77,0.12); border-color: rgba(255,184,77,0.28); color: var(--warning); }
+    button.active { border-color: rgba(109,255,207,0.35); background: rgba(109,255,207,0.08); color: var(--accent-2); }
+    .hero { display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; margin-bottom: 18px; }
+    .hero-main, .hero-side, .panel, .section { padding: 22px; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(109,255,207,0.24);
+      color: var(--accent-2); padding: 8px 12px; border-radius: 999px; font-size: 12px; font-weight: 800;
+      letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 14px; background: rgba(109,255,207,0.06);
     }
-
+    .hero-main h2 { margin: 0; font-size: clamp(34px, 4vw, 58px); line-height: .96; letter-spacing: -.04em; }
+    .hero-main p { color: var(--muted); line-height: 1.6; font-size: 16px; }
+    .mini-stats, .workflow, .feature-grid { display: grid; gap: 12px; }
+    .mini-stats { grid-template-columns: repeat(4, 1fr); margin-top: 18px; }
+    .workflow { grid-template-columns: repeat(4, 1fr); margin-bottom: 18px; }
+    .feature-grid { grid-template-columns: repeat(3, 1fr); }
+    .mini-stat, .step, .status-block, .feature-item, .lineup-card, .table-wrap, .upload-zone, .subcard {
+      border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,0.025);
+    }
+    .mini-stat, .step, .status-block, .feature-item, .lineup-card, .subcard { padding: 16px; }
+    .mini-stat strong { display:block; font-size: 24px; margin-bottom: 5px; }
+    .mini-stat span, .muted, .tiny, .status-block p, .step p, .feature-item p { color: var(--muted); }
+    .step-num {
+      width: 34px; height: 34px; border-radius: 999px; display: grid; place-items: center;
+      background: rgba(71,164,255,0.12); border: 1px solid rgba(71,164,255,0.25); margin-bottom: 12px; font-weight: 800;
+    }
+    .optimizer-shell { display: grid; grid-template-columns: 320px minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
+    .panel-head { display:flex; justify-content: space-between; align-items:center; gap: 10px; margin-bottom: 14px; }
+    .field { margin-bottom: 14px; }
+    .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:7px; text-transform:uppercase; letter-spacing:0.14em; }
+    .input, .select, .slider-box, input[type="text"], input[type="number"], textarea, select {
+      width:100%; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,0.03); padding:11px 12px;
+    }
+    input[type="range"] { width: 100%; }
+    .chip-row { display:flex; gap:8px; flex-wrap:wrap; }
+    .chip { padding:8px 11px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,0.03); font-size:13px; }
     .chip.active { border-color: rgba(109,255,207,0.35); background: rgba(109,255,207,0.08); color: var(--accent-2); }
-
-    .player-table {
-      width: 100%;
-      border-collapse: collapse;
-      overflow: hidden;
-      border-radius: 18px;
-      border: 1px solid var(--line);
+    .table-wrap { overflow: auto; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding: 12px 10px; border-bottom:1px solid rgba(255,255,255,0.05); text-align:left; font-size:13px; }
+    th { color: var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:0.14em; background:rgba(255,255,255,0.025); position: sticky; top: 0; }
+    tbody tr:hover td { background: rgba(255,255,255,0.025); }
+    .tag { display:inline-flex; padding:5px 9px; border-radius:999px; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .good { background:rgba(81,224,141,0.12); color:var(--success); }
+    .warn-tag { background:rgba(255,184,77,0.12); color:var(--warning); }
+    .hot { background:rgba(255,107,125,0.12); color:var(--danger); }
+    .lineup-list { max-height: 860px; overflow: auto; }
+    .lineup-card { margin-bottom: 12px; cursor:pointer; }
+    .lineup-card.active { border-color: rgba(109,255,207,0.35); box-shadow: 0 0 0 1px rgba(109,255,207,0.15) inset; }
+    .summary-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
+    .summary-box { padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,0.025); text-align:center; }
+    .summary-box strong { display:block; font-size: 20px; margin-bottom: 4px; }
+    .drop-note { margin-top: 12px; color: var(--muted); font-size: 13px; }
+    .hidden { display: none !important; }
+    .footer-note { color: var(--muted); text-align:center; font-size:13px; padding: 20px 0 8px; }
+    .error-box { border:1px solid rgba(255,107,125,0.28); background: rgba(255,107,125,0.08); color: #ffd5da; padding: 14px; border-radius: 16px; margin-top: 12px; }
+    @media (max-width: 1200px) {
+      .hero, .optimizer-shell, .workflow, .mini-stats, .feature-grid, .summary-grid { grid-template-columns: 1fr; }
     }
-
-    .player-table th, .player-table td {
-      padding: 14px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      text-align: left;
-      font-size: 14px;
-    }
-
-    .player-table th {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      background: rgba(255,255,255,0.025);
-    }
-
-    .player-table tr:hover td { background: rgba(255,255,255,0.025); }
-    .tag {
-      display: inline-flex;
-      padding: 5px 9px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .tag.good { background: rgba(81,224,141,0.12); color: var(--success); }
-    .tag.warn { background: rgba(255,184,77,0.12); color: var(--warning); }
-    .tag.hot { background: rgba(255,107,125,0.12); color: var(--danger); }
-
-    .lineup-card {
-      padding: 16px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-      margin-bottom: 12px;
-    }
-
-    .lineup-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 9px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      font-size: 14px;
-    }
-
-    .lineup-row:last-child { border-bottom: 0; }
-
-    .actions-stack {
-      display: grid;
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    .btn.full {
-      width: 100%;
-      text-align: center;
-      justify-content: center;
-      display: inline-flex;
-    }
-
-    .section {
-      margin-top: 22px;
-      padding: 22px;
-    }
-
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .feature-item {
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(255,255,255,0.025);
-      padding: 18px;
-    }
-
-    .footer-note {
-      color: var(--muted);
-      text-align: center;
-      font-size: 13px;
-      padding: 26px 0 8px;
-    }
-
-    @media (max-width: 1180px) {
-      .hero, .optimizer-shell, .workflow, .feature-grid, .mini-stats {
-        grid-template-columns: 1fr;
-      }
-      .hero-side { order: -1; }
-    }
-
-    @media (max-width: 740px) {
+    @media (max-width: 760px) {
       .app { padding: 14px; }
       .topbar { flex-direction: column; align-items: flex-start; }
       .hero-main, .hero-side, .panel, .section { padding: 18px; }
-      .player-table th:nth-child(4),
-      .player-table td:nth-child(4),
-      .player-table th:nth-child(6),
-      .player-table td:nth-child(6) {
-        display: none;
-      }
     }
   </style>
 </head>
-<body class="grid-bg">
+<body>
   <div class="app">
-    <div class="topbar">
+    <div class="card topbar">
       <div class="brand">
         <div class="brand-mark">⚡</div>
         <div>
-          <div style="font-size: 20px;">Court Edge</div>
-          <small>NBA DFS Optimizer</small>
+          <h1>Court Edge</h1>
+          <small>NBA DFS Optimizer — rebuilt architecture</small>
         </div>
       </div>
       <div class="nav-actions">
-        <button class="btn">Pricing</button>
-        <button class="btn">Docs</button>
-        <button class="btn">Login</button>
-        <button class="btn primary">Start Optimizing</button>
+        <button id="tab-upload" class="active">1. Upload</button>
+        <button id="tab-build">2. Build</button>
+        <button id="tab-results">3. Results</button>
       </div>
     </div>
 
     <section class="hero">
       <div class="card hero-main">
-        <div class="eyebrow">Live Slate • DraftKings + FanDuel</div>
-        <h1>Build sharper NBA lineups with a cleaner, faster optimizer.</h1>
-        <p class="hero-copy">
-          Court Edge helps you lock core plays, manage exposure, stack intelligently, and generate tournament-ready lineups without digging through a cluttered interface.
-        </p>
-        <div class="hero-actions">
-          <button class="btn primary">Start With Today’s Main Slate</button>
-          <button class="btn">Preview Demo Build</button>
-        </div>
+        <div class="eyebrow">Self-contained • No React CDN dependency</div>
+        <h2>Upload your slate, set rules, and generate sharper NBA DFS builds.</h2>
+        <p>This rebuild gives you a stable architecture first: no external React/Babel dependency, cleaner screens, and a simpler path to adding the real optimizer brain as you upload more source files.</p>
         <div class="mini-stats">
-          <div class="mini-stat"><strong>150</strong><span>Lineups per run</span></div>
-          <div class="mini-stat"><strong>Live</strong><span>Projection refresh status</span></div>
-          <div class="mini-stat"><strong>DK / FD</strong><span>Site support</span></div>
-          <div class="mini-stat"><strong>CSV</strong><span>One-click export</span></div>
+          <div class="mini-stat"><strong>Local</strong><span>Single-file architecture</span></div>
+          <div class="mini-stat"><strong>CSV</strong><span>FanDuel upload parsing</span></div>
+          <div class="mini-stat"><strong>20</strong><span>Lineups per run default</span></div>
+          <div class="mini-stat"><strong>Stable</strong><span>No script CDN reliance</span></div>
         </div>
       </div>
-
       <div class="card hero-side">
         <div class="status-block">
-          <div class="status-label">Slate Status</div>
-          <div class="status-value">Main Slate · 8 Games</div>
-          <div class="muted">Locks in 01:42:18 · Last projection sync 2 min ago</div>
+          <div class="tiny muted">Slate status</div>
+          <div style="font-size:22px;font-weight:800;margin:6px 0;">Main Slate · 8 Games</div>
+          <p>Starts with hardcoded Vegas hooks and CSV-driven player pool management.</p>
         </div>
         <div class="status-block">
-          <div class="status-label">Optimizer Workflow</div>
-          <div class="muted">Choose a slate, set your rules, generate builds, export lineups. No dead-end loading screen. No guessing where to click next.</div>
+          <div class="tiny muted">Architecture path</div>
+          <p>Today: stable uploader, player pool, locks/excludes, ownership, lineup generator, output. Next: richer projections, injury automations, export integrations, saved builds.</p>
         </div>
         <div class="status-block">
-          <div class="status-label">What Makes It Better</div>
-          <div class="muted">Cleaner controls, real status states, stronger lineup visibility, and a premium analytics-first UI that feels operational from the first second.</div>
+          <div class="tiny muted">What to upload next</div>
+          <p>Projection sheets, ownership logic, injury feeds, or any export formats you want to wire in.</p>
         </div>
       </div>
     </section>
 
     <section class="workflow">
-      <div class="card step"><div class="step-num">1</div><h3>Choose Slate</h3><p>Select site, contest type, and slate without landing in a blank dashboard.</p></div>
-      <div class="card step"><div class="step-num">2</div><h3>Set Rules</h3><p>Lock, exclude, cap ownership, tune randomness, and set team limits in one clear rail.</p></div>
-      <div class="card step"><div class="step-num">3</div><h3>Generate Builds</h3><p>Run one lineup or a full portfolio with clear salary, projection, and leverage signals.</p></div>
-      <div class="card step"><div class="step-num">4</div><h3>Export + Monitor</h3><p>Download CSV, watch updates, and react to late news without losing your build logic.</p></div>
+      <div class="card step"><div class="step-num">1</div><h3>Upload CSV</h3><p>Load a FanDuel export and build your player pool locally.</p></div>
+      <div class="card step"><div class="step-num">2</div><h3>Edit Rules</h3><p>Adjust ownership, locks, excludes, lineup count, and strategy.</p></div>
+      <div class="card step"><div class="step-num">3</div><h3>Generate Lineups</h3><p>Run a self-contained heuristic builder with salary and position checks.</p></div>
+      <div class="card step"><div class="step-num">4</div><h3>Review Output</h3><p>Inspect lineups, player pool, and exposure summary in one place.</p></div>
     </section>
 
-    <section class="optimizer-shell">
-      <aside class="card panel">
-        <div class="panel-head">
-          <div>
-            <h3>Build Rules</h3>
-            <p class="tiny muted">Everything a serious user expects, without overload.</p>
-          </div>
-          <span class="pill">Live</span>
-        </div>
-
-        <div class="field">
-          <label>Site</label>
-          <div class="chip-row">
-            <div class="chip active">DraftKings</div>
-            <div class="chip">FanDuel</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Slate</label>
-          <select class="select"><option>Main Slate · 8 Games</option><option>Turbo Slate</option><option>Showdown</option></select>
-        </div>
-
-        <div class="field">
-          <label>Contest Type</label>
-          <div class="chip-row">
-            <div class="chip active">GPP</div>
-            <div class="chip">Cash</div>
-            <div class="chip">SE</div>
-            <div class="chip">MME</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Lineups to Generate</label>
-          <div class="input">20</div>
-        </div>
-
-        <div class="field">
-          <label>Randomness</label>
-          <div class="slider-box">24% · Tournament profile</div>
-        </div>
-
-        <div class="field">
-          <label>Exposure Rules</label>
-          <div class="chip-row">
-            <div class="chip active">Min 10%</div>
-            <div class="chip">Max 60%</div>
-            <div class="chip">Team Cap 3</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Stack Logic</label>
-          <div class="chip-row">
-            <div class="chip">Game Stack</div>
-            <div class="chip active">Bring-Back</div>
-            <div class="chip">Late Swap</div>
-          </div>
-        </div>
-
-        <div class="actions-stack">
-          <button class="btn primary full">Generate Lineups</button>
-          <button class="btn full">Reset Rules</button>
-        </div>
-      </aside>
-
-      <main class="card panel">
-        <div class="panel-head">
-          <div>
-            <h3>Player Pool</h3>
-            <p class="tiny muted">Projection, salary, leverage, status, and quick actions in one scan.</p>
-          </div>
-          <span class="pill">Updated 2 min ago</span>
-        </div>
-
-        <table class="player-table">
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th>Team</th>
-              <th>Salary</th>
-              <th>Proj</th>
-              <th>Own</th>
-              <th>Value</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Luka Doncic</strong><div class="tiny muted">PG / SG</div></td>
-              <td>DAL</td>
-              <td>$11,200</td>
-              <td>57.8</td>
-              <td>24%</td>
-              <td>5.16x</td>
-              <td><span class="tag good">Core</span></td>
-            </tr>
-            <tr>
-              <td><strong>Jalen Brunson</strong><div class="tiny muted">PG</div></td>
-              <td>NYK</td>
-              <td>$9,300</td>
-              <td>48.2</td>
-              <td>19%</td>
-              <td>5.18x</td>
-              <td><span class="tag warn">Q Tag</span></td>
-            </tr>
-            <tr>
-              <td><strong>Jaren Jackson Jr.</strong><div class="tiny muted">PF / C</div></td>
-              <td>MEM</td>
-              <td>$7,800</td>
-              <td>42.4</td>
-              <td>13%</td>
-              <td>5.44x</td>
-              <td><span class="tag hot">Leverage</span></td>
-            </tr>
-            <tr>
-              <td><strong>Brandin Podziemski</strong><div class="tiny muted">SG / SF</div></td>
-              <td>GSW</td>
-              <td>$5,600</td>
-              <td>31.7</td>
-              <td>21%</td>
-              <td>5.66x</td>
-              <td><span class="tag good">Value</span></td>
-            </tr>
-            <tr>
-              <td><strong>Nickeil Alexander-Walker</strong><div class="tiny muted">SG / SF</div></td>
-              <td>MIN</td>
-              <td>$4,500</td>
-              <td>26.1</td>
-              <td>11%</td>
-              <td>5.80x</td>
-              <td><span class="tag hot">Low Own</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </main>
-
-      <aside class="card panel">
-        <div class="panel-head">
-          <div>
-            <h3>Generated Lineup</h3>
-            <p class="tiny muted">Right rail shows the build clearly instead of hiding it beneath clutter.</p>
-          </div>
-          <span class="pill">Lineup 1 of 20</span>
-        </div>
-
-        <div class="lineup-card">
-          <div class="lineup-row"><span>PG · Luka Doncic</span><strong>57.8</strong></div>
-          <div class="lineup-row"><span>SG · Brandin Podziemski</span><strong>31.7</strong></div>
-          <div class="lineup-row"><span>SF · Nickeil Alexander-Walker</span><strong>26.1</strong></div>
-          <div class="lineup-row"><span>PF · Jaren Jackson Jr.</span><strong>42.4</strong></div>
-          <div class="lineup-row"><span>C · Value Center Placeholder</span><strong>34.6</strong></div>
-          <div class="lineup-row"><span>G · Mid-Range Guard</span><strong>29.8</strong></div>
-          <div class="lineup-row"><span>F · Utility Wing</span><strong>27.5</strong></div>
-          <div class="lineup-row"><span>UTIL · Late Swap Value</span><strong>23.9</strong></div>
-        </div>
-
-        <div class="status-block" style="margin-bottom:12px;">
-          <div class="status-label">Lineup Summary</div>
-          <div class="status-value">273.8 Proj</div>
-          <div class="muted">Salary $49,800 · Avg ownership 17.1% · 2 late-swap pieces</div>
-        </div>
-
-        <div class="actions-stack">
-          <button class="btn primary full">Export CSV</button>
-          <button class="btn full">Generate Another</button>
-          <button class="btn full">Save Build</button>
-        </div>
-      </aside>
+    <section id="screen-upload" class="card section">
+      <h2 style="margin-top:0;">Upload slate file</h2>
+      <p class="muted">Start here. This file becomes the player pool that powers the build and results screens.</p>
+      <div class="upload-zone" style="padding:28px; text-align:center; margin-top:14px;">
+        <input id="csvFile" type="file" accept=".csv" class="hidden" />
+        <button id="chooseFile" class="primary">Choose FanDuel CSV</button>
+        <div class="drop-note">Accepted: FanDuel-NBA-*.csv</div>
+      </div>
+      <div id="uploadStatus" class="drop-note">No file loaded yet.</div>
+      <div id="uploadError" class="error-box hidden"></div>
     </section>
 
-    <section class="card section">
-      <h2>What should improve from your current version</h2>
-      <p>The redesign should replace raw loading states with a real product-first opening, make the optimizer workflow obvious, and surface serious DFS controls immediately instead of making the tool feel like a React shell waiting to hydrate.</p>
-      <div class="feature-grid">
-        <div class="feature-item"><h3>Real Loading States</h3><p>Use skeletons, sync timestamps, and slate status instead of generic “Loading React…” messaging.</p></div>
-        <div class="feature-item"><h3>Cleaner Filters</h3><p>Put locks, excludes, stack rules, and exposure logic in one left-side workflow rail.</p></div>
-        <div class="feature-item"><h3>Sharper Data Scan</h3><p>Projection, value, salary, ownership, and player status should be visible at a glance.</p></div>
-        <div class="feature-item"><h3>Visible Output</h3><p>The lineup rail should always show what the optimizer actually built and why it matters.</p></div>
+    <section id="screen-build" class="hidden">
+      <div class="optimizer-shell">
+        <aside class="card panel">
+          <div class="panel-head"><div><h3 style="margin:0;">Build rules</h3><p class="tiny muted" style="margin:4px 0 0;">Core controls for a stable first architecture.</p></div></div>
+          <div class="field">
+            <label>Lineups to generate</label>
+            <input id="lineupCount" type="range" min="1" max="20" value="10" />
+            <div id="lineupCountText" class="tiny muted" style="margin-top:6px;">10 lineups</div>
+          </div>
+          <div class="field">
+            <label>Strategy</label>
+            <div class="chip-row" id="strategyRow">
+              <button class="chip active" data-strategy="mixed">Mixed</button>
+              <button class="chip" data-strategy="chalk">Chalk</button>
+              <button class="chip" data-strategy="balanced">Balanced</button>
+              <button class="chip" data-strategy="contrarian">Contrarian</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Quick actions</label>
+            <div class="actions-stack">
+              <button id="fetchVegas" class="primary">Load Vegas boosts</button>
+              <button id="generateBtn" class="success">Generate lineups</button>
+              <button id="resetLocks">Clear locks/excludes</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Hardcoded slate signals</label>
+            <div id="vegasSummary" class="subcard tiny muted">Not loaded yet.</div>
+          </div>
+        </aside>
+
+        <main class="card panel">
+          <div class="panel-head">
+            <div><h3 style="margin:0;">Player pool</h3><p class="tiny muted" style="margin:4px 0 0;">Edit ownership and manage locks/excludes directly.</p></div>
+            <div class="row">
+              <button id="showOwnership" class="active">Ownership</button>
+              <button id="showPool">Pool</button>
+            </div>
+          </div>
+          <div id="poolWrap" class="table-wrap">
+            <table id="poolTable">
+              <thead>
+                <tr>
+                  <th>Player</th><th>Pos</th><th>Team</th><th>Salary</th><th>Proj</th><th>Own</th><th>Value</th><th>Lock</th><th>Exclude</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </main>
+
+        <aside class="card panel">
+          <div class="panel-head"><div><h3 style="margin:0;">Build status</h3><p class="tiny muted" style="margin:4px 0 0;">What the generator is using right now.</p></div></div>
+          <div class="subcard" style="margin-bottom:12px;">
+            <div class="tiny muted">Locked players</div>
+            <div id="lockedList" class="drop-note">None</div>
+          </div>
+          <div class="subcard" style="margin-bottom:12px;">
+            <div class="tiny muted">Excluded players</div>
+            <div id="excludedList" class="drop-note">None</div>
+          </div>
+          <div class="subcard">
+            <div class="tiny muted">Generator notes</div>
+            <div id="generatorNotes" class="drop-note">Upload a file, then generate.</div>
+          </div>
+        </aside>
       </div>
     </section>
 
-    <div class="footer-note">Keep the same HTML filename you already use and replace its contents with this updated structure when you’re ready to test the next version.</div>
+    <section id="screen-results" class="hidden">
+      <div class="optimizer-shell">
+        <aside class="card panel">
+          <div class="panel-head"><div><h3 style="margin:0;">Generated lineups</h3><p class="tiny muted" style="margin:4px 0 0;">Select a lineup to inspect.</p></div></div>
+          <div id="lineupList" class="lineup-list"></div>
+        </aside>
+
+        <main class="card panel">
+          <div class="panel-head"><div><h3 style="margin:0;">Lineup detail</h3><p class="tiny muted" style="margin:4px 0 0;">Projection, salary, ownership, and slot assignments.</p></div></div>
+          <div id="lineupDetailEmpty" class="drop-note">Generate a lineup to see details.</div>
+          <div id="lineupDetail" class="hidden">
+            <div class="summary-grid" id="summaryGrid"></div>
+            <div class="table-wrap">
+              <table id="lineupDetailTable">
+                <thead>
+                  <tr><th>Slot</th><th>Player</th><th>Team</th><th>Salary</th><th>Proj</th><th>Own</th><th>Value</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+
+        <aside class="card panel">
+          <div class="panel-head"><div><h3 style="margin:0;">Exposure summary</h3><p class="tiny muted" style="margin:4px 0 0;">How often players appear across generated lineups.</p></div></div>
+          <div class="table-wrap">
+            <table id="exposureTable">
+              <thead><tr><th>Player</th><th>Count</th><th>Exposure</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="card section" style="margin-top:18px;">
+      <h2 style="margin-top:0;">What this rebuild fixes</h2>
+      <div class="feature-grid">
+        <div class="feature-item"><h3>No fragile React CDN chain</h3><p>This architecture runs as plain HTML, CSS, and JavaScript.</p></div>
+        <div class="feature-item"><h3>Clear state flow</h3><p>Upload → Build → Results is explicit and easier to maintain.</p></div>
+        <div class="feature-item"><h3>Expandable brain</h3><p>You can now keep uploading source files and we can wire in more intelligence.</p></div>
+      </div>
+    </section>
+
+    <div class="footer-note">Court Edge rebuilt architecture — self-contained baseline for the next iteration.</div>
   </div>
+
+  <script>
+    const STATE = {
+      step: 'upload',
+      players: [],
+      ownershipMap: {},
+      lineups: [],
+      selectedLineup: 0,
+      locks: new Set(),
+      excludes: new Set(),
+      strategy: 'mixed',
+      vegasLoaded: false
+    };
+
+    const RULES = {
+      SALARY_CAP: 60000,
+      MIN_SALARY_USED: 58000,
+      FLOOR_FPPG_MIN: 15,
+      NEVER_PLAY_OWN_THRESHOLD: 3,
+      POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 }
+    };
+
+    const HARDCODED_GAMES = [
+      { away: 'CLE', home: 'DAL', total: 218.5, homeSpread: 12.5 },
+      { away: 'MEM', home: 'DET', total: 224.5, homeSpread: -14.5 },
+      { away: 'NYK', home: 'IND', total: 226.5, homeSpread: 13.5 },
+      { away: 'PHX', home: 'TOR', total: 222.0, homeSpread: -5.5 },
+      { away: 'NOP', home: 'HOU', total: 224.0, homeSpread: -7.5 },
+      { away: 'UTA', home: 'POR', total: 235.5, homeSpread: -17.5 },
+      { away: 'MIN', home: 'GSW', total: 228.5, homeSpread: 5.5 },
+      { away: 'CHI', home: 'LAC', total: 226.0, homeSpread: -14.5 }
+    ];
+
+    const POSITION_ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+    const el = (id) => document.getElementById(id);
+    const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString();
+    const toPct = (n) => (Number(n || 0)).toFixed(1) + '%';
+
+    function setStep(step) {
+      STATE.step = step;
+      ['upload','build','results'].forEach(name => {
+        el('screen-' + name).classList.toggle('hidden', name !== step);
+        el('tab-' + name).classList.toggle('active', name === step);
+      });
+    }
+
+    function parseCSV(text) {
+      const lines = text.trim().split(/\r?\n/);
+      if (lines.length < 2) throw new Error('CSV appears empty or invalid.');
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, ''));
+      const idx = (name) => headers.indexOf(name);
+      const players = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        if (cols.length < 6) continue;
+        const get = (name) => (idx(name) >= 0 ? (cols[idx(name)] || '').trim() : '');
+        const name = get('nickname') || [get('firstname'), get('lastname')].filter(Boolean).join(' ');
+        const salary = parseInt(get('salary') || '0', 10);
+        const fppg = parseFloat(get('fppg') || '0');
+        const injury = get('injuryindicator') || '';
+        const team = get('team') || '';
+        const game = get('game') || '';
+        const posRaw = get('rosterposition') || get('position') || '';
+        const positions = posRaw.split('/').map(p => p.trim()).filter(p => POSITION_ORDER.includes(p));
+
+        if (!name || !salary || !fppg || !positions.length || injury === 'O') continue;
+        if (fppg < RULES.FLOOR_FPPG_MIN) continue;
+
+        const player = {
+          id: name.toLowerCase(),
+          name,
+          team,
+          game,
+          salary,
+          fppg,
+          injury,
+          positions,
+          ownership: 15,
+          value: +(fppg / (salary / 1000)).toFixed(2)
+        };
+        players.push(player);
+      }
+      return players.sort((a,b) => b.fppg - a.fppg);
+    }
+
+    function applyVegasBoosts() {
+      const teamMap = {};
+      HARDCODED_GAMES.forEach(g => {
+        const spread = g.homeSpread;
+        const homeImpl = +((g.total / 2) - (spread / 2)).toFixed(1);
+        const awayImpl = +(g.total - homeImpl).toFixed(1);
+        teamMap[g.home] = { impliedPts: homeImpl, total: g.total };
+        teamMap[g.away] = { impliedPts: awayImpl, total: g.total };
+      });
+      STATE.players = STATE.players.map(p => {
+        const v = teamMap[p.team];
+        if (!v) return p;
+        let own = 8;
+        if (v.impliedPts >= 122) own = 24;
+        else if (v.impliedPts >= 118) own = 20;
+        else if (v.impliedPts >= 114) own = 17;
+        else if (v.impliedPts >= 110) own = 14;
+        else if (v.impliedPts >= 106) own = 11;
+        p.ownership = Math.min(65, Math.max(2, own));
+        STATE.ownershipMap[p.id] = p.ownership;
+        return p;
+      });
+      STATE.vegasLoaded = true;
+      el('vegasSummary').innerHTML = HARDCODED_GAMES.map(g => `<div style="margin-bottom:6px;"><strong>${g.away}@${g.home}</strong> · O/U ${g.total}</div>`).join('');
+      renderPool();
+    }
+
+    function scorePlayer(p) {
+      let score = p.fppg + p.value * 2;
+      if (STATE.strategy === 'chalk') score += p.ownership * 0.35;
+      if (STATE.strategy === 'balanced') score += p.ownership * 0.12;
+      if (STATE.strategy === 'contrarian') score += (22 - Math.min(p.ownership, 22)) * 0.55;
+      return score;
+    }
+
+    function buildLineup(pool) {
+      const needed = { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 };
+      const lineup = [];
+      const used = new Set();
+      let budget = RULES.SALARY_CAP;
+
+      function place(p, pos) {
+        needed[pos] -= 1;
+        lineup.push({ ...p, slot: pos });
+        used.add(p.id);
+        budget -= p.salary;
+      }
+
+      const locked = pool.filter(p => STATE.locks.has(p.id));
+      const rest = pool.filter(p => !STATE.locks.has(p.id) && !STATE.excludes.has(p.id));
+
+      for (const p of locked) {
+        for (const pos of p.positions) {
+          if (needed[pos] > 0) { place(p, pos); break; }
+        }
+      }
+
+      const sorted = [...rest].sort((a,b) => scorePlayer(b) - scorePlayer(a) + (Math.random() - 0.5) * 8);
+      for (const p of sorted) {
+        if (used.has(p.id)) continue;
+        const slotsLeft = Object.values(needed).reduce((a,b) => a+b, 0);
+        if (!slotsLeft) break;
+        for (const pos of p.positions) {
+          if (needed[pos] > 0) {
+            const budgetAfter = budget - p.salary;
+            const minNeeded = (slotsLeft - 1) * 3500;
+            if (budgetAfter >= minNeeded) { place(p, pos); break; }
+          }
+        }
+      }
+
+      if (Object.values(needed).reduce((a,b) => a+b, 0) > 0) return null;
+      const total = lineup.reduce((s,p) => s + p.salary, 0);
+      if (total < RULES.MIN_SALARY_USED || total > RULES.SALARY_CAP) return null;
+      return lineup;
+    }
+
+    function generateLineups() {
+      const desired = Number(el('lineupCount').value || 10);
+      const pool = STATE.players.filter(p => !STATE.excludes.has(p.id) && (STATE.ownershipMap[p.id] ?? p.ownership) >= RULES.NEVER_PLAY_OWN_THRESHOLD)
+        .map(p => ({ ...p, ownership: STATE.ownershipMap[p.id] ?? p.ownership }));
+
+      const lineups = [];
+      const seen = new Set();
+      let attempts = 0;
+      while (lineups.length < desired && attempts < desired * 80) {
+        attempts++;
+        const lu = buildLineup(pool);
+        if (!lu) continue;
+        const key = lu.map(p => p.id).sort().join('|');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        lineups.push(lu);
+      }
+      STATE.lineups = lineups;
+      STATE.selectedLineup = 0;
+      renderResults();
+      setStep('results');
+    }
+
+    function lineupStats(lu) {
+      return {
+        total: lu.reduce((s,p) => s + p.salary, 0),
+        proj: lu.reduce((s,p) => s + p.fppg, 0),
+        own: lu.reduce((s,p) => s + (STATE.ownershipMap[p.id] ?? p.ownership), 0) / lu.length
+      };
+    }
+
+    function renderPool() {
+      const tbody = el('poolTable').querySelector('tbody');
+      tbody.innerHTML = '';
+      STATE.players.forEach(p => {
+        const tr = document.createElement('tr');
+        const own = STATE.ownershipMap[p.id] ?? p.ownership;
+        tr.innerHTML = `
+          <td><strong>${p.name}</strong></td>
+          <td>${p.positions.join('/')}</td>
+          <td>${p.team || '-'}</td>
+          <td>${fmtMoney(p.salary)}</td>
+          <td>${p.fppg.toFixed(1)}</td>
+          <td><input data-own="${p.id}" type="number" min="0" max="100" step="0.5" value="${own}" style="width:78px"></td>
+          <td>${p.value.toFixed(2)}x</td>
+          <td><button data-lock="${p.id}" class="${STATE.locks.has(p.id) ? 'active' : ''}">${STATE.locks.has(p.id) ? 'Locked' : 'Lock'}</button></td>
+          <td><button data-exclude="${p.id}" class="${STATE.excludes.has(p.id) ? 'warn active' : 'warn'}">${STATE.excludes.has(p.id) ? 'Excluded' : 'Exclude'}</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      bindPoolActions();
+      renderBuildStatus();
+    }
+
+    function bindPoolActions() {
+      document.querySelectorAll('[data-own]').forEach(input => {
+        input.addEventListener('change', e => {
+          const id = e.target.dataset.own;
+          STATE.ownershipMap[id] = parseFloat(e.target.value || '0');
+          renderBuildStatus();
+        });
+      });
+      document.querySelectorAll('[data-lock]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const id = e.target.dataset.lock;
+          if (STATE.locks.has(id)) STATE.locks.delete(id); else STATE.locks.add(id);
+          STATE.excludes.delete(id);
+          renderPool();
+        });
+      });
+      document.querySelectorAll('[data-exclude]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const id = e.target.dataset.exclude;
+          if (STATE.excludes.has(id)) STATE.excludes.delete(id); else STATE.excludes.add(id);
+          STATE.locks.delete(id);
+          renderPool();
+        });
+      });
+    }
+
+    function renderBuildStatus() {
+      const locked = STATE.players.filter(p => STATE.locks.has(p.id)).map(p => p.name);
+      const excluded = STATE.players.filter(p => STATE.excludes.has(p.id)).map(p => p.name);
+      el('lockedList').textContent = locked.length ? locked.join(', ') : 'None';
+      el('excludedList').textContent = excluded.length ? excluded.join(', ') : 'None';
+      el('generatorNotes').textContent = `${STATE.players.length} players loaded · ${locked.length} locked · ${excluded.length} excluded · strategy ${STATE.strategy}`;
+    }
+
+    function renderResults() {
+      const list = el('lineupList');
+      list.innerHTML = '';
+      if (!STATE.lineups.length) {
+        list.innerHTML = '<div class="error-box">No valid lineups generated. Adjust locks, excludes, or ownership settings.</div>';
+        el('lineupDetail').classList.add('hidden');
+        el('lineupDetailEmpty').classList.remove('hidden');
+        el('exposureTable').querySelector('tbody').innerHTML = '';
+        return;
+      }
+      STATE.lineups.forEach((lu, idx) => {
+        const stats = lineupStats(lu);
+        const card = document.createElement('div');
+        card.className = 'lineup-card' + (idx === STATE.selectedLineup ? ' active' : '');
+        card.innerHTML = `
+          <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+            <strong>#${idx + 1}</strong>
+            <span>${stats.proj.toFixed(1)} proj</span>
+          </div>
+          <div class="tiny muted">${fmtMoney(stats.total)} · ${toPct(stats.own)} avg own</div>
+        `;
+        card.addEventListener('click', () => {
+          STATE.selectedLineup = idx;
+          renderResults();
+        });
+        list.appendChild(card);
+      });
+      renderLineupDetail();
+      renderExposure();
+    }
+
+    function renderLineupDetail() {
+      const lu = STATE.lineups[STATE.selectedLineup];
+      if (!lu) return;
+      el('lineupDetail').classList.remove('hidden');
+      el('lineupDetailEmpty').classList.add('hidden');
+      const stats = lineupStats(lu);
+      el('summaryGrid').innerHTML = `
+        <div class="summary-box"><strong>${stats.proj.toFixed(1)}</strong><span class="tiny muted">Projected</span></div>
+        <div class="summary-box"><strong>${fmtMoney(stats.total)}</strong><span class="tiny muted">Salary</span></div>
+        <div class="summary-box"><strong>${toPct(stats.own)}</strong><span class="tiny muted">Avg ownership</span></div>
+        <div class="summary-box"><strong>${lu.length}</strong><span class="tiny muted">Players</span></div>
+      `;
+      const tbody = el('lineupDetailTable').querySelector('tbody');
+      tbody.innerHTML = '';
+      [...lu].sort((a,b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot)).forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.slot}</td>
+          <td><strong>${p.name}</strong></td>
+          <td>${p.team || '-'}</td>
+          <td>${fmtMoney(p.salary)}</td>
+          <td>${p.fppg.toFixed(1)}</td>
+          <td>${toPct(STATE.ownershipMap[p.id] ?? p.ownership)}</td>
+          <td>${p.value.toFixed(2)}x</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderExposure() {
+      const counts = new Map();
+      STATE.lineups.forEach(lu => lu.forEach(p => counts.set(p.name, (counts.get(p.name) || 0) + 1)));
+      const tbody = el('exposureTable').querySelector('tbody');
+      tbody.innerHTML = '';
+      [...counts.entries()].sort((a,b) => b[1] - a[1]).forEach(([name, count]) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${name}</td><td>${count}</td><td>${toPct((count / STATE.lineups.length) * 100)}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function showError(message) {
+      el('uploadError').textContent = message;
+      el('uploadError').classList.remove('hidden');
+    }
+
+    function clearError() {
+      el('uploadError').classList.add('hidden');
+      el('uploadError').textContent = '';
+    }
+
+    // Events
+    el('chooseFile').addEventListener('click', () => el('csvFile').click());
+    el('csvFile').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      clearError();
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          STATE.players = parseCSV(reader.result);
+          STATE.ownershipMap = Object.fromEntries(STATE.players.map(p => [p.id, 15]));
+          el('uploadStatus').textContent = `${file.name} loaded · ${STATE.players.length} eligible players parsed.`;
+          renderPool();
+          setStep('build');
+        } catch (err) {
+          showError(err.message || 'Unable to parse CSV.');
+        }
+      };
+      reader.onerror = () => showError('Unable to read file.');
+      reader.readAsText(file);
+    });
+
+    ['upload','build','results'].forEach(name => {
+      el('tab-' + name).addEventListener('click', () => {
+        if (name === 'upload' || (name === 'build' && STATE.players.length) || (name === 'results' && STATE.lineups.length)) setStep(name);
+      });
+    });
+
+    el('lineupCount').addEventListener('input', (e) => {
+      el('lineupCountText').textContent = `${e.target.value} lineups`;
+    });
+
+    document.querySelectorAll('#strategyRow [data-strategy]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        STATE.strategy = btn.dataset.strategy;
+        document.querySelectorAll('#strategyRow [data-strategy]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderBuildStatus();
+      });
+    });
+
+    el('fetchVegas').addEventListener('click', applyVegasBoosts);
+    el('generateBtn').addEventListener('click', generateLineups);
+    el('resetLocks').addEventListener('click', () => {
+      STATE.locks.clear();
+      STATE.excludes.clear();
+      renderPool();
+    });
+
+    // init
+    setStep('upload');
+  </script>
 </body>
 </html>
