@@ -181,7 +181,7 @@
     <section class="hero">
       <div class="card hero-main">
         <div class="eyebrow">Self-contained • No React CDN dependency</div>
-        <h2>Upload your slate, set rules, and generate sharper NBA DFS builds.</h2>
+        <h2>Upload your slate, run stochastic simulations, and rank sharper NBA DFS builds.</h2>
         <p>This rebuild gives you a stable architecture first: no external React/Babel dependency, cleaner screens, and a simpler path to adding the real optimizer brain as you upload more source files.</p>
         <div class="mini-stats">
           <div class="mini-stat"><strong>Local</strong><span>Single-file architecture</span></div>
@@ -254,6 +254,11 @@
             <div id="lineupCountText" class="tiny muted" style="margin-top:6px;">20 lineups</div>
           </div>
           <div class="field">
+            <label>Stochastic simulations</label>
+            <input id="simCount" type="range" min="1000" max="10000" step="1000" value="10000" />
+            <div id="simCountText" class="tiny muted" style="margin-top:6px;">10000 sims per batch</div>
+          </div>
+          <div class="field">
             <label>Strategy</label>
             <div class="chip-row" id="strategyRow">
               <button class="chip active" data-strategy="mixed">Mixed</button>
@@ -308,7 +313,7 @@
           </div>
           <div class="subcard">
             <div class="tiny muted">Generator notes</div>
-            <div id="generatorNotes" class="drop-note">Upload a file, then generate.</div>
+            <div id="generatorNotes" class="drop-note">Upload a slate file, then add projection/ownership/injury files to feed the brain. The generator now ranks lineups with stochastic simulations.</div>
           <div class="drop-note" id="brainDataStatus" style="margin-top:10px;">Projection file: none · Ownership file: none · Injury file: none</div>
           </div>
         </aside>
@@ -330,7 +335,7 @@
             <div class="table-wrap">
               <table id="lineupDetailTable">
                 <thead>
-                  <tr><th>Slot</th><th>Player</th><th>Team</th><th>Salary</th><th>Proj</th><th>Own</th><th>Value</th></tr>
+                  <tr><th>Slot</th><th>Player</th><th>Team</th><th>Salary</th><th>Proj</th><th>Own</th><th>Value</th><th>StdDev</th></tr>
                 </thead>
                 <tbody></tbody>
               </table>
@@ -367,6 +372,9 @@
       step: 'upload',
       players: [],
       ownershipMap: {},
+      projectionOverrides: {},
+      ownershipOverrides: {},
+      injuryFlags: {},
       lineups: [],
       selectedLineup: 0,
       locks: new Set(),
@@ -475,15 +483,19 @@
       renderPool();
     }
 
-    function scorePlayer(p) {
-      let score = p.fppg + p.value * 2;
-      if (STATE.strategy === 'chalk') score += p.ownership * 0.35;
-      if (STATE.strategy === 'balanced') score += p.ownership * 0.12;
-      if (STATE.strategy === 'contrarian') score += (22 - Math.min(p.ownership, 22)) * 0.55;
+    function scorePlayer(p, exposureMap = {}, lineupIndex = 0) {
+      const proj = STATE.projectionOverrides[p.id] ?? p.fppg;
+      const own = STATE.ownershipOverrides[p.id] ?? STATE.ownershipMap[p.id] ?? p.ownership;
+      let score = proj + p.value * 2;
+      if (STATE.strategy === 'chalk') score += own * 0.35;
+      if (STATE.strategy === 'balanced') score += own * 0.12;
+      if (STATE.strategy === 'contrarian') score += (22 - Math.min(own, 22)) * 0.55;
+      const priorExposure = exposureMap[p.id] || 0;
+      if (lineupIndex > 0) score -= priorExposure * (STATE.strategy === 'chalk' ? 0.4 : 1.35);
       return score;
     }
 
-    function buildLineup(pool) {
+    function buildLineup(pool, exposureMap = {}, lineupIndex = 0) {
       const needed = { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 };
       const lineup = [];
       const used = new Set();
@@ -505,7 +517,7 @@
         }
       }
 
-      const sorted = [...rest].sort((a,b) => scorePlayer(b) - scorePlayer(a) + (Math.random() - 0.5) * 8);
+      const sorted = [...rest].sort((a,b) => scorePlayer(b, exposureMap, lineupIndex) - scorePlayer(a, exposureMap, lineupIndex) + (Math.random() - 0.5) * (10 + lineupIndex * 0.35));
       for (const p of sorted) {
         if (used.has(p.id)) continue;
         const slotsLeft = Object.values(needed).reduce((a,b) => a+b, 0);
@@ -527,45 +539,63 @@
 
     function generateLineups() {
       const desired = Number(el('lineupCount').value || 20);
-      const pool = STATE.players.filter(p => !STATE.excludes.has(p.id) && (STATE.ownershipMap[p.id] ?? p.ownership) >= RULES.NEVER_PLAY_OWN_THRESHOLD)
-        .map(p => ({ ...p, ownership: STATE.ownershipMap[p.id] ?? p.ownership }));
+      const simCount = Number(el('simCount').value || 10000);
+      const pool = STATE.players.filter(p => !STATE.excludes.has(p.id) && (STATE.ownershipOverrides[p.id] ?? STATE.ownershipMap[p.id] ?? p.ownership) >= RULES.NEVER_PLAY_OWN_THRESHOLD)
+        .map(p => ({
+          ...p,
+          fppg: STATE.projectionOverrides[p.id] ?? p.fppg,
+          ownership: STATE.ownershipOverrides[p.id] ?? STATE.ownershipMap[p.id] ?? p.ownership,
+          injury: STATE.injuryFlags[p.id] || p.injury,
+          value: +(((STATE.projectionOverrides[p.id] ?? p.fppg) / (p.salary / 1000)).toFixed(2))
+        }));
 
-      const lineups = [];
+      const candidates = [];
       const seen = new Set();
+      const exposureMap = {};
       let attempts = 0;
-      const maxAttempts = Math.max(1200, desired * 250);
-      while (lineups.length < desired && attempts < maxAttempts) {
+      const targetCandidates = Math.max(desired * 12, 120);
+      const maxAttempts = Math.max(4000, targetCandidates * 40);
+
+      while (candidates.length < targetCandidates && attempts < maxAttempts) {
         attempts++;
-        // increase randomness as we go so we don't collapse into the same lineup
-        const shuffled = [...pool].sort((a, b) => scorePlayer(b) - scorePlayer(a) + (Math.random() - 0.5) * (8 + attempts / 18));
-        if (attempts > 10 && shuffled.length > 12) {
-          const bumpCount = Math.min(4, Math.floor(attempts / 40) + 1);
+        const lineupIndex = candidates.length;
+        const shuffled = [...pool].sort((a, b) => scorePlayer(b, exposureMap, lineupIndex) - scorePlayer(a, exposureMap, lineupIndex) + (Math.random() - 0.5) * (12 + lineupIndex * 0.45));
+        if (attempts > 12 && shuffled.length > 14) {
+          const bumpCount = Math.min(8, 1 + Math.floor(lineupIndex / 5));
           for (let i = 0; i < bumpCount; i++) {
-            const idx = Math.floor(Math.random() * Math.min(18, shuffled.length));
+            const idx = Math.floor(Math.random() * Math.min(24, shuffled.length));
             const moved = shuffled.splice(idx, 1)[0];
-            const insertAt = Math.floor(shuffled.length * (0.25 + Math.random() * 0.5));
+            const insertAt = Math.floor(shuffled.length * (0.2 + Math.random() * 0.6));
             shuffled.splice(insertAt, 0, moved);
           }
         }
-        const lu = buildLineup(shuffled);
+        const lu = buildLineup(shuffled, exposureMap, lineupIndex);
         if (!lu) continue;
         const key = lu.map(p => p.id).sort().join('|');
         if (seen.has(key)) continue;
         seen.add(key);
-        lineups.push(lu);
+        lu._sim = simulateLineup(lu, simCount);
+        candidates.push(lu);
+        lu.forEach(p => exposureMap[p.id] = (exposureMap[p.id] || 0) + 1);
       }
-      // fallback: if uniqueness is exhausted, keep building best-effort extras instead of returning only one lineup
-      if (lineups.length < desired) {
-        let fallbackAttempts = 0;
-        while (lineups.length < desired && fallbackAttempts < desired * 40) {
-          fallbackAttempts++;
-          const shuffled = [...pool].sort((a, b) => scorePlayer(b) - scorePlayer(a) + (Math.random() - 0.5) * 22);
-          const lu = buildLineup(shuffled);
-          if (!lu) continue;
-          lineups.push(lu);
+
+      candidates.sort((a, b) => {
+        if (STATE.strategy === 'contrarian') return b._sim.simP90 - a._sim.simP90;
+        if (STATE.strategy === 'chalk') return b._sim.simMean - a._sim.simMean;
+        if (STATE.strategy === 'balanced') return (b._sim.simMean + b._sim.simP75) - (a._sim.simMean + a._sim.simP75);
+        return (b._sim.simMean + b._sim.simP90 * 0.35) - (a._sim.simMean + a._sim.simP90 * 0.35);
+      });
+
+      const finalLineups = candidates.slice(0, desired);
+      if (!finalLineups.length) {
+        const fallback = buildLineup(pool, {}, 0);
+        if (fallback) {
+          fallback._sim = simulateLineup(fallback, simCount);
+          finalLineups.push(fallback);
         }
       }
-      STATE.lineups = lineups;
+
+      STATE.lineups = finalLineups;
       STATE.selectedLineup = 0;
       renderBuildStatus();
       renderResults();
@@ -634,7 +664,7 @@
       const excluded = STATE.players.filter(p => STATE.excludes.has(p.id)).map(p => p.name);
       el('lockedList').textContent = locked.length ? locked.join(', ') : 'None';
       el('excludedList').textContent = excluded.length ? excluded.join(', ') : 'None';
-      el('generatorNotes').textContent = `${STATE.players.length} players loaded · ${locked.length} locked · ${excluded.length} excluded · strategy ${STATE.strategy}`;
+      el('generatorNotes').textContent = `${STATE.players.length} players loaded · ${locked.length} locked · ${excluded.length} excluded · strategy ${STATE.strategy} · ${el('simCount').value} stochastic sims`;
     }
 
     function renderResults() {
@@ -654,9 +684,9 @@
         card.innerHTML = `
           <div class="row" style="justify-content:space-between; margin-bottom:8px;">
             <strong>#${idx + 1}</strong>
-            <span>${stats.proj.toFixed(1)} proj</span>
+            <span>${(lu._sim?.simMean ?? stats.proj).toFixed(1)} sim mean</span>
           </div>
-          <div class="tiny muted">${fmtMoney(stats.total)} · ${toPct(stats.own)} avg own</div>
+          <div class="tiny muted">${fmtMoney(stats.total)} · ${toPct(stats.own)} avg own · P90 ${(lu._sim?.simP90 ?? stats.proj).toFixed(1)}</div>
         `;
         card.addEventListener('click', () => {
           STATE.selectedLineup = idx;
@@ -675,10 +705,10 @@
       el('lineupDetailEmpty').classList.add('hidden');
       const stats = lineupStats(lu);
       el('summaryGrid').innerHTML = `
-        <div class="summary-box"><strong>${stats.proj.toFixed(1)}</strong><span class="tiny muted">Projected</span></div>
+        <div class="summary-box"><strong>${(lu._sim?.simMean ?? stats.proj).toFixed(1)}</strong><span class="tiny muted">Sim mean</span></div>
+        <div class="summary-box"><strong>${(lu._sim?.simP90 ?? stats.proj).toFixed(1)}</strong><span class="tiny muted">P90</span></div>
         <div class="summary-box"><strong>${fmtMoney(stats.total)}</strong><span class="tiny muted">Salary</span></div>
         <div class="summary-box"><strong>${toPct(stats.own)}</strong><span class="tiny muted">Avg ownership</span></div>
-        <div class="summary-box"><strong>${lu.length}</strong><span class="tiny muted">Players</span></div>
       `;
       const tbody = el('lineupDetailTable').querySelector('tbody');
       tbody.innerHTML = '';
@@ -692,6 +722,7 @@
           <td>${p.fppg.toFixed(1)}</td>
           <td>${toPct(STATE.ownershipMap[p.id] ?? p.ownership)}</td>
           <td>${p.value.toFixed(2)}x</td>
+          <td>${playerStdDev(p).toFixed(1)}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -717,6 +748,64 @@
     function clearError() {
       el('uploadError').classList.add('hidden');
       el('uploadError').textContent = '';
+    }
+
+    function randn() {
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+
+    function playerStdDev(player) {
+      const mean = STATE.projectionOverrides[player.id] ?? player.fppg;
+      let base = Math.max(4, mean * 0.28);
+      if (STATE.strategy === 'chalk') base *= 0.92;
+      if (STATE.strategy === 'contrarian') base *= 1.12;
+      return base;
+    }
+
+    function simulateLineup(lineup, simCount) {
+      let sum = 0;
+      let best = -Infinity;
+      const results = [];
+      for (let i = 0; i < simCount; i++) {
+        let total = 0;
+        for (const player of lineup) {
+          const mean = STATE.projectionOverrides[player.id] ?? player.fppg;
+          const sd = playerStdDev(player);
+          total += Math.max(0, mean + randn() * sd);
+        }
+        sum += total;
+        if (total > best) best = total;
+        results.push(total);
+      }
+      results.sort((a,b) => a-b);
+      const pick = (p) => results[Math.min(results.length - 1, Math.floor(results.length * p))];
+      return {
+        simMean: +(sum / simCount).toFixed(2),
+        simP75: +pick(0.75).toFixed(2),
+        simP90: +pick(0.90).toFixed(2),
+        simCeiling: +best.toFixed(2)
+      };
+    }
+
+    function parseSimpleDataFile(text) {
+      const lines = text.trim().split(/
+?
+/);
+      if (!lines.length) return [];
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      return lines.slice(1).map(line => {
+        const cols = line.split(',');
+        const row = {};
+        headers.forEach((h, i) => row[h] = (cols[i] || '').trim());
+        return row;
+      }).filter(r => Object.keys(r).length);
+    }
+
+    function normalizeName(name) {
+      return String(name || '').trim().toLowerCase();
     }
 
     // Events
@@ -749,6 +838,12 @@
 
     el('lineupCount').addEventListener('input', (e) => {
       el('lineupCountText').textContent = `${e.target.value} lineups`;
+      renderBuildStatus();
+    });
+
+    el('simCount').addEventListener('input', (e) => {
+      el('simCountText').textContent = `${e.target.value} sims per batch`;
+      renderBuildStatus();
     });
 
     document.querySelectorAll('#strategyRow [data-strategy]').forEach(btn => {
@@ -773,19 +868,45 @@
       if (!node) return;
       node.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        const parts = {
-          projectionFile: 'Projection file',
-          ownershipFile: 'Ownership file',
-          injuryFile: 'Injury file'
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const rows = parseSimpleDataFile(reader.result);
+          if (id === 'projectionFile') {
+            rows.forEach(r => {
+              const name = normalizeName(r.name || r.player || r.nickname);
+              const proj = parseFloat(r.projection || r.proj || r.fppg || r.fdavg || '');
+              if (name && !Number.isNaN(proj)) STATE.projectionOverrides[name] = proj;
+            });
+          }
+          if (id === 'ownershipFile') {
+            rows.forEach(r => {
+              const name = normalizeName(r.name || r.player || r.nickname);
+              const own = parseFloat(r.ownership || r.own || r.ownpct || '');
+              if (name && !Number.isNaN(own)) {
+                STATE.ownershipOverrides[name] = own;
+                STATE.ownershipMap[name] = own;
+              }
+            });
+          }
+          if (id === 'injuryFile') {
+            rows.forEach(r => {
+              const name = normalizeName(r.name || r.player || r.nickname);
+              const status = String(r.status || r.injury || r.flag || '').toUpperCase();
+              if (name && status) STATE.injuryFlags[name] = status;
+            });
+          }
+          const status = el('brainDataStatus');
+          if (status) {
+            status.textContent = [
+              'Projection file: ' + (el('projectionFile').files[0]?.name || 'none'),
+              'Ownership file: ' + (el('ownershipFile').files[0]?.name || 'none'),
+              'Injury file: ' + (el('injuryFile').files[0]?.name || 'none')
+            ].join(' · ');
+          }
+          renderPool();
         };
-        const label = parts[id];
-        const status = el('brainDataStatus');
-        if (!status) return;
-        status.textContent = [
-          'Projection file: ' + (el('projectionFile').files[0]?.name || 'none'),
-          'Ownership file: ' + (el('ownershipFile').files[0]?.name || 'none'),
-          'Injury file: ' + (el('injuryFile').files[0]?.name || 'none')
-        ].join(' · ');
+        reader.readAsText(file);
       });
     });
 
