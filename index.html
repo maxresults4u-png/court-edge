@@ -313,12 +313,20 @@
       color: var(--accent-2);
     }
 
+    .player-pool-scroll {
+      max-height: 520px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.015);
+    }
+
     .player-table {
       width: 100%;
       border-collapse: collapse;
       overflow: hidden;
       border-radius: 18px;
-      border: 1px solid var(--line);
+      border: 0;
     }
 
     .player-table th, .player-table td {
@@ -373,6 +381,8 @@
 
 
     .portfolio-list {
+      max-height: 260px;
+      overflow: auto;
       display: grid;
       gap: 8px;
       max-height: 260px;
@@ -475,7 +485,8 @@
         <div class="status-block">
           <div class="status-label">Slate Status</div>
           <div class="status-value" id="slateStatusValue">Main Slate · 8 Games</div>
-          <div class="muted" id="slateStatusSub">Locks in 01:42:18 · Last projection sync 2 min ago</div>
+          <div class="muted" id="slateStatusSub">Waiting for build settings</div>
+          <div class="tiny muted" id="slateStatusMeta" style="margin-top:10px; line-height:1.6;">Pool 0 · Portfolio 0 · No slate CSV loaded</div>
         </div>
         <div class="status-block">
           <div class="status-label">Math Engine</div>
@@ -670,7 +681,8 @@
           <span class="pill" id="playerPoolTimestamp">Updated just now</span>
         </div>
 
-        <table class="player-table">
+        <div class="player-pool-scroll">
+          <table class="player-table">
           <thead>
             <tr>
               <th>Player</th>
@@ -685,6 +697,7 @@
           </thead>
           <tbody id="playerPoolBody"></tbody>
         </table>
+        </div>
 
         <div class="section" style="padding:18px 0 0; margin-top:18px;">
           <h2 style="margin:0 0 6px; font-size:22px;">Math Snapshot</h2>
@@ -707,7 +720,7 @@
           <span class="pill" id="lineupPosition">Lineup 1 of 20</span>
         </div>
 
-        <div class="lineup-card" id="generatedLineup"></div>
+        <div class="lineup-card" id="generatedLineup"><div class="muted">No lineup generated yet. Click <strong>Generate Lineups</strong>.</div></div>
 
         <div class="status-block" style="margin-bottom:12px;">
           <div class="status-label">Lineup Summary</div>
@@ -1096,6 +1109,10 @@
       renderPlayerPool();
       renderMathSummary();
       updateStatusBlocks();
+      if (!state.generatedPortfolio.length && state.players.length) {
+        window.clearTimeout(window.__courtEdgeAutobuild);
+        window.__courtEdgeAutobuild = window.setTimeout(() => generatePortfolio(), 60);
+      }
     }
 
     function renderPlayerPool() {
@@ -1251,10 +1268,18 @@
       state.currentLineupIndex = 1;
       state.lastGeneratedLineup = state.generatedPortfolio[0]?.lineup || [];
       renderLineup();
+      updateStatusBlocks();
     }
 
     function renderLineup() {
-      if (!state.generatedPortfolio.length) return;
+      if (!state.generatedPortfolio.length) {
+        document.getElementById('generatedLineup').innerHTML = `<div class="muted">No lineup generated yet. Click <strong>Generate Lineups</strong>.</div>`;
+        document.getElementById('lineupPosition').textContent = `Lineup 0 of 0`;
+        document.getElementById('lineupMedian').textContent = `0.0 P50`;
+        document.getElementById('lineupSummaryText').textContent = `P75 0.0 · P90 0.0 · P95 0.0 · Leverage 0.0 · Fragility 0.0 · Salary $0 · Avg ownership 0%`;
+        renderPortfolioList();
+        return;
+      }
       const idx = clamp(state.currentLineupIndex - 1, 0, state.generatedPortfolio.length - 1);
       const selected = state.generatedPortfolio[idx];
       state.lastGeneratedLineup = selected.lineup;
@@ -1300,8 +1325,13 @@
 
     function updateStatusBlocks() {
       const slateCfg = getSlateConfig(state.slate);
-      document.getElementById('slateStatusValue').textContent = slateCfg.label;
-      document.getElementById('slateStatusSub').textContent = `Sim count ${formatNumber(state.simCount)} · ${state.site} · ${state.contest} · Last projection sync ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      const poolCount = state.players.length;
+      const portfolioCount = state.generatedPortfolio.length;
+      const loadedSlateFile = state.uploads.slatePlayerCsv?.fileName || 'demo pool';
+      const effectiveSims = effectiveSimCount();
+      document.getElementById('slateStatusValue').textContent = `${slateCfg.label} · ${state.site} ${state.contest}`;
+      document.getElementById('slateStatusSub').textContent = `Requested sims ${formatNumber(state.simCount)} · Effective sims ${formatNumber(effectiveSims)} · Last sync ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      document.getElementById('slateStatusMeta').textContent = `Pool ${formatNumber(poolCount)} · Portfolio ${formatNumber(portfolioCount)} · Fragility ${fragilityDisplayLabel(state.fragilityCap)} · Source ${loadedSlateFile}`;
       document.getElementById('heroLineupCount').textContent = String(state.lineupCount);
       document.getElementById('fragilityDisplay').textContent = fragilityDisplayLabel(state.fragilityCap);
       document.getElementById('simCountDisplay').textContent = formatNumber(state.simCount);
@@ -1497,6 +1527,7 @@
           ? `${file.name} loaded · ${canonical.players.length.toLocaleString()} players ingested`
           : `${file.name} loaded but no valid players were ingested`;
         refreshPlayers();
+        window.setTimeout(() => generatePortfolio(), 80);
         document.getElementById(inputId).value = '';
         return;
       } else if (type === 'historicalGameLogs') {
@@ -1528,6 +1559,7 @@
           setActiveChip('site', spec.site);
         }
         refreshPlayers();
+        window.setTimeout(() => generatePortfolio(), 80);
         if (rows.length && spec.slotColumns.length) {
           statusEl.textContent = `${file.name} loaded · ready to generate ${Math.max(1, Math.min(150, rows.length))} lineups`;
         } else {
@@ -1693,6 +1725,7 @@
     bindChipGroups();
     bindInputs();
     refreshPlayers();
+    renderLineup();
   </script>
 
 </body>
