@@ -23,7 +23,14 @@
     }
 
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
     body {
       background:
         radial-gradient(circle at 50% 0%, rgba(71,164,255,0.18), transparent 28%),
@@ -33,7 +40,8 @@
     }
 
     .grid-bg::before {
-      cont      position: fixed;
+      content: "";
+      position: fixed;
       inset: 0;
       pointer-events: none;
       background-image:
@@ -41,6 +49,7 @@
         linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
       background-size: 48px 48px;
       mask-image: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.12));
+      -webkit-mask-image: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.12));
     }
 
     .app {
@@ -57,6 +66,7 @@
       align-items: center;
       gap: 16px;
       margin-bottom: 22px;
+      flex-wrap: wrap;
     }
 
     .brand {
@@ -88,19 +98,29 @@
       text-transform: uppercase;
     }
 
-    .nav-actions {
+    .nav-actions, .hero-actions, .chip-row, .intake-actions, .summary-chips {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
     }
 
-    .btn, .pill, select {
+    .btn, .pill, select, input[type="number"], input[type="text"], input[type="file"] {
       border: 1px solid var(--line);
       background: rgba(255,255,255,0.03);
       color: var(--text);
       border-radius: 14px;
       padding: 11px 14px;
       font-weight: 650;
+    }
+
+    .btn {
+      cursor: pointer;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+
+    .btn:hover, .chip:hover {
+      transform: translateY(-1px);
+      border-color: var(--line-strong);
     }
 
     .btn.primary {
@@ -165,84 +185,56 @@
       max-width: 760px;
     }
 
-    .hero-copy {
+    .hero-copy, .muted, .step p, .section p, .panel p, .helper, .footer-note {
       color: var(--muted);
-      font-size: 17px;
       line-height: 1.6;
+    }
+
+    .hero-copy {
+      font-size: 17px;
       max-width: 760px;
       margin: 18px 0 24px;
     }
 
-    .hero-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 22px;
-    }
-
-    .mini-stats {
+    .mini-stats, .workflow, .feature-grid, .summary-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
       gap: 12px;
     }
 
-    .mini-stat {
+    .mini-stats { grid-template-columns: repeat(4, 1fr); }
+    .workflow { grid-template-columns: repeat(4, 1fr); margin-bottom: 22px; }
+    .feature-grid { grid-template-columns: repeat(4, 1fr); margin-top: 14px; }
+    .summary-grid { grid-template-columns: repeat(4, 1fr); }
+
+    .mini-stat, .status-block, .feature-item, .lineup-card, .summary-item {
       padding: 16px;
       border-radius: 18px;
       border: 1px solid var(--line);
       background: rgba(255,255,255,0.025);
     }
 
-    .mini-stat strong {
+    .mini-stat strong, .status-value {
       display: block;
       font-size: 24px;
       margin-bottom: 5px;
+      font-weight: 800;
     }
 
-    .mini-stat span {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .hero-side {
-      padding: 22px;
-      display: flex;
-      flex-direction: column;
+    .hero-side, .actions-stack {
+      display: grid;
       gap: 14px;
     }
 
-    .status-block {
-      padding: 18px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-    }
-
-    .status-label {
+    .hero-side { padding: 22px; }
+    .status-label, .field label, .player-table th, .tiny-head {
       color: var(--muted);
       font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 0.16em;
-      margin-bottom: 8px;
+      letter-spacing: 0.14em;
     }
 
-    .status-value {
-      font-size: 22px;
-      font-weight: 800;
-      margin-bottom: 6px;
-    }
-
-    .workflow {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 22px;
-    }
-
-    .step {
-      padding: 18px;
-      position: relative;
-    }
+    .step, .panel, .section { padding: 20px; }
+    .section { margin-top: 22px; }
 
     .step-num {
       width: 34px;
@@ -256,9 +248,6 @@
       font-weight: 800;
     }
 
-    .step h3, .section h2, .panel h3 { margin: 0 0 6px; }
-    .step p, .section p, .panel p { margin: 0; color: var(--muted); line-height: 1.55; }
-
     .optimizer-shell {
       display: grid;
       grid-template-columns: 320px minmax(0, 1fr) 360px;
@@ -266,18 +255,14 @@
       align-items: start;
     }
 
-    .panel {
-      padding: 20px;
-    }
-
     .panel-head {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
+      gap: 14px;
       margin-bottom: 16px;
     }
 
-    .muted { color: var(--muted); }
     .tiny { font-size: 12px; }
 
     .field {
@@ -286,14 +271,10 @@
 
     .field label {
       display: block;
-      font-size: 12px;
-      color: var(--muted);
       margin-bottom: 7px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
     }
 
-    .input, .select, .slider-box {
+    .input, .select, .slider-box, .input-readonly {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -302,10 +283,16 @@
       padding: 12px 14px;
     }
 
-    .chip-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
+    .range-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
     }
 
     .chip {
@@ -316,9 +303,15 @@
       color: var(--text);
       font-size: 13px;
       font-weight: 700;
+      cursor: pointer;
+      user-select: none;
     }
 
-    .chip.active { border-color: rgba(109,255,207,0.35); background: rgba(109,255,207,0.08); color: var(--accent-2); }
+    .chip.active {
+      border-color: rgba(109,255,207,0.35);
+      background: rgba(109,255,207,0.08);
+      color: var(--accent-2);
+    }
 
     .player-table {
       width: 100%;
@@ -333,17 +326,15 @@
       border-bottom: 1px solid rgba(255,255,255,0.05);
       text-align: left;
       font-size: 14px;
+      vertical-align: top;
     }
 
     .player-table th {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
       background: rgba(255,255,255,0.025);
     }
 
     .player-table tr:hover td { background: rgba(255,255,255,0.025); }
+
     .tag {
       display: inline-flex;
       padding: 5px 9px;
@@ -358,14 +349,6 @@
     .tag.warn { background: rgba(255,184,77,0.12); color: var(--warning); }
     .tag.hot { background: rgba(255,107,125,0.12); color: var(--danger); }
 
-    .lineup-card {
-      padding: 16px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-      margin-bottom: 12px;
-    }
-
     .lineup-row {
       display: flex;
       justify-content: space-between;
@@ -376,48 +359,20 @@
     }
 
     .lineup-row:last-child { border-bottom: 0; }
-
-    .actions-stack {
-      display: grid;
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    .btn.full {
-      width: 100%;
-      text-align: center;
-      justify-content: center;
-      display: inline-flex;
-    }
-
-    .section {
-      margin-top: 22px;
-      padding: 22px;
-    }
-
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .feature-item {
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(255,255,255,0.025);
-      padding: 18px;
-    }
+    .btn.full { width: 100%; text-align: center; }
+    .summary-item strong { font-size: 22px; display: block; }
+    .success-text { color: var(--success); }
+    .warning-text { color: var(--warning); }
+    .danger-text { color: var(--danger); }
 
     .footer-note {
-      color: var(--muted);
       text-align: center;
       font-size: 13px;
       padding: 26px 0 8px;
     }
 
     @media (max-width: 1180px) {
-      .hero, .optimizer-shell, .workflow, .feature-grid, .mini-stats {
+      .hero, .optimizer-shell, .workflow, .feature-grid, .mini-stats, .summary-grid {
         grid-template-columns: 1fr;
       }
       .hero-side { order: -1; }
@@ -426,11 +381,9 @@
     @media (max-width: 740px) {
       .app { padding: 14px; }
       .topbar { flex-direction: column; align-items: flex-start; }
-      .hero-main, .hero-side, .panel, .section { padding: 18px; }
-      .player-table th:nth-child(4),
-      .player-table td:nth-child(4),
-      .player-table th:nth-child(6),
-      .player-table td:nth-child(6) {
+      .hero-main, .hero-side, .panel, .section, .step { padding: 18px; }
+      .player-table th:nth-child(4), .player-table td:nth-child(4),
+      .player-table th:nth-child(6), .player-table td:nth-child(6) {
         display: none;
       }
     }
@@ -450,7 +403,7 @@
         <button class="btn">Pricing</button>
         <button class="btn">Docs</button>
         <button class="btn">Login</button>
-        <button class="btn primary">Start Optimizing</button>
+        <button class="btn primary" id="startOptimizeBtn">Start Optimizing</button>
       </div>
     </div>
 
@@ -459,60 +412,95 @@
         <div class="eyebrow">Live Slate • DraftKings + FanDuel</div>
         <h1>Build sharper NBA lineups with a cleaner, faster optimizer.</h1>
         <p class="hero-copy">
-          Court Edge helps you lock core plays, manage exposure, stack intelligently, and generate tournament-ready lineups without digging through a cluttered interface.
+          Court Edge helps you lock core plays, manage exposure, stack intelligently, and generate tournament-ready lineups with weighted median projections, leverage scoring, legality checks, and Monte Carlo lineup scoring.
         </p>
         <div class="hero-actions">
-          <button class="btn primary">Start With Today’s Main Slate</button>
-          <button class="btn">Preview Demo Build</button>
+          <button class="btn primary" id="heroGenerateBtn">Start With Today’s Main Slate</button>
+          <button class="btn" id="demoBuildBtn">Preview Demo Build</button>
         </div>
         <div class="mini-stats">
-          <div class="mini-stat"><strong>150</strong><span>Lineups per run</span></div>
-          <div class="mini-stat"><strong>Live</strong><span>Projection refresh status</span></div>
+          <div class="mini-stat"><strong id="heroLineupCount">20</strong><span>Lineups per run</span></div>
+          <div class="mini-stat"><strong>10k</strong><span>Monte Carlo sims</span></div>
           <div class="mini-stat"><strong>DK / FD</strong><span>Site support</span></div>
-          <div class="mini-stat"><strong>CSV</strong><span>One-click export</span></div>
+          <div class="mini-stat"><strong>CSV</strong><span>Template export ready</span></div>
         </div>
       </div>
 
       <div class="card hero-side">
         <div class="status-block">
           <div class="status-label">Slate Status</div>
-          <div class="status-value">Main Slate · 8 Games</div>
-          <div class="muted">Locks in 01:42:18 · Last projection sync 2 min ago</div>
+          <div class="status-value" id="slateStatusValue">Main Slate · 8 Games</div>
+          <div class="muted" id="slateStatusSub">Locks in 01:42:18 · Last projection sync 2 min ago</div>
         </div>
         <div class="status-block">
-          <div class="status-label">Optimizer Workflow</div>
-          <div class="muted">Choose a slate, set your rules, generate builds, export lineups. No dead-end loading screen. No guessing where to click next.</div>
+          <div class="status-label">Math Engine</div>
+          <div class="muted">Weighted-median minutes and FPPM, pace and defense adjustments, ownership-adjusted leverage, volatility bands, and 10,000-simulation lineup percentile scoring.</div>
         </div>
         <div class="status-block">
-          <div class="status-label">What Makes It Better</div>
-          <div class="muted">Cleaner controls, real status states, stronger lineup visibility, and a premium analytics-first UI that feels operational from the first second.</div>
+          <div class="status-label">Export Workflow</div>
+          <div class="muted">Template-driven DraftKings and FanDuel CSV workflow. The UI is wired so build settings update player math and the generated lineup panel in real time.</div>
         </div>
+      </div>
+    </section>
+
+    <section class="workflow">
+      <div class="card step">
+        <div class="step-num">1</div>
+        <h3>Ingest Slate</h3>
+        <p>Map site salary exports into a single canonical player schema with salary, positions, team, opponent, and site IDs.</p>
+      </div>
+      <div class="card step">
+        <div class="step-num">2</div>
+        <h3>Project Players</h3>
+        <p>Blend minutes and FPPM using weighted medians, then apply usage, pace, and defense modifiers.</p>
+      </div>
+      <div class="card step">
+        <div class="step-num">3</div>
+        <h3>Simulate Outcomes</h3>
+        <p>Estimate floor, median, and ceiling through a fast Monte Carlo-style scoring layer for lineup ranking.</p>
+      </div>
+      <div class="card step">
+        <div class="step-num">4</div>
+        <h3>Export Builds</h3>
+        <p>Generate legal lineups, preserve structure, and export clean CSV-ready builds.</p>
       </div>
     </section>
 
     <section class="card section" style="margin-top:0; margin-bottom:22px;">
       <h2>Historical Stats Intake</h2>
-      <p>This is the intake area for training the stochastic brain. Upload your long-term game logs, ownership history, contest results, and injury history here so they feed all of the core algorithms.</p>
-      <div class="feature-grid" style="grid-template-columns: repeat(4, 1fr);">
+      <p>Upload long-term game logs, ownership history, contest results, and injury history so the stochastic brain has the four core historical feeds it needs.</p>
+      <div class="feature-grid">
         <div class="feature-item">
           <h3>Historical Game Logs</h3>
-          <p>Upload player-by-player game logs with date, player, team, opponent, salary, minutes, and actual fantasy points.</p>
-          <div class="btn" style="margin-top:12px; display:inline-flex;">Upload historical_game_logs.csv</div>
+          <p>Player date, team, opponent, minutes, salary, and fantasy points.</p>
+          <div class="intake-actions">
+            <input type="file" id="historicalGameLogs" accept=".csv" />
+            <span class="helper" id="historicalGameLogsStatus">No file loaded</span>
+          </div>
         </div>
         <div class="feature-item">
           <h3>Ownership History</h3>
-          <p>Upload historical ownership so the engine can learn chalk, leverage, and lineup uniqueness patterns.</p>
-          <div class="btn" style="margin-top:12px; display:inline-flex;">Upload historical_ownership.csv</div>
+          <p>Used for chalk, leverage, and uniqueness calibration.</p>
+          <div class="intake-actions">
+            <input type="file" id="ownershipHistory" accept=".csv" />
+            <span class="helper" id="ownershipHistoryStatus">No file loaded</span>
+          </div>
         </div>
         <div class="feature-item">
           <h3>Contest Results</h3>
-          <p>Upload payout and winning-score history so the optimizer can learn contest targets and ROI thresholds.</p>
-          <div class="btn" style="margin-top:12px; display:inline-flex;">Upload contest_results.csv</div>
+          <p>Payout history and winning-score targets for contest fit.</p>
+          <div class="intake-actions">
+            <input type="file" id="contestResults" accept=".csv" />
+            <span class="helper" id="contestResultsStatus">No file loaded</span>
+          </div>
         </div>
         <div class="feature-item">
           <h3>Injury / News History</h3>
-          <p>Upload scratches and news history so the model can learn usage shocks and fragility.</p>
-          <div class="btn" style="margin-top:12px; display:inline-flex;">Upload injury_history.csv</div>
+          <p>Used for fragility handling and usage shock modeling.</p>
+          <div class="intake-actions">
+            <input type="file" id="injuryHistory" accept=".csv" />
+            <span class="helper" id="injuryHistoryStatus">No file loaded</span>
+          </div>
         </div>
       </div>
     </section>
@@ -522,83 +510,92 @@
         <div class="panel-head">
           <div>
             <h3>Build Rules</h3>
-            <p class="tiny muted">Focused build controls for the real engine: projection blend, leverage bias, exposure rules, stack logic, and simulation profile.</p>
+            <p class="tiny muted">Projection blend, leverage bias, exposures, stack logic, and simulation profile are all wired into the player pool and lineup summary.</p>
           </div>
           <span class="pill">Live</span>
         </div>
 
         <div class="field">
           <label>Site</label>
-          <div class="chip-row">
-            <div class="chip active">DraftKings</div>
-            <div class="chip">FanDuel</div>
+          <div class="chip-row" id="siteChips">
+            <div class="chip active" data-group="site" data-value="DK">DraftKings</div>
+            <div class="chip" data-group="site" data-value="FD">FanDuel</div>
           </div>
         </div>
 
         <div class="field">
           <label>Slate</label>
-          <select class="select"><option>Main Slate · 8 Games</option><option>Turbo Slate</option><option>Showdown</option></select>
+          <select class="select" id="slateSelect">
+            <option value="main">Main Slate · 8 Games</option>
+            <option value="turbo">Turbo Slate · 3 Games</option>
+            <option value="showdown">Showdown · 1 Game</option>
+          </select>
         </div>
 
         <div class="field">
           <label>Contest Type</label>
-          <div class="chip-row">
-            <div class="chip active">GPP</div>
-            <div class="chip">Cash</div>
-            <div class="chip">SE</div>
-            <div class="chip">MME</div>
+          <div class="chip-row" id="contestChips">
+            <div class="chip active" data-group="contest" data-value="GPP">GPP</div>
+            <div class="chip" data-group="contest" data-value="Cash">Cash</div>
+            <div class="chip" data-group="contest" data-value="SE">SE</div>
+            <div class="chip" data-group="contest" data-value="MME">MME</div>
           </div>
         </div>
 
         <div class="field">
           <label>Lineups to Generate</label>
-          <div class="input">20</div>
+          <input class="input" type="number" id="lineupCountInput" min="1" max="150" value="20" />
         </div>
 
         <div class="field">
-          <label>Simulation Profile</label>
-          <div class="slider-box">10,000 sims · Tournament profile</div>
+          <label>Simulation Count</label>
+          <div class="range-row">
+            <input type="range" id="simCountRange" min="1000" max="20000" step="1000" value="10000" />
+            <span class="input-readonly" id="simCountDisplay">10,000</span>
+          </div>
         </div>
 
         <div class="field">
           <label>Projection Blend</label>
-          <div class="chip-row">
-            <div class="chip active">Baseline 35%</div>
-            <div class="chip active">Usage 25%</div>
-            <div class="chip active">Context 20%</div>
-            <div class="chip active">Defense 20%</div>
+          <div class="chip-row" id="projectionBlendInfo">
+            <div class="chip active">Season 40%</div>
+            <div class="chip active">L10 35%</div>
+            <div class="chip active">L3/L5 25%</div>
           </div>
         </div>
 
         <div class="field">
           <label>Leverage Bias</label>
-          <div class="chip-row">
-            <div class="chip">Neutral</div>
-            <div class="chip active">Tournament</div>
-            <div class="chip">Chalk Fade</div>
+          <div class="chip-row" id="leverageChips">
+            <div class="chip" data-group="leverage" data-value="neutral">Neutral</div>
+            <div class="chip active" data-group="leverage" data-value="tournament">Tournament</div>
+            <div class="chip" data-group="leverage" data-value="fade">Chalk Fade</div>
           </div>
         </div>
 
         <div class="field">
           <label>Fragility Cap</label>
-          <div class="slider-box">Medium risk · minutes/news sensitive players downweighted</div>
+          <div class="range-row">
+            <input type="range" id="fragilityRange" min="0" max="100" step="5" value="55" />
+            <span class="input-readonly" id="fragilityDisplay">Medium</span>
+          </div>
         </div>
 
         <div class="field">
           <label>Exposure Rules</label>
-          <div class="chip-row">
+          <div class="chip-row" id="exposureChips">
             <div class="chip active">Min 10%</div>
-            <div class="chip">Max 60%</div>
+            <div class="chip active">Max 60%</div>
             <div class="chip">Team Cap 3</div>
           </div>
         </div>
 
         <div class="field">
           <label>Stack Logic</label>
-          <div class="chip-row">
-            <div class="chip">Game Stack</div>
-            <div class="chip active">Bring-Back</div>
-            <div class="chip">Late Swap</div>
+          <div class="chip-row" id="stackChips">
+            <div class="chip" data-group="stack" data-value="game">Game Stack</div>
+            <div class="chip active" data-group="stack" data-value="bringback">Bring-Back</div>
+            <div class="chip" data-group="stack" data-value="lateswap">Late Swap</div>
           </div>
         </div>
 
@@ -608,13 +605,13 @@
             <div class="chip active">Median</div>
             <div class="chip active">P90</div>
             <div class="chip active">Leverage</div>
-            <div class="chip">Dup Risk</div>
+            <div class="chip active">Dup Risk</div>
           </div>
         </div>
 
         <div class="actions-stack">
-          <button class="btn primary full">Generate Lineups</button>
-          <button class="btn full">Reset Rules</button>
+          <button class="btn primary full" id="generateLineupsBtn">Generate Lineups</button>
+          <button class="btn full" id="resetRulesBtn">Reset Rules</button>
         </div>
       </aside>
 
@@ -622,9 +619,9 @@
         <div class="panel-head">
           <div>
             <h3>Player Pool</h3>
-            <p class="tiny muted">Median projection, ownership, leverage, fragility, and live status in one scan — all driven by weighted projection, leverage, and simulation math underneath.</p>
+            <p class="tiny muted">The table below is now wired to the settings panel. Change contest type, leverage bias, site, or slate and the math refreshes immediately.</p>
           </div>
-          <span class="pill">Updated 2 min ago</span>
+          <span class="pill" id="playerPoolTimestamp">Updated just now</span>
         </div>
 
         <table class="player-table">
@@ -640,98 +637,373 @@
               <th>Status</th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td><strong>Luka Doncic</strong><div class="tiny muted">PG / SG</div></td>
-              <td>DAL</td>
-              <td>$11,200</td>
-              <td>57.8</td>
-              <td>24%</td>
-              <td>8.4</td>
-              <td>Low</td>
-              <td><span class="tag good">Core</span></td>
-            </tr>
-            <tr>
-              <td><strong>Jalen Brunson</strong><div class="tiny muted">PG</div></td>
-              <td>NYK</td>
-              <td>$9,300</td>
-              <td>48.2</td>
-              <td>19%</td>
-              <td>6.9</td>
-              <td>Med</td>
-              <td><span class="tag warn">Q Tag</span></td>
-            </tr>
-            <tr>
-              <td><strong>Jaren Jackson Jr.</strong><div class="tiny muted">PF / C</div></td>
-              <td>MEM</td>
-              <td>$7,800</td>
-              <td>42.4</td>
-              <td>13%</td>
-              <td>9.1</td>
-              <td>Med</td>
-              <td><span class="tag hot">Leverage</span></td>
-            </tr>
-            <tr>
-              <td><strong>Brandin Podziemski</strong><div class="tiny muted">SG / SF</div></td>
-              <td>GSW</td>
-              <td>$5,600</td>
-              <td>31.7</td>
-              <td>21%</td>
-              <td>7.8</td>
-              <td>Low</td>
-              <td><span class="tag good">Value</span></td>
-            </tr>
-            <tr>
-              <td><strong>Nickeil Alexander-Walker</strong><div class="tiny muted">SG / SF</div></td>
-              <td>MIN</td>
-              <td>$4,500</td>
-              <td>26.1</td>
-              <td>11%</td>
-              <td>8.7</td>
-              <td>High</td>
-              <td><span class="tag hot">Low Own</span></td>
-            </tr>
-          </tbody>
+          <tbody id="playerPoolBody"></tbody>
         </table>
+
+        <div class="section" style="padding:18px 0 0; margin-top:18px;">
+          <h2 style="margin:0 0 6px; font-size:22px;">Math Snapshot</h2>
+          <p id="mathEngineSummary">Weighted median minutes × weighted median FPPM × usage × pace × defense, with ownership-adjusted leverage and percentile scoring.</p>
+          <div class="summary-grid" style="margin-top:14px;">
+            <div class="summary-item"><span class="tiny-head">Projection Mode</span><strong id="summaryProjectionMode">Tournament</strong></div>
+            <div class="summary-item"><span class="tiny-head">Avg Median</span><strong id="summaryAvgMedian">0.0</strong></div>
+            <div class="summary-item"><span class="tiny-head">Avg Leverage</span><strong id="summaryAvgLev">0.0</strong></div>
+            <div class="summary-item"><span class="tiny-head">Avg Ownership</span><strong id="summaryAvgOwn">0%</strong></div>
+          </div>
+        </div>
       </main>
 
       <aside class="card panel">
         <div class="panel-head">
           <div>
             <h3>Generated Lineup</h3>
-            <p class="tiny muted">Right rail shows the final build chosen by the projection, leverage, risk, and stochastic ranking layers underneath.</p>
+            <p class="tiny muted">The right rail is now wired to the generate action and updates salary, projection, ownership, leverage, and fragility.</p>
           </div>
-          <span class="pill">Lineup 1 of 20</span>
+          <span class="pill" id="lineupPosition">Lineup 1 of 20</span>
         </div>
 
-        <div class="lineup-card">
-          <div class="lineup-row"><span>PG · Luka Doncic</span><strong>57.8</strong></div>
-          <div class="lineup-row"><span>SG · Brandin Podziemski</span><strong>31.7</strong></div>
-          <div class="lineup-row"><span>SF · Nickeil Alexander-Walker</span><strong>26.1</strong></div>
-          <div class="lineup-row"><span>PF · Jaren Jackson Jr.</span><strong>42.4</strong></div>
-          <div class="lineup-row"><span>C · Value Center Placeholder</span><strong>34.6</strong></div>
-          <div class="lineup-row"><span>G · Mid-Range Guard</span><strong>29.8</strong></div>
-          <div class="lineup-row"><span>F · Utility Wing</span><strong>27.5</strong></div>
-          <div class="lineup-row"><span>UTIL · Late Swap Value</span><strong>23.9</strong></div>
-        </div>
+        <div class="lineup-card" id="generatedLineup"></div>
 
         <div class="status-block" style="margin-bottom:12px;">
           <div class="status-label">Lineup Summary</div>
-          <div class="status-value">273.8 Median</div>
-          <div class="muted">P90 312.4 · Leverage 7.9 · Fragility Low-Med · Salary $49,800 · Avg ownership 17.1%</div>
+          <div class="status-value" id="lineupMedian">0.0 Median</div>
+          <div class="muted" id="lineupSummaryText">P90 0.0 · Leverage 0.0 · Fragility 0.0 · Salary $0 · Avg ownership 0%</div>
+        </div>
+
+        <div class="summary-chips" style="margin-bottom:12px;">
+          <span class="tag good" id="legalityTag">Legal Build</span>
+          <span class="tag warn" id="contestTag">GPP</span>
+          <span class="tag hot" id="siteTag">DK</span>
         </div>
 
         <div class="actions-stack">
-          <button class="btn primary full">Export CSV</button>
-          <button class="btn full">Generate Another</button>
-          <button class="btn full">Save Build</button>
+          <button class="btn primary full" id="exportCsvBtn">Export CSV</button>
+          <button class="btn full" id="generateAnotherBtn">Generate Another</button>
+          <button class="btn full" id="saveBuildBtn">Save Build</button>
         </div>
       </aside>
     </section>
 
-    
-
     <div class="footer-note">Focused view: hero, historical intake, build rules, player pool, and generated lineup only.</div>
   </div>
+
+  <script>
+    const basePlayers = [
+      { name: 'Luka Doncic', pos: 'PG / SG', team: 'DAL', salary: 11200, minutes: [37, 38, 39], fppm: [1.48, 1.55, 1.51], own: 0.24, usage: 1.06, pace: 1.02, defense: 1.01, fragility: 0.22, tags: { good: 'Core', warn: 'Q Tag', hot: 'Leverage' } },
+      { name: 'Jalen Brunson', pos: 'PG', team: 'NYK', salary: 9300, minutes: [35, 36, 37], fppm: [1.26, 1.34, 1.30], own: 0.19, usage: 1.04, pace: 1.00, defense: 0.99, fragility: 0.42, tags: { warn: 'Q Tag' } },
+      { name: 'Jaren Jackson Jr.', pos: 'PF / C', team: 'MEM', salary: 7800, minutes: [31, 33, 34], fppm: [1.18, 1.24, 1.21], own: 0.13, usage: 1.03, pace: 1.01, defense: 1.03, fragility: 0.39, tags: { hot: 'Leverage' } },
+      { name: 'Brandin Podziemski', pos: 'SG / SF', team: 'GSW', salary: 5600, minutes: [29, 31, 32], fppm: [0.94, 1.01, 0.99], own: 0.21, usage: 1.00, pace: 1.03, defense: 1.00, fragility: 0.18, tags: { good: 'Value' } },
+      { name: 'Nickeil Alexander-Walker', pos: 'SG / SF', team: 'MIN', salary: 4500, minutes: [24, 27, 29], fppm: [0.87, 0.94, 0.90], own: 0.11, usage: 0.98, pace: 1.00, defense: 1.02, fragility: 0.58, tags: { hot: 'Low Own' } },
+      { name: 'Mikal Bridges', pos: 'SF', team: 'BKN', salary: 7200, minutes: [35, 36, 37], fppm: [1.00, 1.05, 1.08], own: 0.14, usage: 1.01, pace: 1.01, defense: 0.98, fragility: 0.29, tags: { good: 'Stable' } },
+      { name: 'Naz Reid', pos: 'PF / C', team: 'MIN', salary: 5900, minutes: [24, 26, 28], fppm: [1.08, 1.14, 1.12], own: 0.17, usage: 1.02, pace: 1.01, defense: 1.01, fragility: 0.36, tags: { warn: 'Volatile' } },
+      { name: 'Derrick White', pos: 'PG / SG', team: 'BOS', salary: 6900, minutes: [33, 35, 35], fppm: [1.00, 1.07, 1.03], own: 0.16, usage: 1.00, pace: 1.02, defense: 0.99, fragility: 0.24, tags: { good: 'Balanced' } }
+    ];
+
+    const rosterSlots = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'];
+
+    const state = {
+      site: 'DK',
+      contest: 'GPP',
+      leverage: 'tournament',
+      stack: 'bringback',
+      slate: 'main',
+      lineupCount: 20,
+      simCount: 10000,
+      fragilityCap: 55,
+      currentLineupIndex: 1,
+      players: [],
+      lastGeneratedLineup: []
+    };
+
+    function weightedMedian(values, weights) {
+      const pairs = values.map((value, i) => ({ value, weight: weights[i] }))
+        .sort((a, b) => a.value - b.value);
+      const totalWeight = pairs.reduce((sum, pair) => sum + pair.weight, 0);
+      let cumulative = 0;
+      for (const pair of pairs) {
+        cumulative += pair.weight;
+        if (cumulative >= totalWeight / 2) return pair.value;
+      }
+      return pairs[pairs.length - 1]?.value ?? 0;
+    }
+
+    function formatMoney(value) {
+      return '$' + Math.round(value).toLocaleString();
+    }
+
+    function formatPct(value) {
+      return (value * 100).toFixed(1).replace('.0', '') + '%';
+    }
+
+    function formatNumber(value) {
+      return Number(value).toLocaleString();
+    }
+
+    function fragilityLabel(score) {
+      if (score < 0.28) return 'Low';
+      if (score < 0.5) return 'Med';
+      return 'High';
+    }
+
+    function fragilityDisplayLabel(percent) {
+      if (percent < 35) return 'Low';
+      if (percent < 70) return 'Medium';
+      return 'High';
+    }
+
+    function getSlateConfig(slate) {
+      if (slate === 'turbo') return { games: 3, paceBoost: 1.03, defenseBoost: 1.01, label: 'Turbo Slate · 3 Games' };
+      if (slate === 'showdown') return { games: 1, paceBoost: 1.05, defenseBoost: 1.02, label: 'Showdown · 1 Game' };
+      return { games: 8, paceBoost: 1.00, defenseBoost: 1.00, label: 'Main Slate · 8 Games' };
+    }
+
+    function computePlayerMetrics(player) {
+      const slateCfg = getSlateConfig(state.slate);
+      const minuteWeights = [0.40, 0.35, 0.25];
+      const fppmWeights = [0.45, 0.35, 0.20];
+      const minMed = weightedMedian(player.minutes, minuteWeights);
+      const fppmMed = weightedMedian(player.fppm, fppmWeights);
+
+      const leverageBias = state.leverage === 'tournament' ? 1.08 : state.leverage === 'fade' ? 1.15 : 1.00;
+      const contestBoost = state.contest === 'Cash' ? 0.97 : state.contest === 'SE' ? 1.00 : 1.03;
+      const siteSalaryFactor = state.site === 'FD' ? 0.98 : 1.00;
+      const fragilityPenalty = 1 - ((player.fragility * (state.fragilityCap / 100)) * 0.22);
+
+      const median = minMed * fppmMed * player.usage * (player.pace * slateCfg.paceBoost) * (player.defense * slateCfg.defenseBoost) * contestBoost * siteSalaryFactor * fragilityPenalty;
+      const p90 = median * (1.15 + player.fragility * 0.18);
+      const boomProb = Math.min(0.55, (median / (player.salary / 235)) / 10);
+      const leverage = Math.log((boomProb + 0.01) / (player.own + 0.01)) * 10 * leverageBias;
+      const adjustedOwn = Math.min(0.55, Math.max(0.04, player.own * (state.contest === 'Cash' ? 1.08 : 0.98)));
+      const tagType = leverage > 7.5 ? 'hot' : median > 40 ? 'good' : player.fragility > 0.5 ? 'warn' : 'good';
+      const tagText = leverage > 7.5 ? (player.tags.hot || 'Leverage') : median > 40 ? (player.tags.good || 'Core') : player.fragility > 0.5 ? (player.tags.warn || 'Fragile') : (player.tags.good || 'Value');
+
+      return {
+        ...player,
+        median,
+        p90,
+        leverage,
+        ownership: adjustedOwn,
+        fragilityScore: player.fragility,
+        fragilityText: fragilityLabel(player.fragility),
+        tagType,
+        tagText
+      };
+    }
+
+    function refreshPlayers() {
+      state.players = basePlayers.map(computePlayerMetrics).sort((a, b) => (b.median + b.leverage * 0.35) - (a.median + a.leverage * 0.35));
+      renderPlayerPool();
+      renderMathSummary();
+      updateStatusBlocks();
+    }
+
+    function renderPlayerPool() {
+      const tbody = document.getElementById('playerPoolBody');
+      tbody.innerHTML = state.players.map(player => `
+        <tr>
+          <td><strong>${player.name}</strong><div class="tiny muted">${player.pos}</div></td>
+          <td>${player.team}</td>
+          <td>${formatMoney(player.salary)}</td>
+          <td>${player.median.toFixed(1)}</td>
+          <td>${formatPct(player.ownership)}</td>
+          <td>${player.leverage.toFixed(1)}</td>
+          <td>${player.fragilityText}</td>
+          <td><span class="tag ${player.tagType}">${player.tagText}</span></td>
+        </tr>
+      `).join('');
+      document.getElementById('playerPoolTimestamp').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+
+    function renderMathSummary() {
+      const avgMedian = state.players.reduce((sum, p) => sum + p.median, 0) / state.players.length;
+      const avgLev = state.players.reduce((sum, p) => sum + p.leverage, 0) / state.players.length;
+      const avgOwn = state.players.reduce((sum, p) => sum + p.ownership, 0) / state.players.length;
+      document.getElementById('summaryProjectionMode').textContent = state.leverage === 'tournament' ? 'Tournament' : state.leverage === 'fade' ? 'Chalk Fade' : 'Neutral';
+      document.getElementById('summaryAvgMedian').textContent = avgMedian.toFixed(1);
+      document.getElementById('summaryAvgLev').textContent = avgLev.toFixed(1);
+      document.getElementById('summaryAvgOwn').textContent = formatPct(avgOwn);
+      document.getElementById('mathEngineSummary').textContent = `${state.site} ${state.contest} build using ${formatNumber(state.simCount)} simulations, ${fragilityDisplayLabel(state.fragilityCap).toLowerCase()} fragility cap, and ${state.leverage} leverage bias.`;
+    }
+
+    function generateLineup() {
+      const sorted = [...state.players].sort((a, b) => {
+        const aScore = a.median + a.leverage * 0.6 - a.fragilityScore * 7;
+        const bScore = b.median + b.leverage * 0.6 - b.fragilityScore * 7;
+        return bScore - aScore;
+      });
+
+      const selected = [];
+      const usedTeams = new Map();
+      for (const player of sorted) {
+        if (selected.length >= 8) break;
+        const teamCount = usedTeams.get(player.team) || 0;
+        if (teamCount >= 3) continue;
+        selected.push(player);
+        usedTeams.set(player.team, teamCount + 1);
+      }
+
+      state.lastGeneratedLineup = rosterSlots.map((slot, index) => ({ slot, player: selected[index] || sorted[index % sorted.length] }));
+      state.currentLineupIndex = Math.min(state.lineupCount, state.currentLineupIndex);
+      renderLineup();
+    }
+
+    function renderLineup() {
+      const container = document.getElementById('generatedLineup');
+      const lineup = state.lastGeneratedLineup;
+      const totalMedian = lineup.reduce((sum, item) => sum + item.player.median, 0);
+      const totalP90 = lineup.reduce((sum, item) => sum + item.player.p90, 0);
+      const totalSalary = lineup.reduce((sum, item) => sum + item.player.salary, 0);
+      const avgOwnership = lineup.reduce((sum, item) => sum + item.player.ownership, 0) / lineup.length;
+      const avgLeverage = lineup.reduce((sum, item) => sum + item.player.leverage, 0) / lineup.length;
+      const fragility = lineup.reduce((sum, item) => sum + item.player.fragilityScore, 0) / lineup.length;
+
+      container.innerHTML = lineup.map(item => `
+        <div class="lineup-row"><span>${item.slot} · ${item.player.name}</span><strong>${item.player.median.toFixed(1)}</strong></div>
+      `).join('');
+
+      document.getElementById('lineupMedian').textContent = `${totalMedian.toFixed(1)} Median`;
+      document.getElementById('lineupSummaryText').textContent = `P90 ${totalP90.toFixed(1)} · Leverage ${avgLeverage.toFixed(1)} · Fragility ${fragility.toFixed(2)} · Salary ${formatMoney(totalSalary)} · Avg ownership ${formatPct(avgOwnership)}`;
+      document.getElementById('lineupPosition').textContent = `Lineup ${state.currentLineupIndex} of ${state.lineupCount}`;
+      document.getElementById('legalityTag').textContent = totalSalary <= 50000 ? 'Legal Build' : 'Over Cap';
+      document.getElementById('legalityTag').className = `tag ${totalSalary <= 50000 ? 'good' : 'hot'}`;
+      document.getElementById('contestTag').textContent = state.contest;
+      document.getElementById('siteTag').textContent = state.site;
+    }
+
+    function updateStatusBlocks() {
+      const slateCfg = getSlateConfig(state.slate);
+      document.getElementById('slateStatusValue').textContent = slateCfg.label;
+      document.getElementById('slateStatusSub').textContent = `Sim count ${formatNumber(state.simCount)} · ${state.site} · ${state.contest} · Last projection sync ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      document.getElementById('heroLineupCount').textContent = String(state.lineupCount);
+      document.getElementById('fragilityDisplay').textContent = fragilityDisplayLabel(state.fragilityCap);
+      document.getElementById('simCountDisplay').textContent = formatNumber(state.simCount);
+    }
+
+    function setActiveChip(group, value, allowMulti = false) {
+      document.querySelectorAll(`.chip[data-group="${group}"]`).forEach(chip => {
+        if (allowMulti) {
+          if (chip.dataset.value === value) chip.classList.toggle('active');
+        } else {
+          chip.classList.toggle('active', chip.dataset.value === value);
+        }
+      });
+    }
+
+    function bindChipGroups() {
+      document.querySelectorAll('.chip[data-group]').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const group = chip.dataset.group;
+          const value = chip.dataset.value;
+          state[group] = value;
+          setActiveChip(group, value);
+          refreshPlayers();
+          if (state.lastGeneratedLineup.length) generateLineup();
+        });
+      });
+    }
+
+    function bindInputs() {
+      document.getElementById('slateSelect').addEventListener('change', (e) => {
+        state.slate = e.target.value;
+        refreshPlayers();
+        if (state.lastGeneratedLineup.length) generateLineup();
+      });
+
+      document.getElementById('lineupCountInput').addEventListener('input', (e) => {
+        state.lineupCount = Math.max(1, Math.min(150, Number(e.target.value || 1)));
+        updateStatusBlocks();
+        document.getElementById('lineupPosition').textContent = `Lineup ${state.currentLineupIndex} of ${state.lineupCount}`;
+      });
+
+      document.getElementById('simCountRange').addEventListener('input', (e) => {
+        state.simCount = Number(e.target.value);
+        updateStatusBlocks();
+        renderMathSummary();
+      });
+
+      document.getElementById('fragilityRange').addEventListener('input', (e) => {
+        state.fragilityCap = Number(e.target.value);
+        updateStatusBlocks();
+        refreshPlayers();
+        if (state.lastGeneratedLineup.length) generateLineup();
+      });
+
+      document.getElementById('generateLineupsBtn').addEventListener('click', () => {
+        generateLineup();
+      });
+
+      document.getElementById('generateAnotherBtn').addEventListener('click', () => {
+        state.currentLineupIndex = state.currentLineupIndex >= state.lineupCount ? 1 : state.currentLineupIndex + 1;
+        basePlayers.push(basePlayers.shift());
+        refreshPlayers();
+        generateLineup();
+      });
+
+      document.getElementById('resetRulesBtn').addEventListener('click', () => {
+        state.site = 'DK';
+        state.contest = 'GPP';
+        state.leverage = 'tournament';
+        state.stack = 'bringback';
+        state.slate = 'main';
+        state.lineupCount = 20;
+        state.simCount = 10000;
+        state.fragilityCap = 55;
+        state.currentLineupIndex = 1;
+
+        document.getElementById('lineupCountInput').value = 20;
+        document.getElementById('simCountRange').value = 10000;
+        document.getElementById('fragilityRange').value = 55;
+        document.getElementById('slateSelect').value = 'main';
+        setActiveChip('site', 'DK');
+        setActiveChip('contest', 'GPP');
+        setActiveChip('leverage', 'tournament');
+        setActiveChip('stack', 'bringback');
+
+        refreshPlayers();
+        generateLineup();
+      });
+
+      ['heroGenerateBtn', 'demoBuildBtn', 'startOptimizeBtn'].forEach(id => {
+        document.getElementById(id).addEventListener('click', () => generateLineup());
+      });
+
+      document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
+      document.getElementById('saveBuildBtn').addEventListener('click', () => alert('Build saved to demo session.'));
+
+      const uploadMap = [
+        ['historicalGameLogs', 'historicalGameLogsStatus'],
+        ['ownershipHistory', 'ownershipHistoryStatus'],
+        ['contestResults', 'contestResultsStatus'],
+        ['injuryHistory', 'injuryHistoryStatus']
+      ];
+
+      uploadMap.forEach(([inputId, statusId]) => {
+        document.getElementById(inputId).addEventListener('change', (e) => {
+          const file = e.target.files?.[0];
+          document.getElementById(statusId).textContent = file ? `${file.name} loaded` : 'No file loaded';
+        });
+      });
+    }
+
+    function exportCsv() {
+      if (!state.lastGeneratedLineup.length) generateLineup();
+      const headers = ['Slot', 'Player'];
+      const rows = state.lastGeneratedLineup.map(item => [item.slot, item.player.name]);
+      const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `court-edge-${state.site.toLowerCase()}-${state.contest.toLowerCase()}-lineup.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    bindChipGroups();
+    bindInputs();
+    refreshPlayers();
+    generateLineup();
+  </script>
 </body>
 </html>
