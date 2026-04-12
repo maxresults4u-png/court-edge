@@ -818,7 +818,7 @@
       site: 'DK',
       contest: 'GPP',
       leverage: 'tournament',
-      stack: 'bringback',
+      stack: 'neutral',
       slate: 'main',
       lineupCount: 20,
       simCount: 10000,
@@ -1183,10 +1183,10 @@
 
       const perSlotPools = cfg.slots.map(slot => randomizedCandidates
         .filter(player => eligibilityForSlot(player, slot))
-        .slice(0, 18));
+        .slice(0, Math.max(30, Math.min(80, randomizedCandidates.length))));
 
       let best = null;
-      const tries = 140;
+      const tries = 320;
       for (let t = 0; t < tries; t++) {
         const used = new Set();
         const teamCounts = new Map();
@@ -1201,10 +1201,10 @@
               if (used.has(player.name)) return false;
               if (salary + player.salary > cfg.cap) return false;
               const teamCount = teamCounts.get(player.team) || 0;
-              if (teamCount >= 3 && state.stack !== 'teamstack') return false;
+              if (teamCount >= 4 && state.stack !== 'teamstack') return false;
               if (state.stack === 'bringback' && lineup.length === 1) {
                 const primary = lineup[0].player;
-                if (player.gameId !== primary.gameId && perSlotPools[slotIndex].length > 2) return false;
+                if (player.gameId !== primary.gameId && perSlotPools[slotIndex].length > 6 && Math.random() < 0.6) return false;
               }
               return true;
             });
@@ -1233,38 +1233,84 @@
 
     function generatePortfolio() {
       state.generatedPortfolio = [];
-      const requested = Math.max(1, Math.min(150, state.lineupCount));
-      const maxExposure = state.contest === 'Cash' ? 0.8 : 0.7;
+      const requested = Math.max(1, Math.min(150, Number(state.lineupCount || 1)));
       const seenKeys = new Set();
       state.players.forEach(p => p._usedCount = 0);
-      let attempts = 0;
-      while (state.generatedPortfolio.length < requested && attempts < requested * 18) {
-        attempts += 1;
-        const built = generateOneLineup(state.generatedPortfolio.length);
-        if (!built) break;
-        const key = built.lineup.map(item => item.player.name).sort().join('|');
-        if (seenKeys.has(key)) {
-          state.players.forEach(p => p.buildScore += Math.random() * 0.12 - 0.06);
-          continue;
+
+      const phases = [
+        { maxExposure: state.contest === 'Cash' ? 0.9 : 0.75, uniquenessMin: 2, attemptFactor: 28 },
+        { maxExposure: 0.92, uniquenessMin: 1, attemptFactor: 32 },
+        { maxExposure: 1.0, uniquenessMin: 0, attemptFactor: 40 }
+      ];
+
+      for (const phase of phases) {
+        let attempts = 0;
+        const maxAttempts = Math.max(requested * phase.attemptFactor, 120);
+        while (state.generatedPortfolio.length < requested && attempts < maxAttempts) {
+          attempts += 1;
+          const built = generateOneLineup(state.generatedPortfolio.length);
+          if (!built) {
+            state.players.forEach(p => { p.buildScore += (Math.random() - 0.5) * 0.4; });
+            continue;
+          }
+          const names = built.lineup.map(item => item.player.name).sort();
+          const key = names.join('|');
+
+          let overlapsTooMuch = false;
+          if (phase.uniquenessMin > 0) {
+            for (const existing of state.generatedPortfolio) {
+              const existingSet = new Set(existing.lineup.map(item => item.player.name));
+              let overlap = 0;
+              names.forEach(name => { if (existingSet.has(name)) overlap += 1; });
+              const uniqueDiff = built.lineup.length - overlap;
+              if (uniqueDiff < phase.uniquenessMin) {
+                overlapsTooMuch = true;
+                break;
+              }
+            }
+          }
+
+          let violatesExposure = false;
+          built.lineup.forEach(item => {
+            const nextCount = (item.player._usedCount || 0) + 1;
+            const nextExposure = nextCount / Math.max(1, state.generatedPortfolio.length + 1);
+            if (nextExposure > phase.maxExposure) violatesExposure = true;
+          });
+
+          if (seenKeys.has(key) || overlapsTooMuch || violatesExposure) {
+            built.lineup.forEach(item => { item.player.buildScore -= 0.02 + Math.random() * 0.05; });
+            continue;
+          }
+
+          seenKeys.add(key);
+          built.lineup.forEach(item => {
+            item.player._usedCount = (item.player._usedCount || 0) + 1;
+            item.player.buildScore += Math.random() * 0.04;
+          });
+          state.generatedPortfolio.push(built);
         }
-        let violates = false;
-        built.lineup.forEach(item => {
-          const nextCount = (item.player._usedCount || 0) + 1;
-          const nextExposure = nextCount / Math.max(1, state.generatedPortfolio.length + 1);
-          if (nextExposure > maxExposure) violates = true;
-        });
-        if (violates && attempts < requested * 18) {
-          built.lineup.forEach(item => { item.player.buildScore -= 0.08 + Math.random() * 0.08; });
-          continue;
-        }
-        seenKeys.add(key);
-        built.lineup.forEach(item => { item.player._usedCount = (item.player._usedCount || 0) + 1; });
-        state.generatedPortfolio.push(built);
       }
+
       if (!state.generatedPortfolio.length) {
         const fallback = generateOneLineup(0);
         if (fallback) state.generatedPortfolio.push(fallback);
       }
+
+      if (state.generatedPortfolio.length && state.generatedPortfolio.length < requested) {
+        const base = [...state.generatedPortfolio];
+        let guard = 0;
+        while (state.generatedPortfolio.length < requested && guard < requested * 6) {
+          guard += 1;
+          const seed = base[guard % base.length];
+          const mutated = generateOneLineup(guard);
+          const candidate = mutated || seed;
+          const key = candidate.lineup.map(item => item.player.name).sort().join('|');
+          if (seenKeys.has(key) && candidate !== seed) continue;
+          seenKeys.add(key + ':' + state.generatedPortfolio.length);
+          state.generatedPortfolio.push(candidate);
+        }
+      }
+
       state.currentLineupIndex = 1;
       state.lastGeneratedLineup = state.generatedPortfolio[0]?.lineup || [];
       renderLineup();
