@@ -1233,7 +1233,7 @@
 
     function generatePortfolio() {
       state.generatedPortfolio = [];
-      const requested = state.uploads.lineupTemplate?.rows?.length ? Math.min(50, state.uploads.lineupTemplate.rows.length) : Math.min(50, state.lineupCount);
+      const requested = Math.max(1, Math.min(150, state.lineupCount));
       const maxExposure = state.contest === 'Cash' ? 0.8 : 0.7;
       const seenKeys = new Set();
       state.players.forEach(p => p._usedCount = 0);
@@ -1550,8 +1550,7 @@
         document.getElementById('templateMappingStatus').textContent = spec.slotColumns.length
           ? `Template mapping: ${spec.site} ${spec.format} · ${spec.slotColumns.join(', ')}`
           : 'Template mapping: no roster columns detected';
-        if (rows.length) {
-          state.lineupCount = Math.max(1, Math.min(150, rows.length));
+        if (!Number(document.getElementById('lineupCountInput').value || 0)) {
           document.getElementById('lineupCountInput').value = state.lineupCount;
         }
         if (spec.site && state.site !== spec.site) {
@@ -1561,7 +1560,7 @@
         refreshPlayers();
         window.setTimeout(() => generatePortfolio(), 80);
         if (rows.length && spec.slotColumns.length) {
-          statusEl.textContent = `${file.name} loaded · ready to generate ${Math.max(1, Math.min(150, rows.length))} lineups`;
+          statusEl.textContent = `${file.name} loaded · template mapped · lineup count stays at ${state.lineupCount}`;
         } else {
           statusEl.textContent = `${file.name} loaded · template needs a valid header row`;
         }
@@ -1669,7 +1668,8 @@
         const spec = template.spec || detectTemplateSpec(template.rows);
         const templateHeaders = template.headers?.length ? template.headers : Object.keys(template.rows[0]);
         headers = [...templateHeaders];
-        rows = template.rows.slice(0, state.generatedPortfolio.length).map((templateRow, idx) => {
+        rows = Array.from({ length: state.generatedPortfolio.length }, (_, idx) => {
+          const templateRow = template.rows[idx] || template.rows[idx % template.rows.length] || {};
           const entry = { ...templateRow };
           const lineup = state.generatedPortfolio[idx].lineup;
           spec.slotColumns.forEach((col, colIdx) => {
