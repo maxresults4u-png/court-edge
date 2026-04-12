@@ -342,13 +342,13 @@ function simulatePortfolio(lineups, simCount){
   lineups.forEach(l=>l.players.forEach(p=>{uniq.set(p.id,p); gameKeys.set(p.game,true); teamKeys.set(p.team,true);}));
   const games = [...gameKeys.keys()], teams = [...teamKeys.keys()];
   const playerDraws = new Map();
+  const teamWeight = 0.18;
+  const gameWeight = 0.14;
+  const indivWeight = Math.sqrt(Math.max(0.01, 1 - teamWeight*teamWeight - gameWeight*gameWeight));
 
   // Correlated player outcomes: player-specific + team factor + game environment factor
   uniq.forEach((p,id)=>{
     const arr = new Float32Array(simCount);
-    const teamWeight = 0.18;
-    const gameWeight = 0.14;
-    const indivWeight = Math.sqrt(Math.max(0.01, 1 - teamWeight*teamWeight - gameWeight*gameWeight));
     for(let i=0;i<simCount;i++){
       if(!playerDraws.has('__game__'+p.game)) playerDraws.set('__game__'+p.game, new Float32Array(simCount));
       if(!playerDraws.has('__team__'+p.team)) playerDraws.set('__team__'+p.team, new Float32Array(simCount));
