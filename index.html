@@ -1414,24 +1414,22 @@
     }
 
     function simpleCsvParse(text) {
-      const lines = text.split(/
-?
-/);
+      const lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
       const nonEmpty = lines
         .map((line, idx) => ({ line, idx }))
         .filter(item => item.line.trim().length);
       if (!nonEmpty.length) return { headers: [], rows: [], headerIndex: -1 };
 
-      const expectedKeys = ['entry id','entryid','contest id','contestid','contest name','contestname','pg','sg','sf','pf','c','g','f','util','mvp','star','pro','flex','id','player id','nickname','name'];
+      const expectedKeys = ['entryid','contestid','contestname','pg','sg','sf','pf','c','g','f','util','mvp','star','pro','flex','id','playerid','nickname','name','position','salary','team','teamabbrev','gameinfo','fppg'];
       let headerIndex = -1;
       let headers = [];
 
-      for (const item of nonEmpty.slice(0, 25)) {
+      for (const item of nonEmpty.slice(0, 30)) {
         const cells = parseCsvLine(item.line).map(h => h.trim());
         const normalized = cells.map(normalizeHeader);
         const hitCount = normalized.filter(cell => expectedKeys.includes(cell)).length;
         const distinctCount = new Set(normalized.filter(Boolean)).size;
-        if (hitCount >= 2 || (distinctCount >= 6 && normalized.some(cell => ['pg','sg','sf','pf','c','g','f','util','mvp','flex'].includes(cell)))) {
+        if (hitCount >= 2 || (distinctCount >= 4 && normalized.some(cell => ['position','salary','name','nickname','team','teamabbrev','pg','sg','sf','pf','c','g','f','util','mvp','flex'].includes(cell)))) {
           headerIndex = item.idx;
           headers = cells;
           break;
@@ -1443,7 +1441,7 @@
         headers = parseCsvLine(nonEmpty[0].line).map(h => h.trim());
       }
 
-      const normalizedHeaders = headers.map(h => h.trim().toLowerCase());
+      const normalizedHeaders = headers.map(h => normalizeHeader(h));
       const rows = [];
       for (let i = headerIndex + 1; i < lines.length; i++) {
         const line = lines[i];
@@ -1475,6 +1473,8 @@
         refreshPlayers();
         return;
       }
+      statusEl.textContent = `Loading ${file.name}...`;
+      await new Promise(resolve => setTimeout(resolve, 0));
       const text = await file.text();
       const parsed = simpleCsvParse(text);
       const rows = parsed.rows;
@@ -1693,7 +1693,6 @@
     bindChipGroups();
     bindInputs();
     refreshPlayers();
-    generatePortfolio();
   </script>
 
 </body>
