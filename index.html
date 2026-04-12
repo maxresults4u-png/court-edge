@@ -818,7 +818,7 @@
       site: 'DK',
       contest: 'GPP',
       leverage: 'tournament',
-      stack: 'neutral',
+      stack: 'bringback',
       slate: 'main',
       lineupCount: 20,
       simCount: 10000,
@@ -917,12 +917,11 @@
 
     function effectiveSimCount() {
       const poolSize = state.players.length || state.uploads.slatePlayerCsv?.players?.length || RAW_PLAYERS.length;
-      if (poolSize > 250) return Math.min(state.simCount, 600);
-      if (poolSize > 180) return Math.min(state.simCount, 900);
-      if (poolSize > 120) return Math.min(state.simCount, 1200);
-      if (poolSize > 80) return Math.min(state.simCount, 1800);
-      if (poolSize > 40) return Math.min(state.simCount, 3000);
-      return state.simCount;
+      if (poolSize > 250) return Math.min(state.simCount, 120);
+      if (poolSize > 180) return Math.min(state.simCount, 150);
+      if (poolSize > 120) return Math.min(state.simCount, 200);
+      if (poolSize > 80) return Math.min(state.simCount, 250);
+      return Math.min(state.simCount, 300);
     }
 
     function getRowValue(row, keys) {
@@ -1017,18 +1016,7 @@
     }
 
     function simulatePlayerDistribution(player, projection, sigma) {
-      const samples = [];
-      const simTotal = effectiveSimCount();
-      const gameStd = 0.07 + (player.paceTeam > LEAGUE_PACE ? 0.01 : 0);
-      const idioStd = Math.max(0.05, sigma / Math.max(projection, 1));
-      for (let i = 0; i < simTotal; i++) {
-        const gameShock = 1 + randn() * gameStd;
-        const playerShock = 1 + randn() * idioStd;
-        const points = Math.max(0, projection * gameShock * playerShock);
-        samples.push(points);
-      }
-      samples.sort((a, b) => a - b);
-      return samples;
+      return [];
     }
 
     function computePlayerMetrics(rawPlayer) {
@@ -1053,21 +1041,22 @@
       const fragilityPenalty = 1 - (player.minutes.length ? player.minutes.length / 1000 : 0) - (state.fragilityCap / 100) * ((player.own < 0.09 ? 0.02 : 0) + 0.16 * clamp((0.65 - Math.min(...player.fppm)) / 2, 0, 1));
 
       const fpMed = minMed * fppmMed * aUsage * aPace * aDef * injuryPenalty * fragilityPenalty;
-      const sigmaMin = 1.4826 * mad(player.minutes);
-      const sigmaFppm = 1.4826 * mad(player.fppm);
-      const sigmaFp = Math.sqrt(Math.pow(sigmaMin * fppmMed, 2) + Math.pow(minMed * sigmaFppm, 2));
+      const sigmaMin = Math.max(1.2, 1.4826 * mad(player.minutes));
+      const sigmaFppm = Math.max(0.035, 1.4826 * mad(player.fppm));
+      const sigmaFp = Math.max(2.0, Math.sqrt(Math.pow(sigmaMin * fppmMed, 2) + Math.pow(minMed * sigmaFppm, 2)));
 
-      const sims = simulatePlayerDistribution(player, fpMed, sigmaFp);
-      const floor = quantile(sims, 0.10);
-      const p50 = quantile(sims, 0.50);
-      const p75 = quantile(sims, 0.75);
-      const p90 = quantile(sims, 0.90);
-      const p95 = quantile(sims, 0.95);
+      const floor = Math.max(0, fpMed - 1.2816 * sigmaFp);
+      const p50 = fpMed;
+      const p75 = fpMed + 0.6745 * sigmaFp;
+      const p90 = fpMed + 1.2816 * sigmaFp;
+      const p95 = fpMed + 1.6449 * sigmaFp;
 
       const boomThreshold = profile.salaryBoomK * (siteSalary / 1000);
-      const boomProb = sims.filter(v => v >= boomThreshold).length / sims.length;
-      const bustThreshold = floor * (state.contest === 'Cash' ? 1.02 : 0.96);
-      const bustProb = sims.filter(v => v <= bustThreshold).length / sims.length;
+      const zBoom = (boomThreshold - fpMed) / Math.max(sigmaFp, 1);
+      const boomProb = clamp(1 / (1 + Math.exp(1.35 * zBoom)), 0.01, 0.99);
+      const bustThreshold = Math.max(0, floor * (state.contest === 'Cash' ? 1.02 : 0.96));
+      const zBust = (bustThreshold - fpMed) / Math.max(sigmaFp, 1);
+      const bustProb = clamp(1 / (1 + Math.exp(-1.35 * zBust)), 0.01, 0.99);
 
       const levBias = state.leverage === 'tournament' ? 1.15 : state.leverage === 'fade' ? 0.95 : 1.00;
       const adjustedOwn = clamp(player.own * (state.contest === 'Cash' ? 1.08 : 0.98), 0.01, 0.85);
@@ -1099,7 +1088,7 @@
         tagType,
         tagText,
         buildScore,
-        simulations: sims
+        simulations: []
       };
     }
 
@@ -1109,10 +1098,6 @@
       renderPlayerPool();
       renderMathSummary();
       updateStatusBlocks();
-      if (!state.generatedPortfolio.length && state.players.length) {
-        window.clearTimeout(window.__courtEdgeAutobuild);
-        window.__courtEdgeAutobuild = window.setTimeout(() => generatePortfolio(), 60);
-      }
     }
 
     function renderPlayerPool() {
@@ -1145,22 +1130,20 @@
     }
 
     function lineupSummary(lineup) {
-      const simTotal = state.players[0]?.simulations?.length || effectiveSimCount();
-      const totals = new Array(simTotal).fill(0);
-      let salary = 0, ownershipSum = 0, leverageSum = 0, fragility = 0, proj = 0;
+      let salary = 0, ownershipSum = 0, leverageSum = 0, fragility = 0, proj = 0, variance = 0;
       lineup.forEach(({ player }) => {
         salary += player.salary;
         ownershipSum += player.ownership;
         leverageSum += player.leverage;
         fragility += player.fragilityScore;
         proj += player.median;
-        for (let i = 0; i < simTotal; i++) totals[i] += player.simulations[i] || 0;
+        variance += Math.pow(player.sigmaFp, 2);
       });
-      totals.sort((a, b) => a - b);
-      const p50 = quantile(totals, 0.50);
-      const p75 = quantile(totals, 0.75);
-      const p90 = quantile(totals, 0.90);
-      const p95 = quantile(totals, 0.95);
+      const sigma = Math.sqrt(Math.max(variance, 1));
+      const p50 = proj;
+      const p75 = proj + 0.6745 * sigma;
+      const p90 = proj + 1.2816 * sigma;
+      const p95 = proj + 1.6449 * sigma;
       return {
         salary,
         proj,
@@ -1169,63 +1152,69 @@
         fragilityAvg: fragility / lineup.length,
         dupScore: ownershipSum > 0 ? Math.log(ownershipSum + EPS) : 0,
         p50, p75, p90, p95,
-        legal: salary <= SITE_CONFIG[state.site].cap
+        legal: salary <= SITE_CONFIG[state.site].cap,
+        sigma
       };
     }
 
     function generateOneLineup(lineupIndex = 0) {
       const cfg = SITE_CONFIG[state.site];
-      const randomizedCandidates = [...state.players].sort((a, b) => {
-        const exposurePenaltyA = (a._usedCount || 0) * 1.5;
-        const exposurePenaltyB = (b._usedCount || 0) * 1.5;
-        return (b.buildScore - exposurePenaltyB + Math.random() * 0.6) - (a.buildScore - exposurePenaltyA + Math.random() * 0.6);
+      const maxTeam = state.stack === 'teamstack' ? 4 : 3;
+      const salaryFloor = cfg.cap - (state.site === 'FD' ? 5000 : 3500);
+      const exposureScale = Math.max(1, state.generatedPortfolio.length);
+      const candidates = [...state.players].sort((a, b) => {
+        const penA = (a._usedCount || 0) / exposureScale * 6;
+        const penB = (b._usedCount || 0) / exposureScale * 6;
+        return (b.buildScore - penB + Math.random() * 1.8) - (a.buildScore - penA + Math.random() * 1.8);
       });
 
-      const perSlotPools = cfg.slots.map(slot => randomizedCandidates
-        .filter(player => eligibilityForSlot(player, slot))
-        .slice(0, Math.max(30, Math.min(80, randomizedCandidates.length))));
-
       let best = null;
-      const tries = 320;
+      const tries = 90;
       for (let t = 0; t < tries; t++) {
         const used = new Set();
         const teamCounts = new Map();
+        const gameCounts = new Map();
         const lineup = [];
         let salary = 0;
         let failed = false;
 
         for (let slotIndex = 0; slotIndex < cfg.slots.length; slotIndex++) {
           const slot = cfg.slots[slotIndex];
-          const pool = perSlotPools[slotIndex]
-            .filter(player => {
-              if (used.has(player.name)) return false;
-              if (salary + player.salary > cfg.cap) return false;
-              const teamCount = teamCounts.get(player.team) || 0;
-              if (teamCount >= 4 && state.stack !== 'teamstack') return false;
-              if (state.stack === 'bringback' && lineup.length === 1) {
-                const primary = lineup[0].player;
-                if (player.gameId !== primary.gameId && perSlotPools[slotIndex].length > 6 && Math.random() < 0.6) return false;
-              }
-              return true;
-            });
+          const remaining = cfg.slots.length - slotIndex - 1;
+          const minFutureSalary = remaining * (state.site === 'FD' ? 3500 : 3000);
+          const eligible = candidates.filter(player => {
+            if (!eligibilityForSlot(player, slot)) return false;
+            if (used.has(player.name)) return false;
+            if (salary + player.salary + minFutureSalary > cfg.cap) return false;
+            const teamCount = teamCounts.get(player.team) || 0;
+            if (teamCount >= maxTeam) return false;
+            if (state.stack === 'bringback' && lineup.length >= 1) {
+              const anchor = lineup[0].player;
+              const sameGameCount = gameCounts.get(anchor.gameId) || 0;
+              if (sameGameCount < 2 && slotIndex <= 3 && player.gameId !== anchor.gameId) return false;
+            }
+            return true;
+          });
 
-          if (!pool.length) {
+          if (!eligible.length) {
             failed = true;
             break;
           }
 
-          const sliceWidth = Math.min(pool.length, Math.max(3, 8 - Math.floor(slotIndex / 2)));
-          const selected = pool[Math.floor(Math.random() * sliceWidth)];
-          used.add(selected.name);
-          salary += selected.salary;
-          teamCounts.set(selected.team, (teamCounts.get(selected.team) || 0) + 1);
-          lineup.push({ slot, player: selected });
+          const windowSize = Math.min(eligible.length, slotIndex < 2 ? 18 : 26);
+          const choice = eligible[Math.floor(Math.random() * windowSize)];
+          lineup.push({ slot, player: choice });
+          used.add(choice.name);
+          salary += choice.salary;
+          teamCounts.set(choice.team, (teamCounts.get(choice.team) || 0) + 1);
+          gameCounts.set(choice.gameId, (gameCounts.get(choice.gameId) || 0) + 1);
         }
 
         if (failed || lineup.length !== cfg.slots.length) continue;
         const summary = lineupSummary(lineup);
         if (!summary.legal) continue;
-        const objective = summary.p90 + summary.leverageAvg * 4 - summary.fragilityAvg * 18 - Math.max(0, summary.salary - (cfg.cap - 700)) * 0.005;
+        if (summary.salary < salaryFloor && t < tries - 10) continue;
+        const objective = summary.p90 + summary.leverageAvg * 5 - summary.fragilityAvg * 14 - Math.abs(cfg.cap - summary.salary) * 0.002;
         if (!best || objective > best.objective) best = { lineup, summary, objective };
       }
       return best;
@@ -1233,85 +1222,57 @@
 
     function generatePortfolio() {
       state.generatedPortfolio = [];
-      const requested = Math.max(1, Math.min(150, Number(state.lineupCount || 1)));
+      const requested = Math.max(1, Math.min(150, state.lineupCount));
       const seenKeys = new Set();
-      state.players.forEach(p => p._usedCount = 0);
+      const maxExposure = state.contest === 'Cash' ? 0.88 : state.contest === 'SE' ? 0.55 : 0.72;
+      state.players.forEach(p => { p._usedCount = 0; });
 
-      const phases = [
-        { maxExposure: state.contest === 'Cash' ? 0.9 : 0.75, uniquenessMin: 2, attemptFactor: 28 },
-        { maxExposure: 0.92, uniquenessMin: 1, attemptFactor: 32 },
-        { maxExposure: 1.0, uniquenessMin: 0, attemptFactor: 40 }
-      ];
+      let attempts = 0;
+      const hardCap = Math.max(400, requested * 8);
+      while (state.generatedPortfolio.length < requested && attempts < hardCap) {
+        attempts += 1;
+        const built = generateOneLineup(state.generatedPortfolio.length);
+        if (!built) continue;
+        const key = built.lineup.map(item => item.player.name).sort().join('|');
+        if (seenKeys.has(key)) continue;
 
-      for (const phase of phases) {
-        let attempts = 0;
-        const maxAttempts = Math.max(requested * phase.attemptFactor, 120);
-        while (state.generatedPortfolio.length < requested && attempts < maxAttempts) {
-          attempts += 1;
+        let violates = false;
+        for (const item of built.lineup) {
+          const nextCount = (item.player._usedCount || 0) + 1;
+          const nextExposure = nextCount / Math.max(1, state.generatedPortfolio.length + 1);
+          if (nextExposure > maxExposure) { violates = true; break; }
+        }
+        if (violates && attempts < hardCap * 0.8) continue;
+
+        seenKeys.add(key);
+        built.lineup.forEach(item => { item.player._usedCount = (item.player._usedCount || 0) + 1; });
+        state.generatedPortfolio.push(built);
+      }
+
+      if (state.generatedPortfolio.length < requested && state.players.length) {
+        const relaxedMaxExposure = 0.95;
+        let backfill = 0;
+        while (state.generatedPortfolio.length < requested && backfill < requested * 4) {
+          backfill += 1;
           const built = generateOneLineup(state.generatedPortfolio.length);
-          if (!built) {
-            state.players.forEach(p => { p.buildScore += (Math.random() - 0.5) * 0.4; });
-            continue;
-          }
-          const names = built.lineup.map(item => item.player.name).sort();
-          const key = names.join('|');
-
-          let overlapsTooMuch = false;
-          if (phase.uniquenessMin > 0) {
-            for (const existing of state.generatedPortfolio) {
-              const existingSet = new Set(existing.lineup.map(item => item.player.name));
-              let overlap = 0;
-              names.forEach(name => { if (existingSet.has(name)) overlap += 1; });
-              const uniqueDiff = built.lineup.length - overlap;
-              if (uniqueDiff < phase.uniquenessMin) {
-                overlapsTooMuch = true;
-                break;
-              }
-            }
-          }
-
-          let violatesExposure = false;
-          built.lineup.forEach(item => {
+          if (!built) continue;
+          const key = built.lineup.map(item => item.player.name).sort().join('|');
+          if (seenKeys.has(key)) continue;
+          let violates = false;
+          for (const item of built.lineup) {
             const nextCount = (item.player._usedCount || 0) + 1;
             const nextExposure = nextCount / Math.max(1, state.generatedPortfolio.length + 1);
-            if (nextExposure > phase.maxExposure) violatesExposure = true;
-          });
-
-          if (seenKeys.has(key) || overlapsTooMuch || violatesExposure) {
-            built.lineup.forEach(item => { item.player.buildScore -= 0.02 + Math.random() * 0.05; });
-            continue;
+            if (nextExposure > relaxedMaxExposure) { violates = true; break; }
           }
-
+          if (violates) continue;
           seenKeys.add(key);
-          built.lineup.forEach(item => {
-            item.player._usedCount = (item.player._usedCount || 0) + 1;
-            item.player.buildScore += Math.random() * 0.04;
-          });
+          built.lineup.forEach(item => { item.player._usedCount = (item.player._usedCount || 0) + 1; });
           state.generatedPortfolio.push(built);
         }
       }
 
-      if (!state.generatedPortfolio.length) {
-        const fallback = generateOneLineup(0);
-        if (fallback) state.generatedPortfolio.push(fallback);
-      }
-
-      if (state.generatedPortfolio.length && state.generatedPortfolio.length < requested) {
-        const base = [...state.generatedPortfolio];
-        let guard = 0;
-        while (state.generatedPortfolio.length < requested && guard < requested * 6) {
-          guard += 1;
-          const seed = base[guard % base.length];
-          const mutated = generateOneLineup(guard);
-          const candidate = mutated || seed;
-          const key = candidate.lineup.map(item => item.player.name).sort().join('|');
-          if (seenKeys.has(key) && candidate !== seed) continue;
-          seenKeys.add(key + ':' + state.generatedPortfolio.length);
-          state.generatedPortfolio.push(candidate);
-        }
-      }
-
-      state.currentLineupIndex = 1;
+      state.generatedPortfolio.sort((a, b) => b.summary.p90 - a.summary.p90);
+      state.currentLineupIndex = state.generatedPortfolio.length ? 1 : 0;
       state.lastGeneratedLineup = state.generatedPortfolio[0]?.lineup || [];
       renderLineup();
       updateStatusBlocks();
@@ -1703,7 +1664,6 @@
     }
 
     function exportCsv() {
-      if (!state.generatedPortfolio.length) generatePortfolio();
       if (!state.generatedPortfolio.length) return;
 
       const template = state.uploads.lineupTemplate;
