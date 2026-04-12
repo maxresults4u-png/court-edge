@@ -488,29 +488,6 @@
       </div>
     </section>
 
-    <section class="workflow">
-      <div class="card step">
-        <div class="step-num">1</div>
-        <h3>Ingest Slate</h3>
-        <p>Map site salary exports into a single canonical player schema with salary, positions, team, opponent, and site IDs.</p>
-      </div>
-      <div class="card step">
-        <div class="step-num">2</div>
-        <h3>Project Players</h3>
-        <p>Blend minutes and FPPM using weighted medians, then apply usage, pace, and defense modifiers.</p>
-      </div>
-      <div class="card step">
-        <div class="step-num">3</div>
-        <h3>Simulate Outcomes</h3>
-        <p>Estimate floor, median, and ceiling through a fast Monte Carlo-style scoring layer for lineup ranking.</p>
-      </div>
-      <div class="card step">
-        <div class="step-num">4</div>
-        <h3>Export Builds</h3>
-        <p>Generate legal lineups, preserve structure, and export clean CSV-ready builds.</p>
-      </div>
-    </section>
-
     <section class="card section" style="margin-top:0; margin-bottom:22px;">
       <h2>Historical Stats Intake</h2>
       <p>Upload long-term game logs, ownership history, contest results, and injury history so the stochastic brain has the four core historical feeds it needs.</p>
@@ -594,13 +571,14 @@
 
         <div class="template-box">
           <div class="status-label">Lineup Upload Template</div>
-          <p class="tiny muted">Upload your DraftKings or FanDuel entry template CSV here. The optimizer will use the row count from the template and export the full portfolio, not just one lineup.</p>
+          <p class="tiny muted">Upload your DraftKings or FanDuel entry template CSV here. The loader now scans the file to find the real header row, uses the template row count automatically, and exports the full portfolio.</p>
           <input type="file" id="lineupTemplateCsv" accept=".csv" />
           <div class="template-meta">
             <span id="lineupTemplateStatus">No lineup template loaded</span>
             <span id="lineupTemplateRows">Template rows: 0</span>
           </div>
           <div class="helper" id="templateMappingStatus" style="margin-top:8px; font-size:12px;">Template mapping: waiting for CSV</div>
+          <div class="helper" id="templateParseStatus" style="margin-top:6px; font-size:12px;">Template parser: no file loaded</div>
         </div>
 
         <div class="field">
@@ -1354,12 +1332,15 @@
         if (type === 'lineupTemplate') {
           document.getElementById('lineupTemplateRows').textContent = 'Template rows: 0';
           document.getElementById('templateMappingStatus').textContent = 'Template mapping: waiting for CSV';
+          document.getElementById('templateParseStatus').textContent = 'Template parser: no file loaded';
         }
         refreshPlayers();
         return;
       }
       const text = await file.text();
-      const rows = simpleCsvParse(text);
+      const parsed = simpleCsvParse(text);
+      const rows = parsed.rows;
+      const parseStatusEl = document.getElementById('templateParseStatus');
       if (type === 'historicalGameLogs') {
         const grouped = new Map();
         rows.forEach(row => {
@@ -1371,9 +1352,12 @@
         state.uploads[type] = { rows, grouped, fileName: file.name };
       } else if (type === 'lineupTemplate') {
         const spec = detectTemplateSpec(rows);
-        state.uploads[type] = { rows, fileName: file.name, headers: rows.length ? Object.keys(rows[0]) : [], spec };
+        state.uploads[type] = { rows, fileName: file.name, headers: parsed.headers, spec, headerIndex: parsed.headerIndex };
         document.getElementById('lineupTemplateRows').textContent = `Template rows: ${rows.length.toLocaleString()}`;
-        document.getElementById('lineupTemplateStatus').textContent = `${file.name} loaded`;
+        document.getElementById('lineupTemplateStatus').textContent = rows.length ? `${file.name} loaded` : `${file.name} loaded with 0 rows`;
+        parseStatusEl.textContent = parsed.headerIndex >= 0
+          ? `Template parser: detected header row ${parsed.headerIndex + 1}`
+          : 'Template parser: could not find a header row';
         document.getElementById('templateMappingStatus').textContent = spec.slotColumns.length
           ? `Template mapping: ${spec.site} ${spec.format} · ${spec.slotColumns.join(', ')}`
           : 'Template mapping: no roster columns detected';
@@ -1386,7 +1370,13 @@
           setActiveChip('site', spec.site);
         }
         refreshPlayers();
-        generatePortfolio();
+        if (rows.length && spec.slotColumns.length) {
+          generatePortfolio();
+        }
+        if (!rows.length || !spec.slotColumns.length) {
+          statusEl.textContent = `${file.name} loaded · template needs a valid header row`;
+        }
+        document.getElementById(inputId).value = '';
         return;
       } else {
         const byName = new Map();
@@ -1399,6 +1389,7 @@
       statusEl.textContent = `${file.name} loaded · ${rows.length.toLocaleString()} rows`;
       refreshPlayers();
       if (state.generatedPortfolio.length) generatePortfolio();
+      document.getElementById(inputId).value = '';
     }
 
     function bindChipGroups() {
@@ -1486,7 +1477,7 @@
 
       if (template && template.rows.length) {
         const spec = template.spec || detectTemplateSpec(template.rows);
-        const templateHeaders = Object.keys(template.rows[0]);
+        const templateHeaders = template.headers?.length ? template.headers : Object.keys(template.rows[0]);
         headers = [...templateHeaders];
         rows = template.rows.slice(0, state.generatedPortfolio.length).map((templateRow, idx) => {
           const entry = { ...templateRow };
