@@ -600,6 +600,7 @@
             <span id="lineupTemplateStatus">No lineup template loaded</span>
             <span id="lineupTemplateRows">Template rows: 0</span>
           </div>
+          <div class="helper" id="templateMappingStatus" style="margin-top:8px; font-size:12px;">Template mapping: waiting for CSV</div>
         </div>
 
         <div class="field">
@@ -795,7 +796,11 @@
         minutes:[35,36,37], fppm:[1.00,1.05,1.08], usg:[23.1,23.8,24.2], usgBase:22.8, paceTeam:98.8, paceOpp:99.9, defrtgOpp:111.0, injury:'' },
       { name:'Cam Thomas', team:'BKN', opp:'BOS', gameId:'BKN@BOS', positions:['SG'], salaryDK:6300, salaryFD:7000, own:0.09,
         minutes:[29,31,33], fppm:[0.98,1.04,1.06], usg:[28.2,29.0,29.8], usgBase:27.9, paceTeam:98.8, paceOpp:99.9, defrtgOpp:111.0, injury:'' }
-    ];
+    ].map((player, idx) => ({
+      ...player,
+      dkId: player.dkId || String(100000 + idx),
+      fdId: player.fdId || String(200000 + idx)
+    }));
 
     const LEAGUE_PACE = 99.5;
     const LEAGUE_DEFRTG = 114.5;
@@ -1252,6 +1257,82 @@
       return out;
     }
 
+    function normalizeHeader(value) {
+      return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    }
+
+    function detectTemplateSpec(rows) {
+      const headers = rows.length ? Object.keys(rows[0]) : [];
+      const normalized = headers.map(h => ({ original: h, key: normalizeHeader(h) }));
+      const rowCount = rows.length;
+      const slotRank = {
+        pg: 1, pg1: 1, pg2: 2,
+        sg: 3, sg1: 3, sg2: 4,
+        sf: 5, sf1: 5, sf2: 6,
+        pf: 7, pf1: 7, pf2: 8,
+        c: 9, c1: 9,
+        g: 10, f: 11, util: 12,
+        cpt: 1, captain: 1, mvp: 1, star: 2, pro: 3, flex: 4, flex1: 4, flex2: 5, flex3: 6, flex4: 7, flex5: 8
+      };
+
+      const slotAliases = {
+        pg: ['pg','pg1','pg2','pointguard'],
+        sg: ['sg','sg1','sg2','shootingguard'],
+        sf: ['sf','sf1','sf2','smallforward'],
+        pf: ['pf','pf1','pf2','powerforward'],
+        c: ['c','c1','center'],
+        g: ['g','guard'],
+        f: ['f','forward'],
+        util: ['util','utility'],
+        cpt: ['cpt','captain'],
+        mvp: ['mvp'],
+        star: ['star'],
+        pro: ['pro'],
+        flex: ['flex','flex1','flex2','flex3','flex4','flex5']
+      };
+
+      const matched = [];
+      normalized.forEach(item => {
+        for (const [slot, aliases] of Object.entries(slotAliases)) {
+          if (aliases.includes(item.key)) {
+            matched.push({ header: item.original, slot, rank: slotRank[item.key] || slotRank[slot] || 999, key: item.key });
+            break;
+          }
+        }
+      });
+
+      let site = 'DK';
+      const joinedHeaders = normalized.map(h => h.key).join('|');
+      if (joinedHeaders.includes('entryid') || joinedHeaders.includes('contestid') || matched.some(m => m.slot === 'g' || m.slot === 'f' || m.slot === 'util' || m.slot === 'cpt')) {
+        site = 'DK';
+      } else if (joinedHeaders.includes('entryid') || joinedHeaders.includes('contestname') || matched.filter(m => ['pg','sg','sf','pf'].includes(m.slot)).length >= 8) {
+        site = matched.some(m => m.slot === 'g' || m.slot === 'f' || m.slot === 'util') ? 'DK' : 'FD';
+      }
+
+      matched.sort((a, b) => a.rank - b.rank || a.header.localeCompare(b.header));
+
+      let format = 'classic';
+      if (matched.some(m => ['cpt','captain','mvp','star','pro','flex'].includes(m.slot))) format = 'showdown';
+
+      const slotColumns = matched.map(m => m.header);
+      const orderedSlots = matched.map(m => m.slot === 'captain' ? 'cpt' : m.slot);
+      return { headers, normalized, site, format, rowCount, slotColumns, orderedSlots };
+    }
+
+    function formatTemplatePlayerValue(player, templateSpec, columnName) {
+      const key = normalizeHeader(columnName);
+      if (templateSpec.site === 'FD') {
+        if (key === 'mvp' || key === 'star' || key === 'pro' || key.startsWith('flex')) {
+          return player.fdId ? `${player.name} (${player.fdId})` : player.name;
+        }
+        return player.fdId || player.name;
+      }
+      if (key === 'cpt' || key === 'captain') {
+        return player.dkId ? `${player.name} (${player.dkId})` : player.name;
+      }
+      return player.dkId ? `${player.name} (${player.dkId})` : player.name;
+    }
+
     function simpleCsvParse(text) {
       const lines = text.split(/\r?\n/).filter(line => line.trim().length);
       if (!lines.length) return [];
@@ -1270,6 +1351,10 @@
       if (!file) {
         state.uploads[type] = null;
         statusEl.textContent = 'No file loaded';
+        if (type === 'lineupTemplate') {
+          document.getElementById('lineupTemplateRows').textContent = 'Template rows: 0';
+          document.getElementById('templateMappingStatus').textContent = 'Template mapping: waiting for CSV';
+        }
         refreshPlayers();
         return;
       }
@@ -1285,12 +1370,20 @@
         });
         state.uploads[type] = { rows, grouped, fileName: file.name };
       } else if (type === 'lineupTemplate') {
-        state.uploads[type] = { rows, fileName: file.name, headers: rows.length ? Object.keys(rows[0]) : [] };
+        const spec = detectTemplateSpec(rows);
+        state.uploads[type] = { rows, fileName: file.name, headers: rows.length ? Object.keys(rows[0]) : [], spec };
         document.getElementById('lineupTemplateRows').textContent = `Template rows: ${rows.length.toLocaleString()}`;
         document.getElementById('lineupTemplateStatus').textContent = `${file.name} loaded`;
+        document.getElementById('templateMappingStatus').textContent = spec.slotColumns.length
+          ? `Template mapping: ${spec.site} ${spec.format} · ${spec.slotColumns.join(', ')}`
+          : 'Template mapping: no roster columns detected';
         if (rows.length) {
           state.lineupCount = Math.max(1, Math.min(150, rows.length));
           document.getElementById('lineupCountInput').value = state.lineupCount;
+        }
+        if (spec.site && state.site !== spec.site) {
+          state.site = spec.site;
+          setActiveChip('site', spec.site);
         }
         refreshPlayers();
         generatePortfolio();
@@ -1392,26 +1485,25 @@
       let rows = [];
 
       if (template && template.rows.length) {
+        const spec = template.spec || detectTemplateSpec(template.rows);
         const templateHeaders = Object.keys(template.rows[0]);
-        const slotColumns = templateHeaders.filter(h => {
-          const key = h.toLowerCase();
-          return ['pg','sg','sf','pf','c','g','f','util'].includes(key) || key.startsWith('pg') || key.startsWith('sg') || key.startsWith('sf') || key.startsWith('pf') || key === 'cpt' || key === 'mvp' || key === 'star' || key === 'pro';
-        });
-        headers = templateHeaders;
+        headers = [...templateHeaders];
         rows = template.rows.slice(0, state.generatedPortfolio.length).map((templateRow, idx) => {
           const entry = { ...templateRow };
           const lineup = state.generatedPortfolio[idx].lineup;
-          slotColumns.forEach((col, colIdx) => {
+          spec.slotColumns.forEach((col, colIdx) => {
             const item = lineup[colIdx];
-            if (item) entry[col] = item.player.name;
+            if (item) entry[col] = formatTemplatePlayerValue(item.player, spec, col);
           });
           entry.optimizer_lineup = idx + 1;
+          entry.optimizer_site = spec.site;
+          entry.optimizer_format = spec.format;
           entry.optimizer_p50 = state.generatedPortfolio[idx].summary.p50.toFixed(1);
           entry.optimizer_p90 = state.generatedPortfolio[idx].summary.p90.toFixed(1);
           entry.optimizer_salary = state.generatedPortfolio[idx].summary.salary;
           return entry;
         });
-        const extraHeaders = ['optimizer_lineup','optimizer_p50','optimizer_p90','optimizer_salary'];
+        const extraHeaders = ['optimizer_lineup','optimizer_site','optimizer_format','optimizer_p50','optimizer_p90','optimizer_salary'];
         headers = [...headers, ...extraHeaders.filter(h => !headers.includes(h))];
       } else {
         headers = ['lineup_index','slot','player','team','salary','p50','p90','ownership'];
