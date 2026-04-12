@@ -686,19 +686,63 @@
     <div class="footer-note">Focused view: hero, historical intake, build rules, player pool, and generated lineup only.</div>
   </div>
 
+  
   <script>
-    const basePlayers = [
-      { name: 'Luka Doncic', pos: 'PG / SG', team: 'DAL', salary: 11200, minutes: [37, 38, 39], fppm: [1.48, 1.55, 1.51], own: 0.24, usage: 1.06, pace: 1.02, defense: 1.01, fragility: 0.22, tags: { good: 'Core', warn: 'Q Tag', hot: 'Leverage' } },
-      { name: 'Jalen Brunson', pos: 'PG', team: 'NYK', salary: 9300, minutes: [35, 36, 37], fppm: [1.26, 1.34, 1.30], own: 0.19, usage: 1.04, pace: 1.00, defense: 0.99, fragility: 0.42, tags: { warn: 'Q Tag' } },
-      { name: 'Jaren Jackson Jr.', pos: 'PF / C', team: 'MEM', salary: 7800, minutes: [31, 33, 34], fppm: [1.18, 1.24, 1.21], own: 0.13, usage: 1.03, pace: 1.01, defense: 1.03, fragility: 0.39, tags: { hot: 'Leverage' } },
-      { name: 'Brandin Podziemski', pos: 'SG / SF', team: 'GSW', salary: 5600, minutes: [29, 31, 32], fppm: [0.94, 1.01, 0.99], own: 0.21, usage: 1.00, pace: 1.03, defense: 1.00, fragility: 0.18, tags: { good: 'Value' } },
-      { name: 'Nickeil Alexander-Walker', pos: 'SG / SF', team: 'MIN', salary: 4500, minutes: [24, 27, 29], fppm: [0.87, 0.94, 0.90], own: 0.11, usage: 0.98, pace: 1.00, defense: 1.02, fragility: 0.58, tags: { hot: 'Low Own' } },
-      { name: 'Mikal Bridges', pos: 'SF', team: 'BKN', salary: 7200, minutes: [35, 36, 37], fppm: [1.00, 1.05, 1.08], own: 0.14, usage: 1.01, pace: 1.01, defense: 0.98, fragility: 0.29, tags: { good: 'Stable' } },
-      { name: 'Naz Reid', pos: 'PF / C', team: 'MIN', salary: 5900, minutes: [24, 26, 28], fppm: [1.08, 1.14, 1.12], own: 0.17, usage: 1.02, pace: 1.01, defense: 1.01, fragility: 0.36, tags: { warn: 'Volatile' } },
-      { name: 'Derrick White', pos: 'PG / SG', team: 'BOS', salary: 6900, minutes: [33, 35, 35], fppm: [1.00, 1.07, 1.03], own: 0.16, usage: 1.00, pace: 1.02, defense: 0.99, fragility: 0.24, tags: { good: 'Balanced' } }
+    const RAW_PLAYERS = [
+      { name:'Luka Doncic', team:'DAL', opp:'CLE', gameId:'CLE@DAL', positions:['PG','SG'], salaryDK:11200, salaryFD:11800, own:0.24,
+        minutes:[37,38,39], fppm:[1.48,1.55,1.51], usg:[35.1,36.8,37.2], usgBase:34.5, paceTeam:99.4, paceOpp:97.2, defrtgOpp:111.2, injury:'' },
+      { name:'Kyrie Irving', team:'DAL', opp:'CLE', gameId:'CLE@DAL', positions:['PG','SG'], salaryDK:8900, salaryFD:9300, own:0.18,
+        minutes:[35,36,37], fppm:[1.16,1.20,1.22], usg:[28.2,29.1,29.8], usgBase:27.8, paceTeam:99.4, paceOpp:97.2, defrtgOpp:111.2, injury:'' },
+      { name:'Jarrett Allen', team:'CLE', opp:'DAL', gameId:'CLE@DAL', positions:['C'], salaryDK:7600, salaryFD:8200, own:0.17,
+        minutes:[31,33,34], fppm:[1.12,1.15,1.10], usg:[21.4,22.0,21.8], usgBase:21.1, paceTeam:97.2, paceOpp:99.4, defrtgOpp:115.8, injury:'' },
+      { name:'Donovan Mitchell', team:'CLE', opp:'DAL', gameId:'CLE@DAL', positions:['PG','SG'], salaryDK:9500, salaryFD:10100, own:0.16,
+        minutes:[34,35,36], fppm:[1.24,1.29,1.27], usg:[31.5,32.0,32.4], usgBase:31.0, paceTeam:97.2, paceOpp:99.4, defrtgOpp:115.8, injury:'Q' },
+
+      { name:'Jalen Brunson', team:'NYK', opp:'IND', gameId:'NYK@IND', positions:['PG'], salaryDK:9300, salaryFD:9800, own:0.19,
+        minutes:[35,36,37], fppm:[1.26,1.34,1.30], usg:[31.8,32.5,33.1], usgBase:31.2, paceTeam:96.8, paceOpp:101.1, defrtgOpp:118.4, injury:'Q' },
+      { name:'Josh Hart', team:'NYK', opp:'IND', gameId:'NYK@IND', positions:['SG','SF'], salaryDK:6500, salaryFD:7100, own:0.14,
+        minutes:[38,39,40], fppm:[0.92,0.95,0.94], usg:[17.2,17.8,18.1], usgBase:17.0, paceTeam:96.8, paceOpp:101.1, defrtgOpp:118.4, injury:'' },
+      { name:'Tyrese Haliburton', team:'IND', opp:'NYK', gameId:'NYK@IND', positions:['PG'], salaryDK:9100, salaryFD:9700, own:0.15,
+        minutes:[32,34,35], fppm:[1.20,1.27,1.24], usg:[25.1,25.9,26.4], usgBase:24.8, paceTeam:101.1, paceOpp:96.8, defrtgOpp:112.9, injury:'' },
+      { name:'Pascal Siakam', team:'IND', opp:'NYK', gameId:'NYK@IND', positions:['PF','C'], salaryDK:8400, salaryFD:8800, own:0.13,
+        minutes:[34,35,36], fppm:[1.08,1.13,1.10], usg:[25.4,26.0,25.8], usgBase:25.0, paceTeam:101.1, paceOpp:96.8, defrtgOpp:112.9, injury:'' },
+
+      { name:'Jaren Jackson Jr.', team:'MEM', opp:'DET', gameId:'MEM@DET', positions:['PF','C'], salaryDK:7800, salaryFD:8500, own:0.13,
+        minutes:[31,33,34], fppm:[1.18,1.24,1.21], usg:[28.0,28.9,29.1], usgBase:27.5, paceTeam:99.1, paceOpp:98.4, defrtgOpp:117.0, injury:'' },
+      { name:'Ja Morant', team:'MEM', opp:'DET', gameId:'MEM@DET', positions:['PG'], salaryDK:9800, salaryFD:10300, own:0.10,
+        minutes:[33,34,35], fppm:[1.28,1.35,1.32], usg:[33.0,34.2,34.6], usgBase:32.7, paceTeam:99.1, paceOpp:98.4, defrtgOpp:117.0, injury:'' },
+      { name:'Cade Cunningham', team:'DET', opp:'MEM', gameId:'MEM@DET', positions:['PG','SG'], salaryDK:8800, salaryFD:9400, own:0.12,
+        minutes:[35,36,37], fppm:[1.14,1.20,1.18], usg:[30.1,30.8,31.0], usgBase:29.7, paceTeam:98.4, paceOpp:99.1, defrtgOpp:113.9, injury:'' },
+      { name:'Jalen Duren', team:'DET', opp:'MEM', gameId:'MEM@DET', positions:['C'], salaryDK:6700, salaryFD:7600, own:0.11,
+        minutes:[28,30,31], fppm:[1.08,1.12,1.10], usg:[18.8,19.1,19.0], usgBase:18.5, paceTeam:98.4, paceOpp:99.1, defrtgOpp:113.9, injury:'' },
+
+      { name:'Brandin Podziemski', team:'GSW', opp:'MIN', gameId:'GSW@MIN', positions:['SG','SF'], salaryDK:5600, salaryFD:6500, own:0.21,
+        minutes:[29,31,32], fppm:[0.94,1.01,0.99], usg:[17.2,18.0,18.3], usgBase:17.0, paceTeam:100.7, paceOpp:97.8, defrtgOpp:109.8, injury:'' },
+      { name:'Stephen Curry', team:'GSW', opp:'MIN', gameId:'GSW@MIN', positions:['PG'], salaryDK:9600, salaryFD:10200, own:0.20,
+        minutes:[33,34,35], fppm:[1.24,1.31,1.28], usg:[31.0,31.8,32.2], usgBase:30.8, paceTeam:100.7, paceOpp:97.8, defrtgOpp:109.8, injury:'' },
+      { name:'Nickeil Alexander-Walker', team:'MIN', opp:'GSW', gameId:'GSW@MIN', positions:['SG','SF'], salaryDK:4500, salaryFD:5400, own:0.11,
+        minutes:[24,27,29], fppm:[0.87,0.94,0.90], usg:[14.1,14.6,14.8], usgBase:14.0, paceTeam:97.8, paceOpp:100.7, defrtgOpp:114.7, injury:'' },
+      { name:'Naz Reid', team:'MIN', opp:'GSW', gameId:'GSW@MIN', positions:['PF','C'], salaryDK:5900, salaryFD:6900, own:0.17,
+        minutes:[24,26,28], fppm:[1.08,1.14,1.12], usg:[24.0,24.8,25.1], usgBase:23.5, paceTeam:97.8, paceOpp:100.7, defrtgOpp:114.7, injury:'' },
+
+      { name:'Derrick White', team:'BOS', opp:'BKN', gameId:'BKN@BOS', positions:['PG','SG'], salaryDK:6900, salaryFD:7600, own:0.16,
+        minutes:[33,35,35], fppm:[1.00,1.07,1.03], usg:[19.1,19.8,20.0], usgBase:18.8, paceTeam:99.9, paceOpp:98.8, defrtgOpp:114.0, injury:'' },
+      { name:'Jayson Tatum', team:'BOS', opp:'BKN', gameId:'BKN@BOS', positions:['SF','PF'], salaryDK:10400, salaryFD:10900, own:0.22,
+        minutes:[36,37,38], fppm:[1.28,1.33,1.31], usg:[31.4,32.0,32.5], usgBase:31.0, paceTeam:99.9, paceOpp:98.8, defrtgOpp:114.0, injury:'' },
+      { name:'Mikal Bridges', team:'BKN', opp:'BOS', gameId:'BKN@BOS', positions:['SF'], salaryDK:7200, salaryFD:7800, own:0.14,
+        minutes:[35,36,37], fppm:[1.00,1.05,1.08], usg:[23.1,23.8,24.2], usgBase:22.8, paceTeam:98.8, paceOpp:99.9, defrtgOpp:111.0, injury:'' },
+      { name:'Cam Thomas', team:'BKN', opp:'BOS', gameId:'BKN@BOS', positions:['SG'], salaryDK:6300, salaryFD:7000, own:0.09,
+        minutes:[29,31,33], fppm:[0.98,1.04,1.06], usg:[28.2,29.0,29.8], usgBase:27.9, paceTeam:98.8, paceOpp:99.9, defrtgOpp:111.0, injury:'' }
     ];
 
-    const rosterSlots = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'];
+    const LEAGUE_PACE = 99.5;
+    const LEAGUE_DEFRTG = 114.5;
+    const EPS = 1e-6;
+
+    const SITE_CONFIG = {
+      DK: { cap: 50000, slots: ['PG','SG','SF','PF','C','G','F','UTIL'] },
+      FD: { cap: 60000, slots: ['PG','PG','SG','SG','SF','SF','PF','PF','C'] }
+    };
 
     const state = {
       site: 'DK',
@@ -711,44 +755,68 @@
       fragilityCap: 55,
       currentLineupIndex: 1,
       players: [],
-      lastGeneratedLineup: []
+      generatedPortfolio: [],
+      lastGeneratedLineup: [],
+      uploads: {
+        historicalGameLogs: null,
+        ownershipHistory: null,
+        contestResults: null,
+        injuryHistory: null
+      }
     };
 
     function weightedMedian(values, weights) {
-      const pairs = values.map((value, i) => ({ value, weight: weights[i] }))
+      const pairs = values.map((value, i) => ({ value: Number(value), weight: Number(weights[i] ?? 0) }))
+        .filter(pair => Number.isFinite(pair.value) && Number.isFinite(pair.weight) && pair.weight >= 0)
         .sort((a, b) => a.value - b.value);
-      const totalWeight = pairs.reduce((sum, pair) => sum + pair.weight, 0);
+      if (!pairs.length) return 0;
+      const totalWeight = pairs.reduce((sum, pair) => sum + pair.weight, 0) || pairs.length;
       let cumulative = 0;
       for (const pair of pairs) {
-        cumulative += pair.weight;
+        cumulative += pair.weight || 1;
         if (cumulative >= totalWeight / 2) return pair.value;
       }
-      return pairs[pairs.length - 1]?.value ?? 0;
+      return pairs[pairs.length - 1].value;
     }
 
-    function formatMoney(value) {
-      return '$' + Math.round(value).toLocaleString();
+    function median(values) {
+      const sorted = values.filter(Number.isFinite).slice().sort((a, b) => a - b);
+      if (!sorted.length) return 0;
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
     }
 
-    function formatPct(value) {
-      return (value * 100).toFixed(1).replace('.0', '') + '%';
+    function mad(values) {
+      const m = median(values);
+      return median(values.map(v => Math.abs(v - m)));
     }
 
-    function formatNumber(value) {
-      return Number(value).toLocaleString();
+    function quantile(sortedValues, q) {
+      if (!sortedValues.length) return 0;
+      const arr = sortedValues;
+      const pos = (arr.length - 1) * q;
+      const base = Math.floor(pos);
+      const rest = pos - base;
+      if (arr[base + 1] !== undefined) return arr[base] + rest * (arr[base + 1] - arr[base]);
+      return arr[base];
     }
 
-    function fragilityLabel(score) {
-      if (score < 0.28) return 'Low';
-      if (score < 0.5) return 'Med';
-      return 'High';
+    function randn() {
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     }
 
-    function fragilityDisplayLabel(percent) {
-      if (percent < 35) return 'Low';
-      if (percent < 70) return 'Medium';
-      return 'High';
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
     }
+
+    function formatMoney(value) { return '$' + Math.round(value).toLocaleString(); }
+    function formatPct(value) { return (value * 100).toFixed(1).replace('.0', '') + '%'; }
+    function formatNumber(value) { return Number(value).toLocaleString(); }
+    function fragilityLabel(score) { return score < 0.28 ? 'Low' : score < 0.5 ? 'Med' : 'High'; }
+    function fragilityDisplayLabel(percent) { return percent < 35 ? 'Low' : percent < 70 ? 'Medium' : 'High'; }
 
     function getSlateConfig(slate) {
       if (slate === 'turbo') return { games: 3, paceBoost: 1.03, defenseBoost: 1.01, label: 'Turbo Slate · 3 Games' };
@@ -756,41 +824,143 @@
       return { games: 8, paceBoost: 1.00, defenseBoost: 1.00, label: 'Main Slate · 8 Games' };
     }
 
-    function computePlayerMetrics(player) {
+    function eligibilityForSlot(player, slot) {
+      if (slot === 'UTIL') return true;
+      if (slot === 'G') return player.positions.includes('PG') || player.positions.includes('SG');
+      if (slot === 'F') return player.positions.includes('SF') || player.positions.includes('PF');
+      return player.positions.includes(slot);
+    }
+
+    function contestProfile() {
+      const isCash = state.contest === 'Cash';
+      const isSE = state.contest === 'SE';
+      return {
+        alphaUsage: isCash ? 0.40 : 0.50,
+        betaPace: isCash ? 0.35 : 0.50,
+        betaDef: isCash ? 0.25 : 0.40,
+        salaryBoomK: isCash ? 4.6 : isSE ? 5.0 : 5.3,
+        objectiveWeights: isCash ? { p50: 0.68, p90: 0.10, lev: 0.05, frag: 0.17 } : isSE ? { p50: 0.40, p90: 0.33, lev: 0.16, frag: 0.11 } : { p50: 0.30, p90: 0.42, lev: 0.20, frag: 0.08 }
+      };
+    }
+
+    function applyUploadedData(player) {
+      const out = { ...player };
+      const ownFile = state.uploads.ownershipHistory;
+      if (ownFile && ownFile.byName.has(player.name.toLowerCase())) {
+        const row = ownFile.byName.get(player.name.toLowerCase());
+        const ownCol = ['own_proj','ownership','projected_ownership','own','pct_drafted'].find(k => row[k] != null);
+        if (ownCol) out.own = clamp(Number(row[ownCol]) > 1 ? Number(row[ownCol]) / 100 : Number(row[ownCol]), 0.01, 0.85);
+      }
+      const histFile = state.uploads.historicalGameLogs;
+      if (histFile && histFile.grouped.has(player.name.toLowerCase())) {
+        const rows = histFile.grouped.get(player.name.toLowerCase()).slice(-20);
+        const mins = rows.map(r => Number(r.minutes ?? r.min ?? r.mins)).filter(Number.isFinite);
+        const fps = rows.map(r => Number(r.fppm ?? r.fp_per_min ?? r.fantasy_points_per_min)).filter(Number.isFinite);
+        const usgs = rows.map(r => Number(r.usg_pct ?? r.usg ?? r.usage)).filter(Number.isFinite);
+        if (mins.length >= 3) out.minutes = [median(mins), median(mins.slice(-10)), median(mins.slice(-3))];
+        if (fps.length >= 3) out.fppm = [median(fps), median(fps.slice(-10)), median(fps.slice(-5))];
+        if (usgs.length >= 3) {
+          out.usg = [median(usgs), median(usgs.slice(-10)), median(usgs.slice(-3))];
+          out.usgBase = median(usgs);
+        }
+      }
+      const injuryFile = state.uploads.injuryHistory;
+      if (injuryFile && injuryFile.byName.has(player.name.toLowerCase())) {
+        const row = injuryFile.byName.get(player.name.toLowerCase());
+        const status = row.status || row.injury_status || row.notes_status || row.injury;
+        if (status) out.injury = String(status);
+      }
+      return out;
+    }
+
+    function simulatePlayerDistribution(player, projection, sigma) {
+      const samples = [];
+      const gameStd = 0.07 + (player.paceTeam > LEAGUE_PACE ? 0.01 : 0);
+      const idioStd = Math.max(0.05, sigma / Math.max(projection, 1));
+      for (let i = 0; i < state.simCount; i++) {
+        const gameShock = 1 + randn() * gameStd;
+        const playerShock = 1 + randn() * idioStd;
+        const points = Math.max(0, projection * gameShock * playerShock);
+        samples.push(points);
+      }
+      samples.sort((a, b) => a - b);
+      return samples;
+    }
+
+    function computePlayerMetrics(rawPlayer) {
+      const player = applyUploadedData(rawPlayer);
       const slateCfg = getSlateConfig(state.slate);
+      const profile = contestProfile();
       const minuteWeights = [0.40, 0.35, 0.25];
       const fppmWeights = [0.45, 0.35, 0.20];
+      const usgWeights = [0.45, 0.35, 0.20];
+
       const minMed = weightedMedian(player.minutes, minuteWeights);
       const fppmMed = weightedMedian(player.fppm, fppmWeights);
+      const usgMed = weightedMedian(player.usg, usgWeights);
 
-      const leverageBias = state.leverage === 'tournament' ? 1.08 : state.leverage === 'fade' ? 1.15 : 1.00;
-      const contestBoost = state.contest === 'Cash' ? 0.97 : state.contest === 'SE' ? 1.00 : 1.03;
-      const siteSalaryFactor = state.site === 'FD' ? 0.98 : 1.00;
-      const fragilityPenalty = 1 - ((player.fragility * (state.fragilityCap / 100)) * 0.22);
+      const aUsage = 1 + profile.alphaUsage * ((usgMed - player.usgBase) / Math.max(player.usgBase, 1));
+      const paceGame = ((player.paceTeam + player.paceOpp) / 2);
+      const aPace = Math.pow(Math.max(0.94, paceGame / LEAGUE_PACE), profile.betaPace) * slateCfg.paceBoost;
+      const aDef = Math.pow(Math.max(0.94, player.defrtgOpp / LEAGUE_DEFRTG), profile.betaDef) * slateCfg.defenseBoost;
 
-      const median = minMed * fppmMed * player.usage * (player.pace * slateCfg.paceBoost) * (player.defense * slateCfg.defenseBoost) * contestBoost * siteSalaryFactor * fragilityPenalty;
-      const p90 = median * (1.15 + player.fragility * 0.18);
-      const boomProb = Math.min(0.55, (median / (player.salary / 235)) / 10);
-      const leverage = Math.log((boomProb + 0.01) / (player.own + 0.01)) * 10 * leverageBias;
-      const adjustedOwn = Math.min(0.55, Math.max(0.04, player.own * (state.contest === 'Cash' ? 1.08 : 0.98)));
-      const tagType = leverage > 7.5 ? 'hot' : median > 40 ? 'good' : player.fragility > 0.5 ? 'warn' : 'good';
-      const tagText = leverage > 7.5 ? (player.tags.hot || 'Leverage') : median > 40 ? (player.tags.good || 'Core') : player.fragility > 0.5 ? (player.tags.warn || 'Fragile') : (player.tags.good || 'Value');
+      const siteSalary = state.site === 'FD' ? player.salaryFD : player.salaryDK;
+      const injuryPenalty = player.injury && String(player.injury).toUpperCase().includes('Q') ? 0.965 : 1;
+      const fragilityPenalty = 1 - (player.minutes.length ? player.minutes.length / 1000 : 0) - (state.fragilityCap / 100) * ((player.own < 0.09 ? 0.02 : 0) + 0.16 * clamp((0.65 - Math.min(...player.fppm)) / 2, 0, 1));
+
+      const fpMed = minMed * fppmMed * aUsage * aPace * aDef * injuryPenalty * fragilityPenalty;
+      const sigmaMin = 1.4826 * mad(player.minutes);
+      const sigmaFppm = 1.4826 * mad(player.fppm);
+      const sigmaFp = Math.sqrt(Math.pow(sigmaMin * fppmMed, 2) + Math.pow(minMed * sigmaFppm, 2));
+
+      const sims = simulatePlayerDistribution(player, fpMed, sigmaFp);
+      const floor = quantile(sims, 0.10);
+      const p50 = quantile(sims, 0.50);
+      const p75 = quantile(sims, 0.75);
+      const p90 = quantile(sims, 0.90);
+      const p95 = quantile(sims, 0.95);
+
+      const boomThreshold = profile.salaryBoomK * (siteSalary / 1000);
+      const boomProb = sims.filter(v => v >= boomThreshold).length / sims.length;
+      const bustThreshold = floor * (state.contest === 'Cash' ? 1.02 : 0.96);
+      const bustProb = sims.filter(v => v <= bustThreshold).length / sims.length;
+
+      const levBias = state.leverage === 'tournament' ? 1.15 : state.leverage === 'fade' ? 0.95 : 1.00;
+      const adjustedOwn = clamp(player.own * (state.contest === 'Cash' ? 1.08 : 0.98), 0.01, 0.85);
+      const leverage = Math.log((boomProb + 0.01) / (adjustedOwn + 0.01)) * 10 * levBias;
+      const value = fpMed / (siteSalary / 1000);
+      const fragilityScore = clamp(bustProb + (sigmaFp / Math.max(fpMed, 1)) * 0.25, 0.05, 0.95);
+
+      const tagType = leverage > 1.6 ? 'hot' : value > 5.2 ? 'good' : fragilityScore > 0.55 ? 'warn' : 'good';
+      const tagText = leverage > 1.6 ? 'Leverage' : value > 5.2 ? 'Value' : fragilityScore > 0.55 ? 'Fragile' : 'Core';
+
+      const scoreWeights = profile.objectiveWeights;
+      const buildScore = (scoreWeights.p50 * p50) + (scoreWeights.p90 * p90) + (scoreWeights.lev * Math.max(leverage, -3)) - (scoreWeights.frag * fragilityScore * 20);
 
       return {
         ...player,
-        median,
-        p90,
+        salary: siteSalary,
+        minMed, fppmMed, usgMed,
+        median: fpMed,
+        p50, p75, p90, p95,
+        floor, ceiling: p90,
+        boomProb, bustProb,
         leverage,
         ownership: adjustedOwn,
-        fragilityScore: player.fragility,
-        fragilityText: fragilityLabel(player.fragility),
+        dupScore: Math.log(adjustedOwn + 1e-3),
+        sigmaFp,
+        value,
+        fragilityScore,
+        fragilityText: fragilityLabel(fragilityScore),
         tagType,
-        tagText
+        tagText,
+        buildScore,
+        simulations: sims
       };
     }
 
     function refreshPlayers() {
-      state.players = basePlayers.map(computePlayerMetrics).sort((a, b) => (b.median + b.leverage * 0.35) - (a.median + a.leverage * 0.35));
+      state.players = RAW_PLAYERS.map(computePlayerMetrics).sort((a, b) => b.buildScore - a.buildScore);
       renderPlayerPool();
       renderMathSummary();
       updateStatusBlocks();
@@ -800,7 +970,7 @@
       const tbody = document.getElementById('playerPoolBody');
       tbody.innerHTML = state.players.map(player => `
         <tr>
-          <td><strong>${player.name}</strong><div class="tiny muted">${player.pos}</div></td>
+          <td><strong>${player.name}</strong><div class="tiny muted">${player.positions.join(' / ')}</div></td>
           <td>${player.team}</td>
           <td>${formatMoney(player.salary)}</td>
           <td>${player.median.toFixed(1)}</td>
@@ -814,57 +984,133 @@
     }
 
     function renderMathSummary() {
-      const avgMedian = state.players.reduce((sum, p) => sum + p.median, 0) / state.players.length;
-      const avgLev = state.players.reduce((sum, p) => sum + p.leverage, 0) / state.players.length;
-      const avgOwn = state.players.reduce((sum, p) => sum + p.ownership, 0) / state.players.length;
+      const avgMedian = state.players.reduce((sum, p) => sum + p.median, 0) / Math.max(state.players.length, 1);
+      const avgLev = state.players.reduce((sum, p) => sum + p.leverage, 0) / Math.max(state.players.length, 1);
+      const avgOwn = state.players.reduce((sum, p) => sum + p.ownership, 0) / Math.max(state.players.length, 1);
       document.getElementById('summaryProjectionMode').textContent = state.leverage === 'tournament' ? 'Tournament' : state.leverage === 'fade' ? 'Chalk Fade' : 'Neutral';
       document.getElementById('summaryAvgMedian').textContent = avgMedian.toFixed(1);
       document.getElementById('summaryAvgLev').textContent = avgLev.toFixed(1);
       document.getElementById('summaryAvgOwn').textContent = formatPct(avgOwn);
-      document.getElementById('mathEngineSummary').textContent = `${state.site} ${state.contest} build using ${formatNumber(state.simCount)} simulations, ${fragilityDisplayLabel(state.fragilityCap).toLowerCase()} fragility cap, and ${state.leverage} leverage bias.`;
+      document.getElementById('projectionBlendInfo').textContent = 'Minutes 40/35/25 · FPPM 45/35/20 · USG 45/35/20';
+      document.getElementById('mathEngineSummary').textContent = `${state.site} ${state.contest} build using ${formatNumber(state.simCount)} simulations, weighted-median minutes/FPPM, boom-prob leverage, MAD volatility, and ${fragilityDisplayLabel(state.fragilityCap).toLowerCase()} fragility cap.`;
     }
 
-    function generateLineup() {
-      const sorted = [...state.players].sort((a, b) => {
-        const aScore = a.median + a.leverage * 0.6 - a.fragilityScore * 7;
-        const bScore = b.median + b.leverage * 0.6 - b.fragilityScore * 7;
-        return bScore - aScore;
+    function lineupSummary(lineup) {
+      const totals = new Array(state.simCount).fill(0);
+      let salary = 0, ownershipSum = 0, leverageSum = 0, fragility = 0, proj = 0;
+      lineup.forEach(({ player }) => {
+        salary += player.salary;
+        ownershipSum += player.ownership;
+        leverageSum += player.leverage;
+        fragility += player.fragilityScore;
+        proj += player.median;
+        for (let i = 0; i < state.simCount; i++) totals[i] += player.simulations[i];
+      });
+      totals.sort((a, b) => a - b);
+      const p50 = quantile(totals, 0.50);
+      const p75 = quantile(totals, 0.75);
+      const p90 = quantile(totals, 0.90);
+      const p95 = quantile(totals, 0.95);
+      return {
+        salary,
+        proj,
+        ownershipAvg: ownershipSum / lineup.length,
+        leverageAvg: leverageSum / lineup.length,
+        fragilityAvg: fragility / lineup.length,
+        dupScore: ownershipSum > 0 ? Math.log(ownershipSum + EPS) : 0,
+        p50, p75, p90, p95,
+        legal: salary <= SITE_CONFIG[state.site].cap
+      };
+    }
+
+    function generateOneLineup(lineupIndex = 0) {
+      const cfg = SITE_CONFIG[state.site];
+      const candidates = [...state.players].sort((a, b) => {
+        const exposurePenalty = (a._usedCount || 0) * 1.4;
+        const exposurePenaltyB = (b._usedCount || 0) * 1.4;
+        return (b.buildScore - exposurePenaltyB + Math.random() * 0.25) - (a.buildScore - exposurePenalty + Math.random() * 0.25);
       });
 
-      const selected = [];
-      const usedTeams = new Map();
-      for (const player of sorted) {
-        if (selected.length >= 8) break;
-        const teamCount = usedTeams.get(player.team) || 0;
-        if (teamCount >= 3) continue;
-        selected.push(player);
-        usedTeams.set(player.team, teamCount + 1);
+      let best = null;
+      function dfs(slotIndex, used, salary, teamCounts, current) {
+        if (slotIndex === cfg.slots.length) {
+          if (salary > cfg.cap) return;
+          const summary = lineupSummary(current);
+          const objective = summary.p90 + summary.leverageAvg * 4 - summary.fragilityAvg * 18 - Math.max(0, summary.salary - (cfg.cap - 800)) * 0.005;
+          if (!best || objective > best.objective) best = { lineup: current.slice(), summary, objective };
+          return;
+        }
+        const slot = cfg.slots[slotIndex];
+        for (const player of candidates) {
+          if (used.has(player.name)) continue;
+          if (!eligibilityForSlot(player, slot)) continue;
+          const nextSalary = salary + player.salary;
+          if (nextSalary > cfg.cap) continue;
+          const teamCount = teamCounts.get(player.team) || 0;
+          if (teamCount >= 3 && state.stack !== 'teamstack') continue;
+          if (state.stack === 'bringback' && current.length >= 1) {
+            const primary = current[0].player;
+            if (current.length === 1 && player.gameId !== primary.gameId && candidates.length > cfg.slots.length + 2) continue;
+          }
+          used.add(player.name);
+          teamCounts.set(player.team, teamCount + 1);
+          current.push({ slot, player });
+          dfs(slotIndex + 1, used, nextSalary, teamCounts, current);
+          current.pop();
+          teamCounts.set(player.team, teamCount);
+          if (teamCount === 0) teamCounts.delete(player.team);
+          used.delete(player.name);
+        }
       }
+      dfs(0, new Set(), 0, new Map(), []);
+      return best;
+    }
 
-      state.lastGeneratedLineup = rosterSlots.map((slot, index) => ({ slot, player: selected[index] || sorted[index % sorted.length] }));
-      state.currentLineupIndex = Math.min(state.lineupCount, state.currentLineupIndex);
+    function generatePortfolio() {
+      state.generatedPortfolio = [];
+      const maxExposure = state.contest === 'Cash' ? 0.8 : 0.6;
+      state.players.forEach(p => p._usedCount = 0);
+      for (let i = 0; i < state.lineupCount; i++) {
+        const built = generateOneLineup(i);
+        if (!built) break;
+        const exposureCheck = new Map();
+        built.lineup.forEach(item => {
+          const count = (item.player._usedCount || 0) + 1;
+          exposureCheck.set(item.player.name, count);
+        });
+        const totalProjected = i + 1;
+        let violates = false;
+        exposureCheck.forEach((count) => { if (count / totalProjected > maxExposure) violates = true; });
+        if (violates && i > 0) {
+          state.players.forEach(p => p.buildScore += Math.random() * 0.05);
+          continue;
+        }
+        built.lineup.forEach(item => { item.player._usedCount = (item.player._usedCount || 0) + 1; });
+        state.generatedPortfolio.push(built);
+      }
+      if (!state.generatedPortfolio.length) {
+        const fallback = generateOneLineup(0);
+        if (fallback) state.generatedPortfolio.push(fallback);
+      }
+      state.currentLineupIndex = 1;
+      state.lastGeneratedLineup = state.generatedPortfolio[0]?.lineup || [];
       renderLineup();
     }
 
     function renderLineup() {
+      if (!state.generatedPortfolio.length) return;
+      const idx = clamp(state.currentLineupIndex - 1, 0, state.generatedPortfolio.length - 1);
+      const selected = state.generatedPortfolio[idx];
+      state.lastGeneratedLineup = selected.lineup;
       const container = document.getElementById('generatedLineup');
-      const lineup = state.lastGeneratedLineup;
-      const totalMedian = lineup.reduce((sum, item) => sum + item.player.median, 0);
-      const totalP90 = lineup.reduce((sum, item) => sum + item.player.p90, 0);
-      const totalSalary = lineup.reduce((sum, item) => sum + item.player.salary, 0);
-      const avgOwnership = lineup.reduce((sum, item) => sum + item.player.ownership, 0) / lineup.length;
-      const avgLeverage = lineup.reduce((sum, item) => sum + item.player.leverage, 0) / lineup.length;
-      const fragility = lineup.reduce((sum, item) => sum + item.player.fragilityScore, 0) / lineup.length;
-
-      container.innerHTML = lineup.map(item => `
+      container.innerHTML = selected.lineup.map(item => `
         <div class="lineup-row"><span>${item.slot} · ${item.player.name}</span><strong>${item.player.median.toFixed(1)}</strong></div>
       `).join('');
-
-      document.getElementById('lineupMedian').textContent = `${totalMedian.toFixed(1)} Median`;
-      document.getElementById('lineupSummaryText').textContent = `P90 ${totalP90.toFixed(1)} · Leverage ${avgLeverage.toFixed(1)} · Fragility ${fragility.toFixed(2)} · Salary ${formatMoney(totalSalary)} · Avg ownership ${formatPct(avgOwnership)}`;
-      document.getElementById('lineupPosition').textContent = `Lineup ${state.currentLineupIndex} of ${state.lineupCount}`;
-      document.getElementById('legalityTag').textContent = totalSalary <= 50000 ? 'Legal Build' : 'Over Cap';
-      document.getElementById('legalityTag').className = `tag ${totalSalary <= 50000 ? 'good' : 'hot'}`;
+      document.getElementById('lineupMedian').textContent = `${selected.summary.p50.toFixed(1)} P50`;
+      document.getElementById('lineupSummaryText').textContent = `P75 ${selected.summary.p75.toFixed(1)} · P90 ${selected.summary.p90.toFixed(1)} · P95 ${selected.summary.p95.toFixed(1)} · Leverage ${selected.summary.leverageAvg.toFixed(1)} · Fragility ${selected.summary.fragilityAvg.toFixed(2)} · Salary ${formatMoney(selected.summary.salary)} · Avg ownership ${formatPct(selected.summary.ownershipAvg)}`;
+      document.getElementById('lineupPosition').textContent = `Lineup ${idx + 1} of ${state.generatedPortfolio.length}`;
+      document.getElementById('legalityTag').textContent = selected.summary.legal ? 'Legal Build' : 'Over Cap';
+      document.getElementById('legalityTag').className = `tag ${selected.summary.legal ? 'good' : 'hot'}`;
       document.getElementById('contestTag').textContent = state.contest;
       document.getElementById('siteTag').textContent = state.site;
     }
@@ -878,14 +1124,55 @@
       document.getElementById('simCountDisplay').textContent = formatNumber(state.simCount);
     }
 
-    function setActiveChip(group, value, allowMulti = false) {
+    function setActiveChip(group, value) {
       document.querySelectorAll(`.chip[data-group="${group}"]`).forEach(chip => {
-        if (allowMulti) {
-          if (chip.dataset.value === value) chip.classList.toggle('active');
-        } else {
-          chip.classList.toggle('active', chip.dataset.value === value);
-        }
+        chip.classList.toggle('active', chip.dataset.value === value);
       });
+    }
+
+    function simpleCsvParse(text) {
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (!lines.length) return [];
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      return lines.slice(1).map(line => {
+        const vals = line.split(',');
+        const row = {};
+        headers.forEach((h, i) => row[h] = (vals[i] ?? '').trim());
+        return row;
+      });
+    }
+
+    async function handleUpload(inputId, statusId, type) {
+      const file = document.getElementById(inputId).files?.[0];
+      const statusEl = document.getElementById(statusId);
+      if (!file) {
+        state.uploads[type] = null;
+        statusEl.textContent = 'No file loaded';
+        refreshPlayers();
+        return;
+      }
+      const text = await file.text();
+      const rows = simpleCsvParse(text);
+      if (type === 'historicalGameLogs') {
+        const grouped = new Map();
+        rows.forEach(row => {
+          const name = (row.player_name || row.player || row.name || '').toLowerCase();
+          if (!name) return;
+          if (!grouped.has(name)) grouped.set(name, []);
+          grouped.get(name).push(row);
+        });
+        state.uploads[type] = { rows, grouped };
+      } else {
+        const byName = new Map();
+        rows.forEach(row => {
+          const name = (row.player_name || row.player || row.name || '').toLowerCase();
+          if (name) byName.set(name, row);
+        });
+        state.uploads[type] = { rows, byName };
+      }
+      statusEl.textContent = `${file.name} loaded · ${rows.length.toLocaleString()} rows`;
+      refreshPlayers();
+      if (state.generatedPortfolio.length) generatePortfolio();
     }
 
     function bindChipGroups() {
@@ -896,7 +1183,7 @@
           state[group] = value;
           setActiveChip(group, value);
           refreshPlayers();
-          if (state.lastGeneratedLineup.length) generateLineup();
+          if (state.generatedPortfolio.length) generatePortfolio();
         });
       });
     }
@@ -905,95 +1192,65 @@
       document.getElementById('slateSelect').addEventListener('change', (e) => {
         state.slate = e.target.value;
         refreshPlayers();
-        if (state.lastGeneratedLineup.length) generateLineup();
+        if (state.generatedPortfolio.length) generatePortfolio();
       });
-
       document.getElementById('lineupCountInput').addEventListener('input', (e) => {
         state.lineupCount = Math.max(1, Math.min(150, Number(e.target.value || 1)));
         updateStatusBlocks();
-        document.getElementById('lineupPosition').textContent = `Lineup ${state.currentLineupIndex} of ${state.lineupCount}`;
       });
-
       document.getElementById('simCountRange').addEventListener('input', (e) => {
         state.simCount = Number(e.target.value);
-        updateStatusBlocks();
-        renderMathSummary();
+        refreshPlayers();
+        if (state.generatedPortfolio.length) generatePortfolio();
       });
-
       document.getElementById('fragilityRange').addEventListener('input', (e) => {
         state.fragilityCap = Number(e.target.value);
-        updateStatusBlocks();
         refreshPlayers();
-        if (state.lastGeneratedLineup.length) generateLineup();
+        if (state.generatedPortfolio.length) generatePortfolio();
       });
-
-      document.getElementById('generateLineupsBtn').addEventListener('click', () => {
-        generateLineup();
-      });
-
+      document.getElementById('generateLineupsBtn').addEventListener('click', generatePortfolio);
       document.getElementById('generateAnotherBtn').addEventListener('click', () => {
-        state.currentLineupIndex = state.currentLineupIndex >= state.lineupCount ? 1 : state.currentLineupIndex + 1;
-        basePlayers.push(basePlayers.shift());
-        refreshPlayers();
-        generateLineup();
+        if (!state.generatedPortfolio.length) { generatePortfolio(); return; }
+        state.currentLineupIndex = state.currentLineupIndex >= state.generatedPortfolio.length ? 1 : state.currentLineupIndex + 1;
+        renderLineup();
       });
-
       document.getElementById('resetRulesBtn').addEventListener('click', () => {
-        state.site = 'DK';
-        state.contest = 'GPP';
-        state.leverage = 'tournament';
-        state.stack = 'bringback';
-        state.slate = 'main';
-        state.lineupCount = 20;
-        state.simCount = 10000;
-        state.fragilityCap = 55;
-        state.currentLineupIndex = 1;
-
+        state.site = 'DK'; state.contest = 'GPP'; state.leverage = 'tournament'; state.stack = 'bringback';
+        state.slate = 'main'; state.lineupCount = 20; state.simCount = 10000; state.fragilityCap = 55; state.currentLineupIndex = 1;
         document.getElementById('lineupCountInput').value = 20;
         document.getElementById('simCountRange').value = 10000;
         document.getElementById('fragilityRange').value = 55;
         document.getElementById('slateSelect').value = 'main';
-        setActiveChip('site', 'DK');
-        setActiveChip('contest', 'GPP');
-        setActiveChip('leverage', 'tournament');
-        setActiveChip('stack', 'bringback');
-
+        ['site','contest','leverage','stack'].forEach(group => setActiveChip(group, state[group]));
         refreshPlayers();
-        generateLineup();
+        generatePortfolio();
       });
-
       ['heroGenerateBtn', 'demoBuildBtn', 'startOptimizeBtn'].forEach(id => {
-        document.getElementById(id).addEventListener('click', () => generateLineup());
+        document.getElementById(id).addEventListener('click', generatePortfolio);
       });
-
       document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
-      document.getElementById('saveBuildBtn').addEventListener('click', () => alert('Build saved to demo session.'));
-
+      document.getElementById('saveBuildBtn').addEventListener('click', () => alert('Build saved to this browser session.'));
       const uploadMap = [
-        ['historicalGameLogs', 'historicalGameLogsStatus'],
-        ['ownershipHistory', 'ownershipHistoryStatus'],
-        ['contestResults', 'contestResultsStatus'],
-        ['injuryHistory', 'injuryHistoryStatus']
+        ['historicalGameLogs', 'historicalGameLogsStatus', 'historicalGameLogs'],
+        ['ownershipHistory', 'ownershipHistoryStatus', 'ownershipHistory'],
+        ['contestResults', 'contestResultsStatus', 'contestResults'],
+        ['injuryHistory', 'injuryHistoryStatus', 'injuryHistory']
       ];
-
-      uploadMap.forEach(([inputId, statusId]) => {
-        document.getElementById(inputId).addEventListener('change', (e) => {
-          const file = e.target.files?.[0];
-          document.getElementById(statusId).textContent = file ? `${file.name} loaded` : 'No file loaded';
-        });
+      uploadMap.forEach(([inputId, statusId, type]) => {
+        document.getElementById(inputId).addEventListener('change', () => handleUpload(inputId, statusId, type));
       });
     }
 
     function exportCsv() {
-      if (!state.lastGeneratedLineup.length) generateLineup();
-      const headers = ['Slot', 'Player'];
-      const rows = state.lastGeneratedLineup.map(item => [item.slot, item.player.name]);
+      if (!state.lastGeneratedLineup.length) generatePortfolio();
+      const headers = ['Slot', 'Player', 'Team', 'Salary', 'P50', 'P90', 'Ownership'];
+      const rows = state.lastGeneratedLineup.map(item => [item.slot, item.player.name, item.player.team, item.player.salary, item.player.p50.toFixed(1), item.player.p90.toFixed(1), formatPct(item.player.ownership)]);
       const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `court-edge-${state.site.toLowerCase()}-${state.contest.toLowerCase()}-lineup.csv`;
+      link.download = `court-edge-${state.site.toLowerCase()}-${state.contest.toLowerCase()}-portfolio-lineup-${state.currentLineupIndex}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1003,7 +1260,8 @@
     bindChipGroups();
     bindInputs();
     refreshPlayers();
-    generateLineup();
+    generatePortfolio();
   </script>
+
 </body>
 </html>
