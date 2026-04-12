@@ -1,1738 +1,709 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Court Edge — NBA DFS Optimizer</title>
-  <style>
-    :root {
-      --bg: #07111b;
-      --panel: rgba(12, 22, 35, 0.88);
-      --panel-2: rgba(10, 18, 28, 0.88);
-      --line: rgba(120, 170, 255, 0.15);
-      --line-strong: rgba(120, 170, 255, 0.28);
-      --text: #eaf2ff;
-      --muted: #8ea5c6;
-      --accent: #47a4ff;
-      --accent-2: #6dffcf;
-      --warning: #ffb84d;
-      --danger: #ff6b7d;
-      --success: #51e08d;
-      --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-      --radius: 22px;
-    }
-
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    body {
-      background:
-        radial-gradient(circle at 50% 0%, rgba(71,164,255,0.18), transparent 28%),
-        radial-gradient(circle at 100% 15%, rgba(109,255,207,0.12), transparent 22%),
-        linear-gradient(180deg, #07111b 0%, #0a1320 52%, #060d16 100%);
-      min-height: 100vh;
-    }
-
-    .grid-bg::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-      background-size: 48px 48px;
-      mask-image: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.12));
-      -webkit-mask-image: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.12));
-    }
-
-    .app {
-      max-width: 1440px;
-      margin: 0 auto;
-      padding: 22px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 22px;
-      flex-wrap: wrap;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-    }
-
-    .brand-mark {
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      box-shadow: 0 0 0 6px rgba(71,164,255,0.08), 0 14px 30px rgba(71,164,255,0.18);
-      display: grid;
-      place-items: center;
-      color: #03101c;
-      font-size: 20px;
-    }
-
-    .brand small {
-      display: block;
-      color: var(--muted);
-      font-weight: 600;
-      font-size: 12px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-    }
-
-    .nav-actions, .hero-actions, .chip-row, .intake-actions, .summary-chips {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .btn, .pill, select, input[type="number"], input[type="text"], input[type="file"] {
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
-      border-radius: 14px;
-      padding: 11px 14px;
-      font-weight: 650;
-    }
-
-    .btn {
-      cursor: pointer;
-      transition: transform .15s ease, border-color .15s ease, background .15s ease;
-    }
-
-    .btn:hover, .chip:hover {
-      transform: translateY(-1px);
-      border-color: var(--line-strong);
-    }
-
-    .btn.primary {
-      background: linear-gradient(135deg, rgba(71,164,255,0.2), rgba(109,255,207,0.18));
-      border-color: rgba(109,255,207,0.35);
-      box-shadow: 0 14px 30px rgba(71,164,255,0.12);
-    }
-
-    .hero {
-      display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 22px;
-      margin-bottom: 22px;
-    }
-
-    .card {
-      background: linear-gradient(180deg, rgba(17,28,43,0.92), rgba(10,18,28,0.92));
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
-    }
-
-    .hero-main {
-      padding: 30px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero-main::after {
-      content: "";
-      position: absolute;
-      width: 320px;
-      height: 320px;
-      right: -70px;
-      top: -70px;
-      background: radial-gradient(circle, rgba(71,164,255,0.22), transparent 60%);
-      pointer-events: none;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      border: 1px solid rgba(109,255,207,0.24);
-      color: var(--accent-2);
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      margin-bottom: 16px;
-      background: rgba(109,255,207,0.06);
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(34px, 5vw, 60px);
-      line-height: 0.96;
-      letter-spacing: -0.04em;
-      max-width: 760px;
-    }
-
-    .hero-copy, .muted, .step p, .section p, .panel p, .helper, .footer-note {
-      color: var(--muted);
-      line-height: 1.6;
-    }
-
-    .hero-copy {
-      font-size: 17px;
-      max-width: 760px;
-      margin: 18px 0 24px;
-    }
-
-    .mini-stats, .workflow, .feature-grid, .summary-grid {
-      display: grid;
-      gap: 12px;
-    }
-
-    .mini-stats { grid-template-columns: repeat(4, 1fr); }
-    .workflow { grid-template-columns: repeat(4, 1fr); margin-bottom: 22px; }
-    .feature-grid { grid-template-columns: repeat(4, 1fr); margin-top: 14px; }
-    .summary-grid { grid-template-columns: repeat(4, 1fr); }
-
-    .mini-stat, .status-block, .feature-item, .lineup-card, .summary-item {
-      padding: 16px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-    }
-
-    .mini-stat strong, .status-value {
-      display: block;
-      font-size: 24px;
-      margin-bottom: 5px;
-      font-weight: 800;
-    }
-
-    .hero-side, .actions-stack {
-      display: grid;
-      gap: 14px;
-    }
-
-    .hero-side { padding: 22px; }
-    .status-label, .field label, .player-table th, .tiny-head {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-    }
-
-    .step, .panel, .section { padding: 20px; }
-    .section { margin-top: 22px; }
-
-    .step-num {
-      width: 34px;
-      height: 34px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: rgba(71,164,255,0.12);
-      border: 1px solid rgba(71,164,255,0.25);
-      margin-bottom: 12px;
-      font-weight: 800;
-    }
-
-    .optimizer-shell {
-      display: grid;
-      grid-template-columns: 320px minmax(0, 1fr) 360px;
-      gap: 22px;
-      align-items: start;
-    }
-
-    .panel-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 14px;
-      margin-bottom: 16px;
-    }
-
-    .tiny { font-size: 12px; }
-
-    .field {
-      margin-bottom: 14px;
-    }
-
-    .field label {
-      display: block;
-      margin-bottom: 7px;
-    }
-
-    .input, .select, .slider-box, .input-readonly {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
-      padding: 12px 14px;
-    }
-
-    .range-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      gap: 12px;
-    }
-
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--accent);
-    }
-
-    .chip {
-      padding: 9px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .chip.active {
-      border-color: rgba(109,255,207,0.35);
-      background: rgba(109,255,207,0.08);
-      color: var(--accent-2);
-    }
-
-    .player-pool-scroll {
-      max-height: 520px;
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(255,255,255,0.015);
-    }
-
-    .player-table {
-      width: 100%;
-      border-collapse: collapse;
-      overflow: hidden;
-      border-radius: 18px;
-      border: 0;
-    }
-
-    .player-table th, .player-table td {
-      padding: 14px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      text-align: left;
-      font-size: 14px;
-      vertical-align: top;
-    }
-
-    .player-table th {
-      background: rgba(255,255,255,0.025);
-    }
-
-    .player-table tr:hover td { background: rgba(255,255,255,0.025); }
-
-    .tag {
-      display: inline-flex;
-      padding: 5px 9px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .tag.good { background: rgba(81,224,141,0.12); color: var(--success); }
-    .tag.warn { background: rgba(255,184,77,0.12); color: var(--warning); }
-    .tag.hot { background: rgba(255,107,125,0.12); color: var(--danger); }
-
-    .lineup-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 9px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      font-size: 14px;
-    }
-
-    .lineup-row:last-child { border-bottom: 0; }
-    .btn.full { width: 100%; text-align: center; }
-    .summary-item strong { font-size: 22px; display: block; }
-    .success-text { color: var(--success); }
-    .warning-text { color: var(--warning); }
-    .danger-text { color: var(--danger); }
-
-    .footer-note {
-      text-align: center;
-      font-size: 13px;
-      padding: 26px 0 8px;
-    }
-
-
-    .portfolio-list {
-      max-height: 260px;
-      overflow: auto;
-      display: grid;
-      gap: 8px;
-      max-height: 260px;
-      overflow: auto;
-      margin-top: 10px;
-      padding-right: 4px;
-    }
-
-    .portfolio-item {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: center;
-      padding: 10px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-      cursor: pointer;
-      transition: border-color .15s ease, transform .15s ease, background .15s ease;
-    }
-
-    .portfolio-item:hover, .portfolio-item.active {
-      border-color: rgba(109,255,207,0.35);
-      background: rgba(109,255,207,0.08);
-      transform: translateY(-1px);
-    }
-
-    .template-box {
-      margin-top: 18px;
-      padding: 16px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-    }
-
-    .template-meta {
-      display: grid;
-      gap: 6px;
-      margin-top: 10px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-
-    @media (max-width: 1180px) {
-      .hero, .optimizer-shell, .workflow, .feature-grid, .mini-stats, .summary-grid {
-        grid-template-columns: 1fr;
-      }
-      .hero-side { order: -1; }
-    }
-
-    @media (max-width: 740px) {
-      .app { padding: 14px; }
-      .topbar { flex-direction: column; align-items: flex-start; }
-      .hero-main, .hero-side, .panel, .section, .step { padding: 18px; }
-      .player-table th:nth-child(4), .player-table td:nth-child(4),
-      .player-table th:nth-child(6), .player-table td:nth-child(6) {
-        display: none;
-      }
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Court Edge Optimizer</title>
+<style>
+  :root{--bg:#0a1120;--panel:#111a31;--panel2:#18274a;--text:#eef5ff;--muted:#9db2db;--accent:#7eb1ff;--accent2:#89f0ff;}
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#08111f,#0a1120);color:var(--text)}
+  .wrap{max-width:1500px;margin:0 auto;padding:24px}
+  .hero,.grid,.results-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+  .card{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+  .row2,.row3,.row4{display:grid;gap:14px}.row2{grid-template-columns:1fr 1fr}.row3{grid-template-columns:1fr 1fr 1fr}.row4{grid-template-columns:1fr 1fr 1fr 1fr}
+  h1,h2,h3{margin:0 0 10px} p{margin:0;color:var(--muted);line-height:1.5}
+  .pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.pill{padding:9px 12px;border-radius:999px;background:#18284a;border:1px solid rgba(255,255,255,.07);font-size:.9rem}
+  .metric{display:flex;justify-content:space-between;gap:10px;padding:14px 16px;background:var(--panel2);border-radius:15px;margin-bottom:12px}.metric b{color:var(--accent2)}
+  label{display:block;font-size:.9rem;color:#c9dafb;margin-bottom:7px}
+  input,select,textarea{width:100%;padding:12px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--text)}
+  textarea{min-height:84px}
+  .drop{position:relative;border:1.5px dashed rgba(126,177,255,.35);border-radius:18px;padding:16px;min-height:170px;background:linear-gradient(180deg,rgba(126,177,255,.06),rgba(255,255,255,.02))}
+  .drop input{position:absolute;inset:0;opacity:0;cursor:pointer}.filebox{margin-top:12px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);font-size:.9rem}
+  .btns{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px} button{padding:13px 16px;border:0;border-radius:12px;font-weight:700;cursor:pointer}
+  .primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#08101d}.secondary{background:rgba(255,255,255,.06);color:var(--text);border:1px solid rgba(255,255,255,.08)}
+  .status{margin-top:14px;padding:14px 16px;border-radius:14px;background:#16233f;color:#cfe0ff;white-space:pre-wrap}
+  table{width:100%;border-collapse:collapse;font-size:.92rem} th,td{padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;vertical-align:top} th{color:#c4d5f3}
+  .lineup-card{padding:16px;border:1px solid rgba(255,255,255,.08);background:#10192c;border-radius:18px;margin-bottom:12px}
+  .lineup-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}.badge{padding:8px 10px;border-radius:999px;background:#1b305b;color:var(--accent2);font-weight:700;white-space:nowrap}
+  .small{font-size:.9rem;color:var(--muted)} .tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.tabbtn.active{outline:2px solid rgba(126,177,255,.35)}
+  @media (max-width:1080px){.hero,.grid,.results-grid,.row2,.row3,.row4{grid-template-columns:1fr}}
+</style>
 </head>
-<body class="grid-bg">
-  <div class="app">
-    <div class="topbar">
-      <div class="brand">
-        <div class="brand-mark">⚡</div>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:18px;align-items:flex-start;">
         <div>
-          <div style="font-size: 20px;">Court Edge</div>
-          <small>NBA DFS Optimizer</small>
+          <h1>Court Edge</h1>
+          <p>Working FanDuel NBA optimizer with ownership, leverage, embedded historical model integration, and pairwise/team/game correlation math. This version uses the uploaded historical game logs, usage data, and team advanced stats to build recent player distributions and matchup adjustments for the current slate, then layers ownership and leverage scoring on top.</p>
+          <div class="pills">
+            <div class="pill">Historical model integrated</div><div class="pill">Ownership-aware</div><div class="pill">Leverage scoring</div><div class="pill">Duplication penalty</div><div class="pill">20,000 sim setting</div>
+          </div>
         </div>
-      </div>
-      <div class="nav-actions">
-        <button class="btn">Pricing</button>
-        <button class="btn">Docs</button>
-        <button class="btn">Login</button>
-        <button class="btn primary" id="startOptimizeBtn">Start Optimizing</button>
+        <svg width="120" height="120" viewBox="0 0 120 120" aria-label="Basketball">
+          <defs><radialGradient id="g" cx="35%" cy="30%" r="70%"><stop offset="0%" stop-color="#ffcf88"/><stop offset="55%" stop-color="#ff9d3d"/><stop offset="100%" stop-color="#d96a18"/></radialGradient></defs>
+          <circle cx="60" cy="60" r="46" fill="url(#g)" stroke="#24160a" stroke-width="3"/>
+          <path d="M60 14 C40 35,40 85,60 106" fill="none" stroke="#24160a" stroke-width="3.2"/>
+          <path d="M60 14 C80 35,80 85,60 106" fill="none" stroke="#24160a" stroke-width="3.2"/>
+          <path d="M16 60 C35 46,85 46,104 60" fill="none" stroke="#24160a" stroke-width="3.2"/>
+          <path d="M16 60 C35 74,85 74,104 60" fill="none" stroke="#24160a" stroke-width="3.2"/>
+        </svg>
       </div>
     </div>
+    <div class="card">
+      <div class="metric"><span>Roster</span><b>PG, PG, SG, SG, SF, SF, PF, PF, C</b></div>
+      <div class="metric"><span>Salary Cap</span><b>$60,000</b></div>
+      <div class="metric"><span>Max Same Team</span><b>4</b></div>
+      <div class="metric"><span>Optimizer State</span><b id="optimizerState">Waiting</b></div>
+      <div class="metric"><span>Loaded Players</span><b id="loadedPlayers">0</b></div>
+    </div>
+  </section>
 
-    <section class="hero">
-      <div class="card hero-main">
-        <div class="eyebrow">Live Slate • DraftKings + FanDuel</div>
-        <h1>Build sharper NBA lineups with a cleaner, faster optimizer.</h1>
-        <p class="hero-copy">
-          Court Edge helps you lock core plays, manage exposure, stack intelligently, and generate tournament-ready lineups with weighted median projections, leverage scoring, legality checks, and Monte Carlo lineup scoring.
-        </p>
-        <div class="hero-actions">
-          <button class="btn primary" id="heroGenerateBtn">Start With Today’s Main Slate</button>
-          <button class="btn" id="demoBuildBtn">Preview Demo Build</button>
+  <section class="grid" style="margin-top:18px">
+    <div class="card">
+      <h2>Uploads</h2>
+      <div class="row3">
+        <div class="drop">
+          <input id="fdInput" type="file" accept=".csv"/>
+          <h3>FanDuel Slate CSV</h3>
+          <p>Required. Current FanDuel NBA players list export.</p>
+          <div class="filebox" id="fdFileBox">No file loaded</div>
         </div>
-        <div class="mini-stats">
-          <div class="mini-stat"><strong id="heroLineupCount">20</strong><span>Lineups per run</span></div>
-          <div class="mini-stat"><strong>10k</strong><span>Monte Carlo sims</span></div>
-          <div class="mini-stat"><strong>DK / FD</strong><span>Site support</span></div>
-          <div class="mini-stat"><strong>CSV</strong><span>Template export ready</span></div>
+        <div class="drop">
+          <input id="projInput" type="file" accept=".csv"/>
+          <h3>Projection / Ownership CSV</h3>
+          <p>Optional. Supports columns like player, projection, ceiling, floor, ownership.</p>
+          <div class="filebox" id="projFileBox">No custom projection file loaded</div>
         </div>
-      </div>
-
-      <div class="card hero-side">
-        <div class="status-block">
-          <div class="status-label">Slate Status</div>
-          <div class="status-value" id="slateStatusValue">Main Slate · 8 Games</div>
-          <div class="muted" id="slateStatusSub">Waiting for build settings</div>
-          <div class="tiny muted" id="slateStatusMeta" style="margin-top:10px; line-height:1.6;">Pool 0 · Portfolio 0 · No slate CSV loaded</div>
-        </div>
-        <div class="status-block">
-          <div class="status-label">Math Engine</div>
-          <div class="muted">Weighted-median minutes and FPPM, pace and defense adjustments, ownership-adjusted leverage, volatility bands, and 10,000-simulation lineup percentile scoring.</div>
-        </div>
-        <div class="status-block">
-          <div class="status-label">Export Workflow</div>
-          <div class="muted">Template-driven DraftKings and FanDuel CSV workflow. The UI is wired so build settings update player math and the generated lineup panel in real time.</div>
+        <div class="drop">
+          <input id="actualInput" type="file" accept=".csv"/>
+          <h3>Actual Results CSV</h3>
+          <p>Optional. For backtesting. Supports columns like player, fantasy, actual, fpts.</p>
+          <div class="filebox" id="actualFileBox">No actual-results file loaded</div>
         </div>
       </div>
-    </section>
-
-    <section class="card section" style="margin-top:0; margin-bottom:22px;">
-      <h2>Historical Stats Intake</h2>
-      <p>Upload long-term game logs, ownership history, contest results, and injury history so the stochastic brain has the four core historical feeds it needs.</p>
-      <div class="feature-grid">
-        <div class="feature-item">
-          <h3>Historical Game Logs</h3>
-          <p>Player date, team, opponent, minutes, salary, and fantasy points.</p>
-          <div class="intake-actions">
-            <input type="file" id="historicalGameLogs" accept=".csv" />
-            <span class="helper" id="historicalGameLogsStatus">No file loaded</span>
-          </div>
-        </div>
-        <div class="feature-item">
-          <h3>Ownership History</h3>
-          <p>Used for chalk, leverage, and uniqueness calibration.</p>
-          <div class="intake-actions">
-            <input type="file" id="ownershipHistory" accept=".csv" />
-            <span class="helper" id="ownershipHistoryStatus">No file loaded</span>
-          </div>
-        </div>
-        <div class="feature-item">
-          <h3>Contest Results</h3>
-          <p>Payout history and winning-score targets for contest fit.</p>
-          <div class="intake-actions">
-            <input type="file" id="contestResults" accept=".csv" />
-            <span class="helper" id="contestResultsStatus">No file loaded</span>
-          </div>
-        </div>
-        <div class="feature-item">
-          <h3>Injury / News History</h3>
-          <p>Used for fragility handling and usage shock modeling.</p>
-          <div class="intake-actions">
-            <input type="file" id="injuryHistory" accept=".csv" />
-            <span class="helper" id="injuryHistoryStatus">No file loaded</span>
-          </div>
-        </div>
+      <div style="margin-top:16px">
+        <label for="manualRules">Notes / locks / excludes</label>
+        <textarea id="manualRules" placeholder="Examples: lock Tyrese Maxey, exclude all Q tags, prefer lower-owned 2v2 pivots."></textarea>
       </div>
-    </section>
+      <div class="status" id="statusBox">Upload a FanDuel CSV to start.</div>
+    </div>
 
-    <section class="optimizer-shell">
-      <aside class="card panel">
-        <div class="panel-head">
-          <div>
-            <h3>Build Rules</h3>
-            <p class="tiny muted">Projection blend, leverage bias, exposures, stack logic, and simulation profile are all wired into the player pool and lineup summary.</p>
-          </div>
-          <span class="pill">Live</span>
-        </div>
+    <div class="card">
+      <h2>Optimizer Controls</h2>
+      <div class="row4">
+        <div><label for="simCount">Sim count</label><input id="simCount" type="number" min="1000" step="1000" value="20000"/></div>
+        <div><label for="lineupCount">Lineups</label><input id="lineupCount" type="number" min="1" max="150" value="20"/></div>
+        <div><label for="uniqueness">Min unique players</label><input id="uniqueness" type="number" min="1" max="8" value="2"/></div>
+        <div><label for="maxExposure">Max exposure %</label><input id="maxExposure" type="number" min="1" max="100" value="60"/></div>
+        <div><label for="randomness">Randomness %</label><input id="randomness" type="number" min="0" max="100" value="18"/></div>
+        <div><label for="minSalary">Min lineup salary</label><input id="minSalary" type="number" min="0" max="60000" value="59000"/></div>
+        <div><label for="leverageWeight">Leverage weight</label><input id="leverageWeight" type="number" min="0" max="10" step="0.1" value="2.0"/></div>
+        <div><label for="dupPenalty">Duplication penalty</label><input id="dupPenalty" type="number" min="0" max="10" step="0.1" value="1.4"/></div>
+      </div>
+      <div class="btns">
+        <button class="primary" id="runBtn">Run Optimizer</button>
+        <button class="secondary" id="lateSwapBtn">Run Late Swap</button>
+        <button class="secondary" id="backtestBtn">Run Backtest</button>
+        <button class="secondary" id="downloadBtn">Download Lineups CSV</button>
+      </div>
+      <div class="status" id="summaryBox">No optimizer run yet.</div>
+    </div>
+  </section>
 
-        <div class="field">
-          <label>Site</label>
-          <div class="chip-row" id="siteChips">
-            <div class="chip active" data-group="site" data-value="DK">DraftKings</div>
-            <div class="chip" data-group="site" data-value="FD">FanDuel</div>
-          </div>
-        </div>
+  <section class="grid" style="margin-top:18px">
+    <div class="card">
+      <h2>Late News Center</h2>
+      <p>Paste updates one per line in the format: <span class="small">Player Name, O</span> or <span class="small">Player Name, ACTIVE</span>. Ruling a player out removes them and gives a small automatic teammate bump for the optimizer pool.</p>
+      <div style="margin-top:14px">
+        <label for="newsInput">Manual news updates</label>
+        <textarea id="newsInput" placeholder="Examples:
+Jalen Johnson, O
+Tyrese Maxey, ACTIVE
+Jaylen Brown, Q"></textarea>
+      </div>
+      <div class="btns">
+        <button class="secondary" id="applyNewsBtn">Apply News</button>
+        <button class="secondary" id="resetNewsBtn">Reset Player Pool</button>
+      </div>
+      <div class="status" id="newsStatus">No news updates applied.</div>
+    </div>
+    <div class="card">
+      <h2>Late Swap Game Locks</h2>
+      <p>Mark games that have already started. Late swap will keep players from locked games and rebuild only the open slots.</p>
+      <div id="gameLocks" class="small" style="margin-top:14px">Load a FanDuel slate to see game lock toggles.</div>
+      <div class="status" id="swapStatus">Late swap ready when lineups exist and at least one game is locked.</div>
+    </div>
+  </section>
 
-        <div class="field">
-          <label>Slate</label>
-          <select class="select" id="slateSelect">
-            <option value="main">Main Slate · 8 Games</option>
-            <option value="turbo">Turbo Slate · 3 Games</option>
-            <option value="showdown">Showdown · 1 Game</option>
-          </select>
-        </div>
+  <section class="results-grid" style="margin-top:18px">
+    <div class="card">
+      <h2>Generated Lineups</h2>
+      <div id="lineupsOut"><p class="small">No lineups generated yet.</p></div>
+    </div>
+    <div class="card">
+      <h2>Exposure & Player Pool</h2>
+      <div class="tabs">
+        <button class="secondary tabbtn active" data-tab="exposure">Exposure</button>
+        <button class="secondary tabbtn" data-tab="players">Players</button>
+      </div>
+      <div id="exposureTab"></div>
+      <div id="playersTab" style="display:none"></div>
+    </div>
+  </section>
+</div>
 
-        <div class="field">
-          <label>Contest Type</label>
-          <div class="chip-row" id="contestChips">
-            <div class="chip active" data-group="contest" data-value="GPP">GPP</div>
-            <div class="chip" data-group="contest" data-value="Cash">Cash</div>
-            <div class="chip" data-group="contest" data-value="SE">SE</div>
-            <div class="chip" data-group="contest" data-value="MME">MME</div>
-          </div>
-        </div>
+<script>
+const historicalModel = {"jalen johnson":{"recent_fd_mean":39.74,"recent_fd_std":9.314,"recent_minutes":34.167,"recent_usg":0.2736,"matchup_adj":2.775,"hist_proj":40.579,"hist_ceiling":52.5},"jayson tatum":{"recent_fd_mean":47.23,"recent_fd_std":12.961,"recent_minutes":34.323,"recent_usg":0.22,"matchup_adj":-0.354,"hist_proj":37.101,"hist_ceiling":53.691},"tyrese maxey":{"recent_fd_mean":37.48,"recent_fd_std":16.342,"recent_minutes":33.654,"recent_usg":0.255,"matchup_adj":-1.426,"hist_proj":35.436,"hist_ceiling":56.354},"jaylen brown":{"recent_fd_mean":44.82,"recent_fd_std":9.504,"recent_minutes":36.106,"recent_usg":0.3786,"matchup_adj":-0.354,"hist_proj":40.325,"hist_ceiling":52.49},"scottie barnes":{"recent_fd_mean":38.95,"recent_fd_std":13.674,"recent_minutes":30.1,"recent_usg":0.2328,"matchup_adj":-3.006,"hist_proj":30.044,"hist_ceiling":47.547},"bam adebayo":{"recent_fd_mean":41.69,"recent_fd_std":9.508,"recent_minutes":33.956,"recent_usg":0.2562,"matchup_adj":1.888,"hist_proj":36.543,"hist_ceiling":48.714},"joel embiid":{"recent_fd_mean":38.4,"recent_fd_std":21.033,"recent_minutes":28.982,"recent_usg":0.3477,"matchup_adj":-1.426,"hist_proj":34.753,"hist_ceiling":61.675},"donovan mitchell":{"recent_fd_mean":40.27,"recent_fd_std":9.44,"recent_minutes":33.117,"recent_usg":0.3094,"matchup_adj":0.331,"hist_proj":37.078,"hist_ceiling":49.161},"lamelo ball":{"recent_fd_mean":40.62,"recent_fd_std":7.938,"recent_minutes":30.432,"recent_usg":0.2872,"matchup_adj":0.0,"hist_proj":33.124,"hist_ceiling":43.285},"paolo banchero":{"recent_fd_mean":38.29,"recent_fd_std":13.719,"recent_minutes":33.192,"recent_usg":0.2643,"matchup_adj":-0.575,"hist_proj":32.957,"hist_ceiling":50.518},"jalen brunson":{"recent_fd_mean":39.74,"recent_fd_std":8.191,"recent_minutes":35.637,"recent_usg":0.2896,"matchup_adj":0.354,"hist_proj":35.261,"hist_ceiling":45.744},"james harden":{"recent_fd_mean":37.9,"recent_fd_std":12.112,"recent_minutes":33.979,"recent_usg":0.3246,"matchup_adj":0.331,"hist_proj":35.836,"hist_ceiling":51.339},"giannis antetokounmpo":{"recent_fd_mean":31.33,"recent_fd_std":23.401,"recent_minutes":24.289,"recent_usg":0.3194,"matchup_adj":-0.058,"hist_proj":34.332,"hist_ceiling":64.285},"karl anthony towns":{"recent_fd_mean":35.83,"recent_fd_std":15.544,"recent_minutes":28.887,"recent_usg":0.2429,"matchup_adj":0.354,"hist_proj":31.739,"hist_ceiling":51.636},"cade cunningham":{"recent_fd_mean":38.73,"recent_fd_std":12.555,"recent_minutes":29.257,"recent_usg":0.2883,"matchup_adj":0.823,"hist_proj":37.945,"hist_ceiling":54.015},"evan mobley":{"recent_fd_mean":36.68,"recent_fd_std":17.203,"recent_minutes":28.722,"recent_usg":0.207,"matchup_adj":0.331,"hist_proj":31.006,"hist_ceiling":53.026},"jalen duren":{"recent_fd_mean":40.85,"recent_fd_std":10.269,"recent_minutes":31.563,"recent_usg":0.2244,"matchup_adj":0.823,"hist_proj":33.042,"hist_ceiling":46.187},"ryan rollins":{"recent_fd_mean":29.55,"recent_fd_std":18.97,"recent_minutes":26.619,"recent_usg":0.2419,"matchup_adj":-0.058,"hist_proj":25.856,"hist_ceiling":50.138},"paul george":{"recent_fd_mean":36.39,"recent_fd_std":20.146,"recent_minutes":28.873,"recent_usg":0.2053,"matchup_adj":-1.426,"hist_proj":26.522,"hist_ceiling":52.31},"pascal siakam":{"recent_fd_mean":34.75,"recent_fd_std":16.339,"recent_minutes":30.224,"recent_usg":0.2904,"matchup_adj":2.315,"hist_proj":34.258,"hist_ceiling":55.173},"tyler herro":{"recent_fd_mean":25.33,"recent_fd_std":15.124,"recent_minutes":32.953,"recent_usg":0.2464,"matchup_adj":1.888,"hist_proj":27.397,"hist_ceiling":46.755},"desmond bane":{"recent_fd_mean":32.28,"recent_fd_std":12.215,"recent_minutes":30.965,"recent_usg":0.2001,"matchup_adj":-0.575,"hist_proj":26.119,"hist_ceiling":41.753},"onyeka okongwu":{"recent_fd_mean":27.64,"recent_fd_std":10.445,"recent_minutes":29.532,"recent_usg":0.2002,"matchup_adj":2.775,"hist_proj":27.531,"hist_ceiling":40.901},"brandon ingram":{"recent_fd_mean":27.25,"recent_fd_std":17.443,"recent_minutes":32.045,"recent_usg":0.2638,"matchup_adj":-3.006,"hist_proj":24.171,"hist_ceiling":46.498},"brandon miller":{"recent_fd_mean":30.3,"recent_fd_std":6.644,"recent_minutes":31.225,"recent_usg":0.2794,"matchup_adj":0.0,"hist_proj":27.545,"hist_ceiling":36.05},"jalen suggs":{"recent_fd_mean":31.08,"recent_fd_std":11.235,"recent_minutes":29.999,"recent_usg":0.2116,"matchup_adj":-0.575,"hist_proj":24.673,"hist_ceiling":39.054},"rj barrett":{"recent_fd_mean":29.66,"recent_fd_std":11.45,"recent_minutes":31.734,"recent_usg":0.2883,"matchup_adj":-3.006,"hist_proj":23.828,"hist_ceiling":38.485},"nickeil alexander walker":{"recent_fd_mean":38.38,"recent_fd_std":8.459,"recent_minutes":35.164,"recent_usg":0.2307,"matchup_adj":2.775,"hist_proj":32.961,"hist_ceiling":43.789},"vj edgecombe":{"recent_fd_mean":35.04,"recent_fd_std":10.21,"recent_minutes":35.271,"recent_usg":0.1753,"matchup_adj":-1.426,"hist_proj":26.116,"hist_ceiling":39.185},"dyson daniels":{"recent_fd_mean":38.79,"recent_fd_std":8.401,"recent_minutes":32.893,"recent_usg":0.1468,"matchup_adj":2.775,"hist_proj":31.193,"hist_ceiling":41.946},"julian reese":{"recent_fd_mean":33.99,"recent_fd_std":12.454,"recent_minutes":32.104,"recent_usg":0.22,"matchup_adj":1.554,"hist_proj":28.207,"hist_ceiling":44.149},"derrick white":{"recent_fd_mean":22.96,"recent_fd_std":4.716,"recent_minutes":32.737,"recent_usg":0.2099,"matchup_adj":-0.354,"hist_proj":24.215,"hist_ceiling":30.252},"kel'el ware":{"recent_fd_mean":25.92,"recent_fd_std":17.182,"recent_minutes":18.855,"recent_usg":0.2435,"matchup_adj":1.888,"hist_proj":22.258,"hist_ceiling":44.252},"og anunoby":{"recent_fd_mean":28.45,"recent_fd_std":15.071,"recent_minutes":33.583,"recent_usg":0.2021,"matchup_adj":0.354,"hist_proj":24.994,"hist_ceiling":44.285},"andrew nembhard":{"recent_fd_mean":24.43,"recent_fd_std":17.499,"recent_minutes":30.387,"recent_usg":0.2165,"matchup_adj":2.315,"hist_proj":25.858,"hist_ceiling":48.257},"daniss jenkins":{"recent_fd_mean":32.08,"recent_fd_std":8.492,"recent_minutes":31.622,"recent_usg":0.2173,"matchup_adj":0.823,"hist_proj":21.498,"hist_ceiling":32.368},"payton pritchard":{"recent_fd_mean":30.73,"recent_fd_std":10.559,"recent_minutes":31.088,"recent_usg":0.2189,"matchup_adj":-0.354,"hist_proj":24.757,"hist_ceiling":38.273},"cj mccollum":{"recent_fd_mean":34.53,"recent_fd_std":5.922,"recent_minutes":29.937,"recent_usg":0.2483,"matchup_adj":2.775,"hist_proj":29.559,"hist_ceiling":37.139},"jarrett allen":{"recent_fd_mean":33.66,"recent_fd_std":9.851,"recent_minutes":25.737,"recent_usg":0.1751,"matchup_adj":0.331,"hist_proj":25.369,"hist_ceiling":37.978},"ausar thompson":{"recent_fd_mean":32.98,"recent_fd_std":7.323,"recent_minutes":27.566,"recent_usg":0.1485,"matchup_adj":0.823,"hist_proj":23.83,"hist_ceiling":33.204},"josh hart":{"recent_fd_mean":25.48,"recent_fd_std":9.997,"recent_minutes":31.277,"recent_usg":0.1445,"matchup_adj":0.354,"hist_proj":21.98,"hist_ceiling":34.776},"miles bridges":{"recent_fd_mean":29.93,"recent_fd_std":8.619,"recent_minutes":27.744,"recent_usg":0.2074,"matchup_adj":0.0,"hist_proj":24.061,"hist_ceiling":35.093},"neemias queta":{"recent_fd_mean":29.84,"recent_fd_std":13.096,"recent_minutes":26.979,"recent_usg":0.1399,"matchup_adj":-0.354,"hist_proj":20.935,"hist_ceiling":37.698},"ousmane dieng":{"recent_fd_mean":29.78,"recent_fd_std":12.622,"recent_minutes":31.181,"recent_usg":0.2559,"matchup_adj":-0.058,"hist_proj":18.675,"hist_ceiling":34.832},"will riley":{"recent_fd_mean":34.02,"recent_fd_std":14.082,"recent_minutes":31.135,"recent_usg":0.1909,"matchup_adj":1.554,"hist_proj":21.558,"hist_ceiling":39.583},"norman powell":{"recent_fd_mean":16.54,"recent_fd_std":14.089,"recent_minutes":27.256,"recent_usg":0.255,"matchup_adj":1.888,"hist_proj":22.522,"hist_ceiling":40.556},"immanuel quickley":{"recent_fd_mean":28.31,"recent_fd_std":7.588,"recent_minutes":29.379,"recent_usg":0.2035,"matchup_adj":-3.006,"hist_proj":21.696,"hist_ceiling":31.409},"alex sarr":{"recent_fd_mean":8.89,"recent_fd_std":12.865,"recent_minutes":21.907,"recent_usg":0.2436,"matchup_adj":1.554,"hist_proj":20.204,"hist_ceiling":36.671},"jaime jaquez":{"recent_fd_mean":27.8,"recent_fd_std":7.757,"recent_minutes":26.433,"recent_usg":0.2024,"matchup_adj":1.888,"hist_proj":24.114,"hist_ceiling":34.043},"bobby portis":{"recent_fd_mean":18.99,"recent_fd_std":18.198,"recent_minutes":22.006,"recent_usg":0.2247,"matchup_adj":-0.058,"hist_proj":16.881,"hist_ceiling":40.175},"kon knueppel":{"recent_fd_mean":25.44,"recent_fd_std":10.0,"recent_minutes":30.693,"recent_usg":0.2265,"matchup_adj":0.0,"hist_proj":23.349,"hist_ceiling":36.149},"andrew wiggins":{"recent_fd_mean":26.17,"recent_fd_std":9.019,"recent_minutes":26.956,"recent_usg":0.195,"matchup_adj":1.888,"hist_proj":24.01,"hist_ceiling":35.554},"jakob poeltl":{"recent_fd_mean":24.56,"recent_fd_std":10.607,"recent_minutes":23.15,"recent_usg":0.1268,"matchup_adj":-3.006,"hist_proj":14.384,"hist_ceiling":27.961},"jarace walker":{"recent_fd_mean":22.04,"recent_fd_std":14.5,"recent_minutes":27.499,"recent_usg":0.2176,"matchup_adj":2.315,"hist_proj":20.366,"hist_ceiling":38.926},"mikal bridges":{"recent_fd_mean":23.66,"recent_fd_std":6.111,"recent_minutes":31.929,"recent_usg":0.1904,"matchup_adj":0.354,"hist_proj":22.281,"hist_ceiling":30.103},"kelly oubre":{"recent_fd_mean":24.45,"recent_fd_std":14.889,"recent_minutes":25.715,"recent_usg":0.1632,"matchup_adj":-1.426,"hist_proj":17.605,"hist_ceiling":36.663},"quentin grimes":{"recent_fd_mean":19.8,"recent_fd_std":12.44,"recent_minutes":25.551,"recent_usg":0.1451,"matchup_adj":-1.426,"hist_proj":14.575,"hist_ceiling":30.498},"bilal coulibaly":{"recent_fd_mean":19.17,"recent_fd_std":16.128,"recent_minutes":21.641,"recent_usg":0.1456,"matchup_adj":1.554,"hist_proj":17.461,"hist_ceiling":38.104},"trevon scott":{"recent_fd_mean":24.22,"recent_fd_std":8.596,"recent_minutes":31.062,"recent_usg":0.22,"matchup_adj":0.433,"hist_proj":20.36,"hist_ceiling":31.364},"franz wagner":{"recent_fd_mean":20.34,"recent_fd_std":8.557,"recent_minutes":18.937,"recent_usg":0.2602,"matchup_adj":-0.575,"hist_proj":21.039,"hist_ceiling":31.991},"tobias harris":{"recent_fd_mean":25.11,"recent_fd_std":14.544,"recent_minutes":25.883,"recent_usg":0.1913,"matchup_adj":0.823,"hist_proj":20.333,"hist_ceiling":38.95},"nolan traore":{"recent_fd_mean":25.1,"recent_fd_std":7.036,"recent_minutes":22.6,"recent_usg":0.1848,"matchup_adj":0.433,"hist_proj":15.677,"hist_ceiling":24.683},"pelle larsson":{"recent_fd_mean":25.37,"recent_fd_std":9.958,"recent_minutes":29.916,"recent_usg":0.1509,"matchup_adj":1.888,"hist_proj":19.635,"hist_ceiling":32.381},"kyle kuzma":{"recent_fd_mean":20.04,"recent_fd_std":11.905,"recent_minutes":23.219,"recent_usg":0.2067,"matchup_adj":-0.058,"hist_proj":16.594,"hist_ceiling":31.832},"justin champagnie":{"recent_fd_mean":16.92,"recent_fd_std":13.418,"recent_minutes":23.307,"recent_usg":0.1521,"matchup_adj":1.554,"hist_proj":14.625,"hist_ceiling":31.8},"ben saraf":{"recent_fd_mean":20.75,"recent_fd_std":11.694,"recent_minutes":27.118,"recent_usg":0.1662,"matchup_adj":0.433,"hist_proj":13.497,"hist_ceiling":28.465},"kobe brown":{"recent_fd_mean":17.8,"recent_fd_std":14.773,"recent_minutes":25.793,"recent_usg":0.2018,"matchup_adj":2.315,"hist_proj":13.12,"hist_ceiling":32.03},"wendell carter":{"recent_fd_mean":23.85,"recent_fd_std":8.035,"recent_minutes":27.298,"recent_usg":0.1526,"matchup_adj":-0.575,"hist_proj":18.295,"hist_ceiling":28.581},"jonathan kuminga":{"recent_fd_mean":20.85,"recent_fd_std":8.062,"recent_minutes":21.645,"recent_usg":0.2506,"matchup_adj":2.775,"hist_proj":20.002,"hist_ceiling":30.322},"malachi smith":{"recent_fd_mean":19.2,"recent_fd_std":11.633,"recent_minutes":25.39,"recent_usg":0.22,"matchup_adj":0.433,"hist_proj":15.417,"hist_ceiling":30.307},"jericho sims":{"recent_fd_mean":26.94,"recent_fd_std":9.073,"recent_minutes":28.409,"recent_usg":0.088,"matchup_adj":-0.058,"hist_proj":13.201,"hist_ceiling":24.814},"andre drummond":{"recent_fd_mean":15.6,"recent_fd_std":12.429,"recent_minutes":16.283,"recent_usg":0.1709,"matchup_adj":-1.426,"hist_proj":10.556,"hist_ceiling":26.466},"moussa diabate":{"recent_fd_mean":25.83,"recent_fd_std":9.222,"recent_minutes":26.817,"recent_usg":0.1142,"matchup_adj":0.0,"hist_proj":18.175,"hist_ceiling":29.979},"nic claxton":{"recent_fd_mean":16.08,"recent_fd_std":10.45,"recent_minutes":19.716,"recent_usg":0.1601,"matchup_adj":0.433,"hist_proj":16.631,"hist_ceiling":30.007},"collin murray boyles":{"recent_fd_mean":24.45,"recent_fd_std":10.675,"recent_minutes":20.481,"recent_usg":0.1366,"matchup_adj":-3.006,"hist_proj":12.443,"hist_ceiling":26.107},"quenton jackson":{"recent_fd_mean":18.49,"recent_fd_std":11.554,"recent_minutes":20.858,"recent_usg":0.2949,"matchup_adj":2.315,"hist_proj":16.525,"hist_ceiling":31.314},"davion mitchell":{"recent_fd_mean":20.45,"recent_fd_std":11.014,"recent_minutes":29.877,"recent_usg":0.1373,"matchup_adj":1.888,"hist_proj":18.606,"hist_ceiling":32.704},"mitchell robinson":{"recent_fd_mean":25.72,"recent_fd_std":9.144,"recent_minutes":19.815,"recent_usg":0.0884,"matchup_adj":0.354,"hist_proj":15.639,"hist_ceiling":27.343},"josh minott":{"recent_fd_mean":18.03,"recent_fd_std":13.742,"recent_minutes":20.872,"recent_usg":0.1252,"matchup_adj":0.433,"hist_proj":10.761,"hist_ceiling":28.352},"dennis schroder":{"recent_fd_mean":19.22,"recent_fd_std":9.376,"recent_minutes":20.138,"recent_usg":0.2466,"matchup_adj":0.331,"hist_proj":16.257,"hist_ceiling":28.259},"jamir watkins":{"recent_fd_mean":21.35,"recent_fd_std":8.127,"recent_minutes":23.966,"recent_usg":0.1248,"matchup_adj":1.554,"hist_proj":14.322,"hist_ceiling":24.725},"myles turner":{"recent_fd_mean":19.08,"recent_fd_std":17.445,"recent_minutes":23.084,"recent_usg":0.2014,"matchup_adj":-0.058,"hist_proj":17.19,"hist_ceiling":39.52},"anthony black":{"recent_fd_mean":21.29,"recent_fd_std":9.072,"recent_minutes":24.041,"recent_usg":0.2069,"matchup_adj":-0.575,"hist_proj":19.186,"hist_ceiling":30.798},"jamal shead":{"recent_fd_mean":21.34,"recent_fd_std":9.947,"recent_minutes":26.564,"recent_usg":0.1274,"matchup_adj":-3.006,"hist_proj":10.832,"hist_ceiling":23.564},"anthony gill":{"recent_fd_mean":23.01,"recent_fd_std":7.885,"recent_minutes":29.805,"recent_usg":0.0968,"matchup_adj":1.554,"hist_proj":13.393,"hist_ceiling":23.486},"nikola vucevic":{"recent_fd_mean":20.85,"recent_fd_std":13.69,"recent_minutes":18.964,"recent_usg":0.2076,"matchup_adj":-0.354,"hist_proj":19.722,"hist_ceiling":37.244},"cormac ryan":{"recent_fd_mean":19.36,"recent_fd_std":15.074,"recent_minutes":24.759,"recent_usg":0.313,"matchup_adj":-0.058,"hist_proj":17.134,"hist_ceiling":36.429},"thomas bryant":{"recent_fd_mean":15.66,"recent_fd_std":9.361,"recent_minutes":16.621,"recent_usg":0.1713,"matchup_adj":0.331,"hist_proj":8.561,"hist_ceiling":20.543},"aaron nesmith":{"recent_fd_mean":18.09,"recent_fd_std":12.832,"recent_minutes":30.02,"recent_usg":0.1859,"matchup_adj":2.315,"hist_proj":18.912,"hist_ceiling":35.336},"bub carrington":{"recent_fd_mean":22.03,"recent_fd_std":7.439,"recent_minutes":26.347,"recent_usg":0.1985,"matchup_adj":1.554,"hist_proj":18.286,"hist_ceiling":27.808},"taurean prince":{"recent_fd_mean":24.58,"recent_fd_std":11.833,"recent_minutes":28.023,"recent_usg":0.1068,"matchup_adj":-0.058,"hist_proj":13.776,"hist_ceiling":28.922},"ziaire williams":{"recent_fd_mean":12.7,"recent_fd_std":14.738,"recent_minutes":19.553,"recent_usg":0.1768,"matchup_adj":0.433,"hist_proj":10.978,"hist_ceiling":29.843},"sandro mamukelashvili":{"recent_fd_mean":26.12,"recent_fd_std":7.785,"recent_minutes":22.225,"recent_usg":0.185,"matchup_adj":-3.006,"hist_proj":14.788,"hist_ceiling":24.753},"coby white":{"recent_fd_mean":22.05,"recent_fd_std":6.622,"recent_minutes":18.935,"recent_usg":0.271,"matchup_adj":0.0,"hist_proj":19.162,"hist_ceiling":27.638},"sam merrill":{"recent_fd_mean":24.23,"recent_fd_std":7.234,"recent_minutes":28.954,"recent_usg":0.1743,"matchup_adj":0.331,"hist_proj":17.486,"hist_ceiling":26.745},"tyson etienne":{"recent_fd_mean":16.17,"recent_fd_std":10.105,"recent_minutes":24.2,"recent_usg":0.1831,"matchup_adj":0.433,"hist_proj":9.879,"hist_ceiling":22.813},"max strus":{"recent_fd_mean":19.59,"recent_fd_std":9.37,"recent_minutes":24.532,"recent_usg":0.22,"matchup_adj":0.331,"hist_proj":15.973,"hist_ceiling":27.967},"ja'kobe walter":{"recent_fd_mean":21.01,"recent_fd_std":6.158,"recent_minutes":27.479,"recent_usg":0.1606,"matchup_adj":-3.006,"hist_proj":10.028,"hist_ceiling":17.91},"noah clowney":{"recent_fd_mean":15.4,"recent_fd_std":9.72,"recent_minutes":16.647,"recent_usg":0.202,"matchup_adj":0.433,"hist_proj":13.522,"hist_ceiling":25.964},"tristan vukcevic":{"recent_fd_mean":9.06,"recent_fd_std":12.667,"recent_minutes":15.578,"recent_usg":0.266,"matchup_adj":1.554,"hist_proj":10.81,"hist_ceiling":27.025},"jalen slawson":{"recent_fd_mean":23.28,"recent_fd_std":13.475,"recent_minutes":23.891,"recent_usg":0.121,"matchup_adj":2.315,"hist_proj":18.018,"hist_ceiling":35.266},"micah potter":{"recent_fd_mean":22.01,"recent_fd_std":11.642,"recent_minutes":20.058,"recent_usg":0.1397,"matchup_adj":2.315,"hist_proj":15.512,"hist_ceiling":30.414},"paul reed":{"recent_fd_mean":22.38,"recent_fd_std":10.841,"recent_minutes":15.921,"recent_usg":0.1838,"matchup_adj":0.823,"hist_proj":14.294,"hist_ceiling":28.17},"sharife cooper":{"recent_fd_mean":19.91,"recent_fd_std":9.017,"recent_minutes":18.705,"recent_usg":0.1735,"matchup_adj":1.554,"hist_proj":12.622,"hist_ceiling":24.164},"keon ellis":{"recent_fd_mean":17.83,"recent_fd_std":9.745,"recent_minutes":25.412,"recent_usg":0.0995,"matchup_adj":0.331,"hist_proj":10.546,"hist_ceiling":23.019},"jay huff":{"recent_fd_mean":23.86,"recent_fd_std":8.088,"recent_minutes":22.7,"recent_usg":0.1447,"matchup_adj":2.315,"hist_proj":18.351,"hist_ceiling":28.705},"t j mcconnell":{"recent_fd_mean":22.94,"recent_fd_std":10.287,"recent_minutes":18.823,"recent_usg":0.2178,"matchup_adj":2.315,"hist_proj":18.599,"hist_ceiling":31.767},"leaky black":{"recent_fd_mean":20.37,"recent_fd_std":11.942,"recent_minutes":29.002,"recent_usg":0.22,"matchup_adj":1.554,"hist_proj":18.099,"hist_ceiling":33.385},"duncan robinson":{"recent_fd_mean":20.17,"recent_fd_std":9.225,"recent_minutes":26.934,"recent_usg":0.1795,"matchup_adj":0.823,"hist_proj":16.082,"hist_ceiling":27.89},"kevin huerter":{"recent_fd_mean":22.37,"recent_fd_std":7.966,"recent_minutes":24.852,"recent_usg":0.1758,"matchup_adj":0.823,"hist_proj":16.685,"hist_ceiling":26.882},"e j liddell":{"recent_fd_mean":14.56,"recent_fd_std":14.814,"recent_minutes":21.234,"recent_usg":0.1359,"matchup_adj":0.433,"hist_proj":7.552,"hist_ceiling":26.514},"drake powell":{"recent_fd_mean":16.74,"recent_fd_std":8.673,"recent_minutes":25.683,"recent_usg":0.1319,"matchup_adj":0.433,"hist_proj":9.611,"hist_ceiling":20.713},"tristan da silva":{"recent_fd_mean":19.51,"recent_fd_std":6.169,"recent_minutes":25.979,"recent_usg":0.1533,"matchup_adj":-0.575,"hist_proj":13.317,"hist_ceiling":21.214},"jalen wilson":{"recent_fd_mean":15.84,"recent_fd_std":12.094,"recent_minutes":24.244,"recent_usg":0.1857,"matchup_adj":0.433,"hist_proj":9.41,"hist_ceiling":24.89},"craig porter":{"recent_fd_mean":10.62,"recent_fd_std":12.965,"recent_minutes":17.76,"recent_usg":0.1306,"matchup_adj":0.331,"hist_proj":8.018,"hist_ceiling":24.613},"aj green":{"recent_fd_mean":25.52,"recent_fd_std":11.537,"recent_minutes":32.779,"recent_usg":0.1327,"matchup_adj":-0.058,"hist_proj":15.773,"hist_ceiling":30.54},"pete nance":{"recent_fd_mean":17.48,"recent_fd_std":10.587,"recent_minutes":25.497,"recent_usg":0.1662,"matchup_adj":-0.058,"hist_proj":9.646,"hist_ceiling":23.198},"goga bitadze":{"recent_fd_mean":19.19,"recent_fd_std":12.786,"recent_minutes":15.525,"recent_usg":0.1476,"matchup_adj":-0.575,"hist_proj":10.463,"hist_ceiling":26.829},"obi toppin":{"recent_fd_mean":25.08,"recent_fd_std":9.74,"recent_minutes":18.636,"recent_usg":0.19757,"matchup_adj":2.315,"hist_proj":18.258,"hist_ceiling":30.726},"sam hauser":{"recent_fd_mean":18.31,"recent_fd_std":9.607,"recent_minutes":26.771,"recent_usg":0.1405,"matchup_adj":-0.354,"hist_proj":12.309,"hist_ceiling":24.606},"jose alvarado":{"recent_fd_mean":12.39,"recent_fd_std":11.886,"recent_minutes":14.981,"recent_usg":0.1592,"matchup_adj":0.354,"hist_proj":8.879,"hist_ceiling":24.092},"ethan thompson":{"recent_fd_mean":16.48,"recent_fd_std":14.988,"recent_minutes":26.058,"recent_usg":0.1041,"matchup_adj":2.315,"hist_proj":11.551,"hist_ceiling":30.736},"jaden hardy":{"recent_fd_mean":10.58,"recent_fd_std":10.241,"recent_minutes":20.625,"recent_usg":0.2342,"matchup_adj":1.554,"hist_proj":9.883,"hist_ceiling":22.991},"kam jones":{"recent_fd_mean":10.67,"recent_fd_std":11.338,"recent_minutes":22.05,"recent_usg":0.0906,"matchup_adj":2.315,"hist_proj":7.594,"hist_ceiling":22.106},"jaylon tyson":{"recent_fd_mean":20.88,"recent_fd_std":13.428,"recent_minutes":24.239,"recent_usg":0.2187,"matchup_adj":0.331,"hist_proj":18.127,"hist_ceiling":35.315},"justin edwards":{"recent_fd_mean":5.35,"recent_fd_std":4.676,"recent_minutes":11.1,"recent_usg":0.0958,"matchup_adj":-1.426,"hist_proj":0.288,"hist_ceiling":6.274},"jordan walsh":{"recent_fd_mean":12.84,"recent_fd_std":7.012,"recent_minutes":19.977,"recent_usg":0.1373,"matchup_adj":-0.354,"hist_proj":7.411,"hist_ceiling":16.386},"chaney johnson":{"recent_fd_mean":13.76,"recent_fd_std":9.663,"recent_minutes":16.2,"recent_usg":0.217,"matchup_adj":0.433,"hist_proj":11.593,"hist_ceiling":23.962},"luka garza":{"recent_fd_mean":12.66,"recent_fd_std":12.971,"recent_minutes":15.817,"recent_usg":0.1813,"matchup_adj":-0.354,"hist_proj":8.18,"hist_ceiling":24.783},"simone fontecchio":{"recent_fd_mean":9.2,"recent_fd_std":10.757,"recent_minutes":11.103,"recent_usg":0.1728,"matchup_adj":1.888,"hist_proj":8.175,"hist_ceiling":21.944},"kasparas jakucionis":{"recent_fd_mean":13.43,"recent_fd_std":14.353,"recent_minutes":18.119,"recent_usg":0.1131,"matchup_adj":1.888,"hist_proj":9.17,"hist_ceiling":27.542},"tre johnson":{"recent_fd_mean":7.18,"recent_fd_std":9.955,"recent_minutes":23.495,"recent_usg":0.2135,"matchup_adj":1.554,"hist_proj":11.976,"hist_ceiling":24.719},"ryan kalkbrenner":{"recent_fd_mean":15.42,"recent_fd_std":8.361,"recent_minutes":18.894,"recent_usg":0.1433,"matchup_adj":0.0,"hist_proj":11.28,"hist_ceiling":21.982},"dominick barlow":{"recent_fd_mean":18.14,"recent_fd_std":9.037,"recent_minutes":21.34,"recent_usg":0.1296,"matchup_adj":-1.426,"hist_proj":10.639,"hist_ceiling":22.207},"isaiah stewart":{"recent_fd_mean":17.81,"recent_fd_std":9.432,"recent_minutes":20.344,"recent_usg":0.155,"matchup_adj":0.823,"hist_proj":14.365,"hist_ceiling":26.438},"javonte green":{"recent_fd_mean":17.58,"recent_fd_std":11.683,"recent_minutes":17.357,"recent_usg":0.1355,"matchup_adj":0.823,"hist_proj":10.319,"hist_ceiling":25.274},"miles mcbride":{"recent_fd_mean":18.05,"recent_fd_std":10.286,"recent_minutes":21.123,"recent_usg":0.1895,"matchup_adj":0.354,"hist_proj":14.273,"hist_ceiling":27.439},"jevon carter":{"recent_fd_mean":14.42,"recent_fd_std":7.43,"recent_minutes":19.803,"recent_usg":0.2204,"matchup_adj":-0.575,"hist_proj":8.915,"hist_ceiling":18.425},"baylor scheierman":{"recent_fd_mean":14.42,"recent_fd_std":5.31,"recent_minutes":22.14,"recent_usg":0.1342,"matchup_adj":-0.354,"hist_proj":7.648,"hist_ceiling":14.444},"ronald holland":{"recent_fd_mean":16.93,"recent_fd_std":8.415,"recent_minutes":18.443,"recent_usg":0.1749,"matchup_adj":0.823,"hist_proj":12.352,"hist_ceiling":23.123},"adem bona":{"recent_fd_mean":11.31,"recent_fd_std":9.731,"recent_minutes":15.971,"recent_usg":0.1271,"matchup_adj":-1.426,"hist_proj":5.157,"hist_ceiling":17.612},"jordan clarkson":{"recent_fd_mean":13.29,"recent_fd_std":6.493,"recent_minutes":16.226,"recent_usg":0.2305,"matchup_adj":0.354,"hist_proj":9.186,"hist_ceiling":17.498},"nae'qwan tomlin":{"recent_fd_mean":9.43,"recent_fd_std":8.643,"recent_minutes":14.19,"recent_usg":0.1447,"matchup_adj":0.331,"hist_proj":5.573,"hist_ceiling":16.636},"gary trent":{"recent_fd_mean":14.18,"recent_fd_std":14.081,"recent_minutes":20.167,"recent_usg":0.1459,"matchup_adj":-0.058,"hist_proj":7.537,"hist_ceiling":25.56},"grant williams":{"recent_fd_mean":14.2,"recent_fd_std":7.176,"recent_minutes":20.118,"recent_usg":0.1282,"matchup_adj":0.0,"hist_proj":8.905,"hist_ceiling":18.09},"ochai agbaji":{"recent_fd_mean":5.37,"recent_fd_std":8.829,"recent_minutes":13.235,"recent_usg":0.147,"matchup_adj":0.433,"hist_proj":2.882,"hist_ceiling":14.183},"dean wade":{"recent_fd_mean":11.34,"recent_fd_std":7.534,"recent_minutes":20.903,"recent_usg":0.0928,"matchup_adj":0.331,"hist_proj":7.766,"hist_ceiling":17.409},"sion james":{"recent_fd_mean":15.09,"recent_fd_std":8.154,"recent_minutes":18.911,"recent_usg":0.1086,"matchup_adj":0.0,"hist_proj":7.872,"hist_ceiling":18.31},"jock landale":{"recent_fd_mean":18.85,"recent_fd_std":11.012,"recent_minutes":19.459,"recent_usg":0.1834,"matchup_adj":2.775,"hist_proj":17.082,"hist_ceiling":31.178},"ben sheppard":{"recent_fd_mean":9.0,"recent_fd_std":10.348,"recent_minutes":20.447,"recent_usg":0.1301,"matchup_adj":2.315,"hist_proj":8.94,"hist_ceiling":22.184},"larry nance":{"recent_fd_mean":6.04,"recent_fd_std":8.264,"recent_minutes":15.028,"recent_usg":0.129,"matchup_adj":0.331,"hist_proj":2.657,"hist_ceiling":13.234},"trayce jackson davis":{"recent_fd_mean":3.37,"recent_fd_std":4.198,"recent_minutes":4.914,"recent_usg":0.1573,"matchup_adj":-3.006,"hist_proj":-1.731,"hist_ceiling":3.643},"mouhamed gueye":{"recent_fd_mean":11.37,"recent_fd_std":7.194,"recent_minutes":13.917,"recent_usg":0.1286,"matchup_adj":2.775,"hist_proj":8.484,"hist_ceiling":17.693},"trendon watford":{"recent_fd_mean":4.35,"recent_fd_std":7.96,"recent_minutes":11.105,"recent_usg":0.1484,"matchup_adj":-1.426,"hist_proj":2.575,"hist_ceiling":12.764},"terance mann":{"recent_fd_mean":9.78,"recent_fd_std":7.075,"recent_minutes":18.332,"recent_usg":0.1506,"matchup_adj":0.433,"hist_proj":8.421,"hist_ceiling":17.477},"landry shamet":{"recent_fd_mean":12.95,"recent_fd_std":6.783,"recent_minutes":24.069,"recent_usg":0.1648,"matchup_adj":0.354,"hist_proj":9.988,"hist_ceiling":18.67},"caris levert":{"recent_fd_mean":17.18,"recent_fd_std":7.245,"recent_minutes":18.331,"recent_usg":0.1606,"matchup_adj":0.823,"hist_proj":11.625,"hist_ceiling":20.899},"taelon peter":{"recent_fd_mean":11.81,"recent_fd_std":7.577,"recent_minutes":19.282,"recent_usg":0.1126,"matchup_adj":2.315,"hist_proj":7.066,"hist_ceiling":16.765},"jamal cain":{"recent_fd_mean":18.24,"recent_fd_std":11.668,"recent_minutes":20.753,"recent_usg":0.1201,"matchup_adj":-0.575,"hist_proj":6.819,"hist_ceiling":21.754},"marcus sasser":{"recent_fd_mean":8.4,"recent_fd_std":5.382,"recent_minutes":11.033,"recent_usg":0.2389,"matchup_adj":0.823,"hist_proj":5.936,"hist_ceiling":12.826},"tyler kolek":{"recent_fd_mean":7.22,"recent_fd_std":9.025,"recent_minutes":9.213,"recent_usg":0.2181,"matchup_adj":0.354,"hist_proj":4.703,"hist_ceiling":16.255},"gradey dick":{"recent_fd_mean":4.36,"recent_fd_std":6.471,"recent_minutes":6.451,"recent_usg":0.1443,"matchup_adj":-3.006,"hist_proj":-1.087,"hist_ceiling":7.196},"keshad johnson":{"recent_fd_mean":5.28,"recent_fd_std":7.151,"recent_minutes":8.258,"recent_usg":0.1759,"matchup_adj":1.888,"hist_proj":3.499,"hist_ceiling":12.652},"andre jackson":{"recent_fd_mean":10.56,"recent_fd_std":8.166,"recent_minutes":15.67,"recent_usg":0.1939,"matchup_adj":-0.058,"hist_proj":3.505,"hist_ceiling":13.958},"corey kispert":{"recent_fd_mean":6.71,"recent_fd_std":7.737,"recent_minutes":11.44,"recent_usg":0.1767,"matchup_adj":2.775,"hist_proj":7.852,"hist_ceiling":17.756},"ron harper":{"recent_fd_mean":3.65,"recent_fd_std":6.33,"recent_minutes":6.762,"recent_usg":0.1702,"matchup_adj":-0.354,"hist_proj":0.386,"hist_ceiling":8.488},"jeremy sochan":{"recent_fd_mean":4.6,"recent_fd_std":8.317,"recent_minutes":8.055,"recent_usg":0.0741,"matchup_adj":0.354,"hist_proj":-0.074,"hist_ceiling":10.571},"dru smith":{"recent_fd_mean":3.56,"recent_fd_std":5.12,"recent_minutes":8.212,"recent_usg":0.1503,"matchup_adj":1.888,"hist_proj":6.329,"hist_ceiling":12.883},"a j lawson":{"recent_fd_mean":9.7,"recent_fd_std":10.127,"recent_minutes":11.523,"recent_usg":0.1718,"matchup_adj":-3.006,"hist_proj":0.276,"hist_ceiling":13.239},"hugo gonzalez":{"recent_fd_mean":5.69,"recent_fd_std":7.74,"recent_minutes":9.246,"recent_usg":0.1023,"matchup_adj":-0.354,"hist_proj":1.119,"hist_ceiling":11.027},"zaccharie risacher":{"recent_fd_mean":12.14,"recent_fd_std":9.428,"recent_minutes":14.918,"recent_usg":0.1755,"matchup_adj":2.775,"hist_proj":12.398,"hist_ceiling":24.466},"ariel hukporti":{"recent_fd_mean":4.72,"recent_fd_std":7.514,"recent_minutes":7.346,"recent_usg":0.1653,"matchup_adj":0.354,"hist_proj":1.292,"hist_ceiling":10.91},"gabe vincent":{"recent_fd_mean":9.66,"recent_fd_std":4.163,"recent_minutes":13.813,"recent_usg":0.1034,"matchup_adj":2.775,"hist_proj":5.285,"hist_ceiling":10.613},"jonathan mogbo":{"recent_fd_mean":5.88,"recent_fd_std":6.291,"recent_minutes":6.104,"recent_usg":0.1851,"matchup_adj":-3.006,"hist_proj":-2.178,"hist_ceiling":5.874},"myron gardner":{"recent_fd_mean":3.82,"recent_fd_std":6.383,"recent_minutes":5.762,"recent_usg":0.1474,"matchup_adj":1.888,"hist_proj":3.206,"hist_ceiling":11.376},"tre mann":{"recent_fd_mean":2.66,"recent_fd_std":3.357,"recent_minutes":4.303,"recent_usg":0.2286,"matchup_adj":0.0,"hist_proj":3.013,"hist_ceiling":7.311},"moritz wagner":{"recent_fd_mean":5.1,"recent_fd_std":4.851,"recent_minutes":6.019,"recent_usg":0.2732,"matchup_adj":-0.575,"hist_proj":4.993,"hist_ceiling":11.203},"dalen terry":{"recent_fd_mean":8.99,"recent_fd_std":7.306,"recent_minutes":14.66,"recent_usg":0.1309,"matchup_adj":-1.426,"hist_proj":2.131,"hist_ceiling":11.482},"jabari walker":{"recent_fd_mean":2.06,"recent_fd_std":3.302,"recent_minutes":5.718,"recent_usg":0.1327,"matchup_adj":-1.426,"hist_proj":-0.958,"hist_ceiling":3.269},"tolu smith":{"recent_fd_mean":3.57,"recent_fd_std":6.791,"recent_minutes":7.25,"recent_usg":0.19444,"matchup_adj":0.823,"hist_proj":3.1,"hist_ceiling":11.792},"nikola jovic":{"recent_fd_mean":0.92,"recent_fd_std":2.516,"recent_minutes":7.995,"recent_usg":0.2162,"matchup_adj":1.888,"hist_proj":6.263,"hist_ceiling":9.483},"marjon beauchamp":{"recent_fd_mean":3.37,"recent_fd_std":7.582,"recent_minutes":11.057,"recent_usg":0.22,"matchup_adj":-1.426,"hist_proj":2.905,"hist_ceiling":12.609},"jase richardson":{"recent_fd_mean":4.36,"recent_fd_std":5.667,"recent_minutes":6.863,"recent_usg":0.1419,"matchup_adj":-0.575,"hist_proj":0.053,"hist_ceiling":7.307},"alijah martin":{"recent_fd_mean":3.44,"recent_fd_std":6.329,"recent_minutes":5.397,"recent_usg":0.1326,"matchup_adj":-3.006,"hist_proj":-4.159,"hist_ceiling":3.942},"amari williams":{"recent_fd_mean":1.91,"recent_fd_std":5.97,"recent_minutes":7.755,"recent_usg":0.0564,"matchup_adj":-0.354,"hist_proj":-3.172,"hist_ceiling":4.47},"tyrese proctor":{"recent_fd_mean":9.25,"recent_fd_std":9.105,"recent_minutes":10.456,"recent_usg":0.2329,"matchup_adj":0.331,"hist_proj":4.974,"hist_ceiling":16.629},"mohamed diawara":{"recent_fd_mean":4.83,"recent_fd_std":4.828,"recent_minutes":9.287,"recent_usg":0.19,"matchup_adj":0.354,"hist_proj":1.472,"hist_ceiling":7.653},"noah penda":{"recent_fd_mean":2.37,"recent_fd_std":3.426,"recent_minutes":5.896,"recent_usg":0.1873,"matchup_adj":-0.575,"hist_proj":1.623,"hist_ceiling":6.008},"jamison battle":{"recent_fd_mean":6.95,"recent_fd_std":6.094,"recent_minutes":6.975,"recent_usg":0.1323,"matchup_adj":-3.006,"hist_proj":-2.749,"hist_ceiling":5.052},"josh green":{"recent_fd_mean":4.33,"recent_fd_std":4.688,"recent_minutes":11.095,"recent_usg":0.1008,"matchup_adj":0.0,"hist_proj":0.272,"hist_ceiling":6.273},"jett howard":{"recent_fd_mean":8.54,"recent_fd_std":3.157,"recent_minutes":13.018,"recent_usg":0.2105,"matchup_adj":-0.575,"hist_proj":3.79,"hist_ceiling":7.83},"antonio reeves":{"recent_fd_mean":3.17,"recent_fd_std":4.392,"recent_minutes":5.596,"recent_usg":0.10678,"matchup_adj":0.0,"hist_proj":-2.215,"hist_ceiling":3.407},"isaac jones":{"recent_fd_mean":0.86,"recent_fd_std":1.814,"recent_minutes":2.513,"recent_usg":0.20738,"matchup_adj":0.823,"hist_proj":-0.816,"hist_ceiling":1.505},"pj hall":{"recent_fd_mean":16.4,"recent_fd_std":7.287,"recent_minutes":15.87,"recent_usg":0.1641,"matchup_adj":0.0,"hist_proj":7.507,"hist_ceiling":16.835},"kevin mccullar":{"recent_fd_mean":0.64,"recent_fd_std":2.396,"recent_minutes":1.96,"recent_usg":0.1588,"matchup_adj":0.354,"hist_proj":-1.29,"hist_ceiling":1.777},"colin castleton":{"recent_fd_mean":1.71,"recent_fd_std":3.053,"recent_minutes":4.166,"recent_usg":0.29,"matchup_adj":-0.575,"hist_proj":0.348,"hist_ceiling":4.256},"riley minix":{"recent_fd_mean":1.05,"recent_fd_std":2.291,"recent_minutes":4.377,"recent_usg":0.13775,"matchup_adj":0.331,"hist_proj":-1.921,"hist_ceiling":1.011},"buddy hield":{"recent_fd_mean":0.69,"recent_fd_std":2.182,"recent_minutes":5.2,"recent_usg":0.2279,"matchup_adj":2.775,"hist_proj":6.39,"hist_ceiling":9.183},"keaton wallace":{"recent_fd_mean":2.89,"recent_fd_std":4.527,"recent_minutes":5.515,"recent_usg":0.1817,"matchup_adj":2.775,"hist_proj":3.763,"hist_ceiling":9.557},"keshon gilbert":{"recent_fd_mean":9.5,"recent_fd_std":5.336,"recent_minutes":15.917,"recent_usg":0.22,"matchup_adj":2.775,"hist_proj":8.2,"hist_ceiling":15.03},"pat connaughton":{"recent_fd_mean":2.35,"recent_fd_std":4.299,"recent_minutes":4.719,"recent_usg":0.1041,"matchup_adj":0.0,"hist_proj":-1.976,"hist_ceiling":3.527},"day'ron sharpe":{"recent_fd_mean":21.02,"recent_fd_std":11.775,"recent_minutes":16.718,"recent_usg":0.1724,"matchup_adj":0.433,"hist_proj":15.158,"hist_ceiling":30.23},"ivica zubac":{"recent_fd_mean":23.53,"recent_fd_std":11.038,"recent_minutes":23.51,"recent_usg":0.1645,"matchup_adj":2.315,"hist_proj":23.007,"hist_ceiling":37.135},"jahmir young":{"recent_fd_mean":1.2,"recent_fd_std":1.798,"recent_minutes":2.762,"recent_usg":0.2511,"matchup_adj":1.888,"hist_proj":1.273,"hist_ceiling":3.574},"alex antetokounmpo":{"recent_fd_mean":2.9,"recent_fd_std":4.119,"recent_minutes":2.575,"recent_usg":0.22,"matchup_adj":-0.058,"hist_proj":-0.216,"hist_ceiling":5.056},"tristan enaruna":{"recent_fd_mean":2.68,"recent_fd_std":4.206,"recent_minutes":8.31,"recent_usg":0.18625,"matchup_adj":0.331,"hist_proj":0.137,"hist_ceiling":5.521},"trae young":{"recent_fd_mean":13.95,"recent_fd_std":14.944,"recent_minutes":20.598,"recent_usg":0.2724,"matchup_adj":1.554,"hist_proj":20.882,"hist_ceiling":40.011},"michael porter":{"recent_fd_mean":31.83,"recent_fd_std":16.307,"recent_minutes":27.55,"recent_usg":0.301,"matchup_adj":0.433,"hist_proj":30.58,"hist_ceiling":51.453},"tosan evbuomwan":{"recent_fd_mean":0.0,"recent_fd_std":0.0,"recent_minutes":0.74,"recent_usg":0.08188,"matchup_adj":0.0,"hist_proj":-5.546,"hist_ceiling":-5.546},"rayj dennis":{"recent_fd_mean":1.43,"recent_fd_std":2.939,"recent_minutes":3.18,"recent_usg":0.2035,"matchup_adj":2.775,"hist_proj":4.041,"hist_ceiling":7.802},"tyrese martin":{"recent_fd_mean":2.72,"recent_fd_std":4.414,"recent_minutes":6.712,"recent_usg":0.1764,"matchup_adj":-1.426,"hist_proj":1.646,"hist_ceiling":7.295},"trevor keels":{"recent_fd_mean":0.72,"recent_fd_std":1.893,"recent_minutes":1.668,"recent_usg":0.136,"matchup_adj":1.888,"hist_proj":-2.0,"hist_ceiling":0.423},"christian koloko":{"recent_fd_mean":2.09,"recent_fd_std":3.314,"recent_minutes":5.987,"recent_usg":0.1241,"matchup_adj":2.775,"hist_proj":3.385,"hist_ceiling":7.627},"wendell moore":{"recent_fd_mean":1.09,"recent_fd_std":1.973,"recent_minutes":3.975,"recent_usg":0.08586,"matchup_adj":0.823,"hist_proj":-1.914,"hist_ceiling":0.612},"kevin porter":{"recent_fd_mean":31.36,"recent_fd_std":20.414,"recent_minutes":28.081,"recent_usg":0.2201,"matchup_adj":-0.058,"hist_proj":28.87,"hist_ceiling":55.0},"danny wolf":{"recent_fd_mean":15.0,"recent_fd_std":11.556,"recent_minutes":20.508,"recent_usg":0.1916,"matchup_adj":0.433,"hist_proj":12.835,"hist_ceiling":27.627},"thanasis antetokounmpo":{"recent_fd_mean":2.93,"recent_fd_std":3.469,"recent_minutes":4.806,"recent_usg":0.2117,"matchup_adj":-0.058,"hist_proj":-0.452,"hist_ceiling":3.989},"egor demin":{"recent_fd_mean":16.5,"recent_fd_std":10.353,"recent_minutes":20.099,"recent_usg":0.1946,"matchup_adj":0.433,"hist_proj":13.663,"hist_ceiling":26.915},"asa newell":{"recent_fd_mean":2.78,"recent_fd_std":4.41,"recent_minutes":4.455,"recent_usg":0.1635,"matchup_adj":2.775,"hist_proj":3.982,"hist_ceiling":9.628},"liam mcneeley":{"recent_fd_mean":6.44,"recent_fd_std":5.493,"recent_minutes":9.901,"recent_usg":0.1354,"matchup_adj":0.0,"hist_proj":1.52,"hist_ceiling":8.551},"chaz lanier":{"recent_fd_mean":2.23,"recent_fd_std":3.328,"recent_minutes":7.729,"recent_usg":0.166,"matchup_adj":0.823,"hist_proj":-0.43,"hist_ceiling":3.829},"max shulga":{"recent_fd_mean":0.14,"recent_fd_std":0.443,"recent_minutes":1.968,"recent_usg":0.1745,"matchup_adj":-0.354,"hist_proj":-3.828,"hist_ceiling":-3.261},"kyle lowry":{"recent_fd_mean":0.3,"recent_fd_std":0.949,"recent_minutes":5.13,"recent_usg":0.16133,"matchup_adj":-1.426,"hist_proj":-3.684,"hist_ceiling":-2.47},"garrett temple":{"recent_fd_mean":0.12,"recent_fd_std":0.379,"recent_minutes":2.617,"recent_usg":0.1225,"matchup_adj":-3.006,"hist_proj":-6.98,"hist_ceiling":-6.494},"alex morales":{"recent_fd_mean":2.65,"recent_fd_std":4.88,"recent_minutes":6.898,"recent_usg":0.188,"matchup_adj":-0.575,"hist_proj":-1.757,"hist_ceiling":4.49},"john tonje":{"recent_fd_mean":0.3,"recent_fd_std":0.949,"recent_minutes":0.907,"recent_usg":0.1625,"matchup_adj":-0.354,"hist_proj":-3.598,"hist_ceiling":-2.383},"johni broome":{"recent_fd_mean":1.16,"recent_fd_std":2.533,"recent_minutes":2.428,"recent_usg":0.1202,"matchup_adj":-1.426,"hist_proj":-4.085,"hist_ceiling":-0.843},"vladislav goldin":{"recent_fd_mean":0.73,"recent_fd_std":1.281,"recent_minutes":2.012,"recent_usg":0.0796,"matchup_adj":1.888,"hist_proj":-2.546,"hist_ceiling":-0.906},"chucky hepburn":{"recent_fd_mean":8.75,"recent_fd_std":12.581,"recent_minutes":11.097,"recent_usg":0.20029,"matchup_adj":-3.006,"hist_proj":-1.943,"hist_ceiling":14.16},"tyreke key":{"recent_fd_mean":null,"recent_fd_std":null,"recent_minutes":26.0,"recent_usg":0.22,"matchup_adj":-3.006,"hist_proj":null,"hist_ceiling":null},"trey jemison":{"recent_fd_mean":2.747,"recent_fd_std":6.742,"recent_minutes":26.0,"recent_usg":0.22,"matchup_adj":0.354,"hist_proj":2.257,"hist_ceiling":10.887},"anthony davis":{"recent_fd_mean":44.68,"recent_fd_std":14.369,"recent_minutes":33.05,"recent_usg":0.2687,"matchup_adj":1.554,"hist_proj":38.88,"hist_ceiling":57.273},"jonathan isaac":{"recent_fd_mean":7.19,"recent_fd_std":6.9,"recent_minutes":10.034,"recent_usg":0.1084,"matchup_adj":-0.575,"hist_proj":0.694,"hist_ceiling":9.526},"tony bradley":{"recent_fd_mean":7.72,"recent_fd_std":8.966,"recent_minutes":10.29,"recent_usg":0.1279,"matchup_adj":2.775,"hist_proj":4.485,"hist_ceiling":15.962},"cameron payne":{"recent_fd_mean":13.5,"recent_fd_std":11.73,"recent_minutes":16.395,"recent_usg":0.21533,"matchup_adj":-1.426,"hist_proj":8.988,"hist_ceiling":24.002},"xavier tillman":{"recent_fd_mean":3.61,"recent_fd_std":5.532,"recent_minutes":5.788,"recent_usg":0.1176,"matchup_adj":0.0,"hist_proj":-1.548,"hist_ceiling":5.533},"tyrese haliburton":{"recent_fd_mean":0.0,"recent_fd_std":6.0,"recent_minutes":0.0,"recent_usg":0.22,"matchup_adj":2.315,"hist_proj":17.803,"hist_ceiling":25.483},"d'angelo russell":{"recent_fd_mean":1.44,"recent_fd_std":4.554,"recent_minutes":18.44,"recent_usg":0.1998,"matchup_adj":1.554,"hist_proj":8.348,"hist_ceiling":14.177},"kyshawn george":{"recent_fd_mean":9.87,"recent_fd_std":10.966,"recent_minutes":18.756,"recent_usg":0.2355,"matchup_adj":1.554,"hist_proj":17.464,"hist_ceiling":31.501},"dillon jones":{"recent_fd_mean":0.27,"recent_fd_std":0.854,"recent_minutes":2.845,"recent_usg":0.126,"matchup_adj":0.354,"hist_proj":-2.466,"hist_ceiling":-1.373},"olivier sarr":{"recent_fd_mean":4.42,"recent_fd_std":7.647,"recent_minutes":7.5,"recent_usg":0.14125,"matchup_adj":0.331,"hist_proj":0.378,"hist_ceiling":10.166},"gary harris":{"recent_fd_mean":5.55,"recent_fd_std":6.632,"recent_minutes":11.071,"recent_usg":0.0628,"matchup_adj":-0.058,"hist_proj":-0.678,"hist_ceiling":7.811},"pacome dadiet":{"recent_fd_mean":1.06,"recent_fd_std":2.079,"recent_minutes":4.37,"recent_usg":0.22,"matchup_adj":0.354,"hist_proj":-0.851,"hist_ceiling":1.81},"cam whitmore":{"recent_fd_mean":10.45,"recent_fd_std":11.296,"recent_minutes":15.925,"recent_usg":0.2182,"matchup_adj":1.554,"hist_proj":10.204,"hist_ceiling":24.663},"tidjane salaun":{"recent_fd_mean":5.99,"recent_fd_std":7.215,"recent_minutes":13.73,"recent_usg":0.1425,"matchup_adj":0.0,"hist_proj":4.044,"hist_ceiling":13.279},"johnny furphy":{"recent_fd_mean":15.36,"recent_fd_std":10.115,"recent_minutes":19.712,"recent_usg":0.1211,"matchup_adj":2.315,"hist_proj":10.355,"hist_ceiling":23.302}};
+const state = {fdRaw:[], projRaw:[], actualRaw:[], players:[], basePlayers:[], customProjMap:new Map(), actualMap:new Map(), lineups:[], originalLineups:[], csvDownload:'', gameLocks:new Set()};
+const SLOT_ORDER = ['PG','PG','SG','SG','SF','SF','PF','PF','C'];
+const CAP = 60000, MAX_TEAM = 4;
 
-        <div class="field">
-          <label>Lineups to Generate</label>
-          <input class="input" type="number" id="lineupCountInput" min="1" max="150" value="20" />
-        </div>
+function normName(s){return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w\s']/g,' ').replace(/\b(jr|sr|ii|iii)\b/g,' ').replace(/\s+/g,' ').trim();}
+function csvToRows(text){const rows=[]; let row=[], cell='', inQ=false; for(let i=0;i<text.length;i++){const c=text[i], n=text[i+1]; if(c=='"'){if(inQ && n=='"'){cell+='"'; i++;} else inQ=!inQ;} else if(c==','&&!inQ){row.push(cell); cell='';} else if((c=='\n'||c=='\r')&&!inQ){if(c=='\r'&&n=='\n') i++; row.push(cell); if(row.some(v=>v!=='')) rows.push(row); row=[]; cell='';} else cell+=c;} if(cell.length||row.length){row.push(cell); if(row.some(v=>v!=='')) rows.push(row);} return rows;}
+function rowsToObjects(rows){const h=rows[0]||[]; return rows.slice(1).map(r=>{const o={}; h.forEach((x,i)=>o[x]=r[i]??''); return o;});}
+function parseFile(file){return file.text().then(t=>rowsToObjects(csvToRows(t)));}
+function updateStatus(msg){document.getElementById('statusBox').textContent=msg;}
+function setSummary(msg){document.getElementById('summaryBox').textContent=msg;}
+function setOptimizerState(msg){document.getElementById('optimizerState').textContent=msg;}
+function mean(arr){let s=0; for(let i=0;i<arr.length;i++) s+=arr[i]; return s/arr.length;}
+function percentile(arr,p){const c=Array.from(arr).sort((a,b)=>a-b); return c[Math.floor((p/100)*(c.length-1))];}
+function gaussian(){let u=0,v=0; while(u===0) u=Math.random(); while(v===0) v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
 
-        <div class="template-box" style="margin-bottom:14px;">
-          <div class="status-label">Slate Player CSV</div>
-          <p class="tiny muted">Upload the actual DK or FD salary export here. This file feeds the player pool and replaces the demo players inside the optimizer.</p>
-          <input type="file" id="slatePlayerCsv" accept=".csv" />
-          <div class="template-meta">
-            <span id="slatePlayerStatus">No slate player CSV loaded</span>
-            <span id="slatePlayerRows">Player rows: 0</span>
-          </div>
-          <div class="helper" id="slatePlayerParseStatus" style="margin-top:8px; font-size:12px;">Slate parser: no file loaded</div>
-          <div class="helper" id="slatePlayerMappingStatus" style="margin-top:6px; font-size:12px;">Slate mapping: waiting for salary export</div>
-        </div>
+function splitSlots(rp){return (rp||'').split('/');}
+function pairCorrelation(a,b){
+  let corr = 0;
+  const sameTeam = a.team === b.team;
+  const sameGame = a.game && a.game === b.game;
+  const posA = splitSlots(a.rosterPosition), posB = splitSlots(b.rosterPosition);
+  const hasPG = posA.includes('PG') || posB.includes('PG');
+  const hasC = posA.includes('C') || posB.includes('C');
+  const bothBig = (posA.includes('PF')||posA.includes('C')) && (posB.includes('PF')||posB.includes('C'));
+  const samePrimaryPos = posA[0] === posB[0];
 
-        <div class="template-box">
-          <div class="status-label">Lineup Upload Template</div>
-          <p class="tiny muted">Upload your DraftKings or FanDuel entry template CSV here. This file controls export rows and lineup count. It does not replace the player pool by itself.</p>
-          <input type="file" id="lineupTemplateCsv" accept=".csv" />
-          <div class="template-meta">
-            <span id="lineupTemplateStatus">No lineup template loaded</span>
-            <span id="lineupTemplateRows">Template rows: 0</span>
-          </div>
-          <div class="helper" id="templateMappingStatus" style="margin-top:8px; font-size:12px;">Template mapping: waiting for CSV</div>
-          <div class="helper" id="templateParseStatus" style="margin-top:6px; font-size:12px;">Template parser: no file loaded</div>
-        </div>
+  if(sameGame) corr += 0.03;
+  if(sameTeam) corr += 0.02;
+  if(sameTeam && hasPG && !samePrimaryPos) corr += 0.05;        // assist link
+  if(sameTeam && hasPG && hasC) corr += 0.03;                   // PnR / assist big
+  if(sameTeam && bothBig) corr -= 0.04;                         // rebound cannibalization
+  if(sameTeam && samePrimaryPos) corr -= 0.06;                  // usage overlap
+  if(!sameTeam && sameGame) corr += 0.02;                       // bring-back / game environment
+  if(!sameTeam && sameGame && hasPG && hasC) corr += 0.01;
+  if(a.team === b.team && a.ownership > 25 && b.ownership > 25) corr -= 0.03; // chalk condensation
+  return Math.max(-0.12, Math.min(0.14, corr));
+}
+function lineupCorrelation(players){
+  let t = 0;
+  for(let i=0;i<players.length;i++){
+    for(let j=i+1;j<players.length;j++) t += pairCorrelation(players[i], players[j]);
+  }
+  return t;
+}
+function normalCDF(x, mean, sd){const z=(x-mean)/(Math.sqrt(2)*sd); return 0.5*(1+erf(z));}
+function erf(x){const sign = x<0?-1:1; x=Math.abs(x); const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911; const t=1/(1+p*x); const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x)); return sign*y;}
 
-        <div class="field">
-          <label>Simulation Count</label>
-          <div class="range-row">
-            <input type="range" id="simCountRange" min="1000" max="20000" step="1000" value="10000" />
-            <span class="input-readonly" id="simCountDisplay">10,000</span>
-          </div>
-        </div>
 
-        <div class="field">
-          <label>Projection Blend</label>
-          <div class="chip-row" id="projectionBlendInfo">
-            <div class="chip active">Season 40%</div>
-            <div class="chip active">L10 35%</div>
-            <div class="chip active">L3/L5 25%</div>
-          </div>
-        </div>
+function inferActualRow(row){
+  const keys = Object.keys(row);
+  const nameKey = keys.find(k => /player|name/i.test(k));
+  const scoreKey = keys.find(k => /actual|fpts|fantasy|score/i.test(k));
+  if(!nameKey || !scoreKey) return null;
+  const score = Number(row[scoreKey]);
+  if(Number.isNaN(score)) return null;
+  return {name: row[nameKey], actual: score};
+}
+function inferProjectionRow(row){
+  const keys=Object.keys(row);
+  const nameKey=keys.find(k=>/player|name/i.test(k));
+  const projKey=keys.find(k=>/projection|proj|fpts|fantasy/i.test(k));
+  const ceilKey=keys.find(k=>/ceiling/i.test(k));
+  const ownKey=keys.find(k=>/ownership|own/i.test(k));
+  if(!nameKey || !projKey) return null;
+  return {name:row[nameKey], projection:Number(row[projKey])||null, ceiling:Number(row[ceilKey])||null, ownership:Number(row[ownKey])||null};
+}
 
-        <div class="field">
-          <label>Leverage Bias</label>
-          <div class="chip-row" id="leverageChips">
-            <div class="chip" data-group="leverage" data-value="neutral">Neutral</div>
-            <div class="chip active" data-group="leverage" data-value="tournament">Tournament</div>
-            <div class="chip" data-group="leverage" data-value="fade">Chalk Fade</div>
-          </div>
-        </div>
+function eligible(rp, slot){
+  const m={PG:['PG','PG/SG'],SG:['SG','PG/SG','SG/SF'],SF:['SF','SG/SF','SF/PF'],PF:['PF','SF/PF','PF/C'],C:['C','PF/C']};
+  return m[slot].includes(rp);
+}
 
-        <div class="field">
-          <label>Fragility Cap</label>
-          <div class="range-row">
-            <input type="range" id="fragilityRange" min="0" max="100" step="5" value="55" />
-            <span class="input-readonly" id="fragilityDisplay">Medium</span>
-          </div>
-        </div>
+function estimateOwnership(players){
+  const playable = players.filter(p=>p.playable);
+  const arr = playable.map(p => ((p.proj*0.75)+(p.valueScore*1.25)+(p.injury==='Q'?-2:0))/8);
+  const max = Math.max(...arr);
+  const exps = arr.map(v => Math.exp(v-max));
+  const sum = exps.reduce((a,b)=>a+b,0) || 1;
+  playable.forEach((p,idx)=>{
+    // total player ownership across a DFS slate roughly sums to ~900% for a 9-player lineup
+    p.ownership = Math.min(70, Math.max(0.2, exps[idx]/sum * 900));
+  });
+}
 
-        <div class="field">
-          <label>Exposure Rules</label>
-          <div class="chip-row" id="exposureChips">
-            <div class="chip active">Min 10%</div>
-            <div class="chip active">Max 60%</div>
-            <div class="chip">Team Cap 3</div>
-          </div>
-        </div>
+function enrichLeverage(players){
+  players.forEach(p=>{
+    p.targetScore = Math.max(p.proj + p.std*0.7, (p.salary/1000)*5.1);
+    p.hitRate = Math.max(0.001, 1 - normalCDF(p.targetScore, p.proj, p.std)); // chance of beating tournament target
+    p.optimalRate = Math.max(0.001, 1 - normalCDF(p.ceil, p.proj, p.std*1.15)); // crude tail probability
+    p.leverage = (p.hitRate*100) - p.ownership;
+    p.levValue = p.leverage + (p.valueScore*2.2);
+  });
+}
 
-        <div class="field">
-          <label>Stack Logic</label>
-          <div class="chip-row" id="stackChips">
-            <div class="chip" data-group="stack" data-value="game">Game Stack</div>
-            <div class="chip active" data-group="stack" data-value="bringback">Bring-Back</div>
-            <div class="chip" data-group="stack" data-value="lateswap">Late Swap</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Math Targets</label>
-          <div class="chip-row">
-            <div class="chip active">Median</div>
-            <div class="chip active">P90</div>
-            <div class="chip active">Leverage</div>
-            <div class="chip active">Dup Risk</div>
-          </div>
-        </div>
-
-        <div class="actions-stack">
-          <button class="btn primary full" id="generateLineupsBtn">Generate Lineups</button>
-          <button class="btn full" id="resetRulesBtn">Reset Rules</button>
-        </div>
-      </aside>
-
-      <main class="card panel">
-        <div class="panel-head">
-          <div>
-            <h3>Player Pool</h3>
-            <p class="tiny muted">The table below is now wired to the settings panel. Change contest type, leverage bias, site, or slate and the math refreshes immediately.</p>
-          </div>
-          <span class="pill" id="playerPoolTimestamp">Updated just now</span>
-        </div>
-
-        <div class="player-pool-scroll">
-          <table class="player-table">
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th>Team</th>
-              <th>Salary</th>
-              <th>Med</th>
-              <th>Own</th>
-              <th>Lev</th>
-              <th>Frag</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="playerPoolBody"></tbody>
-        </table>
-        </div>
-
-        <div class="section" style="padding:18px 0 0; margin-top:18px;">
-          <h2 style="margin:0 0 6px; font-size:22px;">Math Snapshot</h2>
-          <p id="mathEngineSummary">Weighted median minutes × weighted median FPPM × usage × pace × defense, with ownership-adjusted leverage and percentile scoring.</p>
-          <div class="summary-grid" style="margin-top:14px;">
-            <div class="summary-item"><span class="tiny-head">Projection Mode</span><strong id="summaryProjectionMode">Tournament</strong></div>
-            <div class="summary-item"><span class="tiny-head">Avg Median</span><strong id="summaryAvgMedian">0.0</strong></div>
-            <div class="summary-item"><span class="tiny-head">Avg Leverage</span><strong id="summaryAvgLev">0.0</strong></div>
-            <div class="summary-item"><span class="tiny-head">Avg Ownership</span><strong id="summaryAvgOwn">0%</strong></div>
-          </div>
-        </div>
-      </main>
-
-      <aside class="card panel">
-        <div class="panel-head">
-          <div>
-            <h3>Generated Lineup</h3>
-            <p class="tiny muted">The right rail is now wired to the generate action and updates salary, projection, ownership, leverage, and fragility.</p>
-          </div>
-          <span class="pill" id="lineupPosition">Lineup 1 of 20</span>
-        </div>
-
-        <div class="lineup-card" id="generatedLineup"><div class="muted">No lineup generated yet. Click <strong>Generate Lineups</strong>.</div></div>
-
-        <div class="status-block" style="margin-bottom:12px;">
-          <div class="status-label">Lineup Summary</div>
-          <div class="status-value" id="lineupMedian">0.0 Median</div>
-          <div class="muted" id="lineupSummaryText">P90 0.0 · Leverage 0.0 · Fragility 0.0 · Salary $0 · Avg ownership 0%</div>
-        </div>
-
-        <div class="summary-chips" style="margin-bottom:12px;">
-          <span class="tag good" id="legalityTag">Legal Build</span>
-          <span class="tag warn" id="contestTag">GPP</span>
-          <span class="tag hot" id="siteTag">DK</span>
-        </div>
-
-        <div class="template-box">
-          <div class="status-label">Portfolio Queue</div>
-          <p class="tiny muted">Click any lineup below to inspect it. Export now writes every generated lineup into one CSV file.</p>
-          <div id="portfolioCountText" class="helper">0 lineups generated</div>
-          <div class="portfolio-list" id="portfolioList"></div>
-        </div>
-
-        <div class="actions-stack">
-          <button class="btn primary full" id="exportCsvBtn">Export CSV</button>
-          <button class="btn full" id="generateAnotherBtn">Generate Another</button>
-          <button class="btn full" id="saveBuildBtn">Save Build</button>
-        </div>
-      </aside>
-    </section>
-
-    <div class="footer-note">Focused view: hero, historical intake, build rules, player pool, and generated lineup only.</div>
-  </div>
-
-  
-  <script>
-    const RAW_PLAYERS = [
-      { name:'Luka Doncic', team:'DAL', opp:'CLE', gameId:'CLE@DAL', positions:['PG','SG'], salaryDK:11200, salaryFD:11800, own:0.24,
-        minutes:[37,38,39], fppm:[1.48,1.55,1.51], usg:[35.1,36.8,37.2], usgBase:34.5, paceTeam:99.4, paceOpp:97.2, defrtgOpp:111.2, injury:'' },
-      { name:'Kyrie Irving', team:'DAL', opp:'CLE', gameId:'CLE@DAL', positions:['PG','SG'], salaryDK:8900, salaryFD:9300, own:0.18,
-        minutes:[35,36,37], fppm:[1.16,1.20,1.22], usg:[28.2,29.1,29.8], usgBase:27.8, paceTeam:99.4, paceOpp:97.2, defrtgOpp:111.2, injury:'' },
-      { name:'Jarrett Allen', team:'CLE', opp:'DAL', gameId:'CLE@DAL', positions:['C'], salaryDK:7600, salaryFD:8200, own:0.17,
-        minutes:[31,33,34], fppm:[1.12,1.15,1.10], usg:[21.4,22.0,21.8], usgBase:21.1, paceTeam:97.2, paceOpp:99.4, defrtgOpp:115.8, injury:'' },
-      { name:'Donovan Mitchell', team:'CLE', opp:'DAL', gameId:'CLE@DAL', positions:['PG','SG'], salaryDK:9500, salaryFD:10100, own:0.16,
-        minutes:[34,35,36], fppm:[1.24,1.29,1.27], usg:[31.5,32.0,32.4], usgBase:31.0, paceTeam:97.2, paceOpp:99.4, defrtgOpp:115.8, injury:'Q' },
-
-      { name:'Jalen Brunson', team:'NYK', opp:'IND', gameId:'NYK@IND', positions:['PG'], salaryDK:9300, salaryFD:9800, own:0.19,
-        minutes:[35,36,37], fppm:[1.26,1.34,1.30], usg:[31.8,32.5,33.1], usgBase:31.2, paceTeam:96.8, paceOpp:101.1, defrtgOpp:118.4, injury:'Q' },
-      { name:'Josh Hart', team:'NYK', opp:'IND', gameId:'NYK@IND', positions:['SG','SF'], salaryDK:6500, salaryFD:7100, own:0.14,
-        minutes:[38,39,40], fppm:[0.92,0.95,0.94], usg:[17.2,17.8,18.1], usgBase:17.0, paceTeam:96.8, paceOpp:101.1, defrtgOpp:118.4, injury:'' },
-      { name:'Tyrese Haliburton', team:'IND', opp:'NYK', gameId:'NYK@IND', positions:['PG'], salaryDK:9100, salaryFD:9700, own:0.15,
-        minutes:[32,34,35], fppm:[1.20,1.27,1.24], usg:[25.1,25.9,26.4], usgBase:24.8, paceTeam:101.1, paceOpp:96.8, defrtgOpp:112.9, injury:'' },
-      { name:'Pascal Siakam', team:'IND', opp:'NYK', gameId:'NYK@IND', positions:['PF','C'], salaryDK:8400, salaryFD:8800, own:0.13,
-        minutes:[34,35,36], fppm:[1.08,1.13,1.10], usg:[25.4,26.0,25.8], usgBase:25.0, paceTeam:101.1, paceOpp:96.8, defrtgOpp:112.9, injury:'' },
-
-      { name:'Jaren Jackson Jr.', team:'MEM', opp:'DET', gameId:'MEM@DET', positions:['PF','C'], salaryDK:7800, salaryFD:8500, own:0.13,
-        minutes:[31,33,34], fppm:[1.18,1.24,1.21], usg:[28.0,28.9,29.1], usgBase:27.5, paceTeam:99.1, paceOpp:98.4, defrtgOpp:117.0, injury:'' },
-      { name:'Ja Morant', team:'MEM', opp:'DET', gameId:'MEM@DET', positions:['PG'], salaryDK:9800, salaryFD:10300, own:0.10,
-        minutes:[33,34,35], fppm:[1.28,1.35,1.32], usg:[33.0,34.2,34.6], usgBase:32.7, paceTeam:99.1, paceOpp:98.4, defrtgOpp:117.0, injury:'' },
-      { name:'Cade Cunningham', team:'DET', opp:'MEM', gameId:'MEM@DET', positions:['PG','SG'], salaryDK:8800, salaryFD:9400, own:0.12,
-        minutes:[35,36,37], fppm:[1.14,1.20,1.18], usg:[30.1,30.8,31.0], usgBase:29.7, paceTeam:98.4, paceOpp:99.1, defrtgOpp:113.9, injury:'' },
-      { name:'Jalen Duren', team:'DET', opp:'MEM', gameId:'MEM@DET', positions:['C'], salaryDK:6700, salaryFD:7600, own:0.11,
-        minutes:[28,30,31], fppm:[1.08,1.12,1.10], usg:[18.8,19.1,19.0], usgBase:18.5, paceTeam:98.4, paceOpp:99.1, defrtgOpp:113.9, injury:'' },
-
-      { name:'Brandin Podziemski', team:'GSW', opp:'MIN', gameId:'GSW@MIN', positions:['SG','SF'], salaryDK:5600, salaryFD:6500, own:0.21,
-        minutes:[29,31,32], fppm:[0.94,1.01,0.99], usg:[17.2,18.0,18.3], usgBase:17.0, paceTeam:100.7, paceOpp:97.8, defrtgOpp:109.8, injury:'' },
-      { name:'Stephen Curry', team:'GSW', opp:'MIN', gameId:'GSW@MIN', positions:['PG'], salaryDK:9600, salaryFD:10200, own:0.20,
-        minutes:[33,34,35], fppm:[1.24,1.31,1.28], usg:[31.0,31.8,32.2], usgBase:30.8, paceTeam:100.7, paceOpp:97.8, defrtgOpp:109.8, injury:'' },
-      { name:'Nickeil Alexander-Walker', team:'MIN', opp:'GSW', gameId:'GSW@MIN', positions:['SG','SF'], salaryDK:4500, salaryFD:5400, own:0.11,
-        minutes:[24,27,29], fppm:[0.87,0.94,0.90], usg:[14.1,14.6,14.8], usgBase:14.0, paceTeam:97.8, paceOpp:100.7, defrtgOpp:114.7, injury:'' },
-      { name:'Naz Reid', team:'MIN', opp:'GSW', gameId:'GSW@MIN', positions:['PF','C'], salaryDK:5900, salaryFD:6900, own:0.17,
-        minutes:[24,26,28], fppm:[1.08,1.14,1.12], usg:[24.0,24.8,25.1], usgBase:23.5, paceTeam:97.8, paceOpp:100.7, defrtgOpp:114.7, injury:'' },
-
-      { name:'Derrick White', team:'BOS', opp:'BKN', gameId:'BKN@BOS', positions:['PG','SG'], salaryDK:6900, salaryFD:7600, own:0.16,
-        minutes:[33,35,35], fppm:[1.00,1.07,1.03], usg:[19.1,19.8,20.0], usgBase:18.8, paceTeam:99.9, paceOpp:98.8, defrtgOpp:114.0, injury:'' },
-      { name:'Jayson Tatum', team:'BOS', opp:'BKN', gameId:'BKN@BOS', positions:['SF','PF'], salaryDK:10400, salaryFD:10900, own:0.22,
-        minutes:[36,37,38], fppm:[1.28,1.33,1.31], usg:[31.4,32.0,32.5], usgBase:31.0, paceTeam:99.9, paceOpp:98.8, defrtgOpp:114.0, injury:'' },
-      { name:'Mikal Bridges', team:'BKN', opp:'BOS', gameId:'BKN@BOS', positions:['SF'], salaryDK:7200, salaryFD:7800, own:0.14,
-        minutes:[35,36,37], fppm:[1.00,1.05,1.08], usg:[23.1,23.8,24.2], usgBase:22.8, paceTeam:98.8, paceOpp:99.9, defrtgOpp:111.0, injury:'' },
-      { name:'Cam Thomas', team:'BKN', opp:'BOS', gameId:'BKN@BOS', positions:['SG'], salaryDK:6300, salaryFD:7000, own:0.09,
-        minutes:[29,31,33], fppm:[0.98,1.04,1.06], usg:[28.2,29.0,29.8], usgBase:27.9, paceTeam:98.8, paceOpp:99.9, defrtgOpp:111.0, injury:'' }
-    ].map((player, idx) => ({
-      ...player,
-      dkId: player.dkId || String(100000 + idx),
-      fdId: player.fdId || String(200000 + idx)
-    }));
-
-    const LEAGUE_PACE = 99.5;
-    const LEAGUE_DEFRTG = 114.5;
-    const EPS = 1e-6;
-
-    const SITE_CONFIG = {
-      DK: { cap: 50000, slots: ['PG','SG','SF','PF','C','G','F','UTIL'] },
-      FD: { cap: 60000, slots: ['PG','PG','SG','SG','SF','SF','PF','PF','C'] }
+function buildPlayers(){
+  const projMap = state.customProjMap;
+  const players = (state.fdRaw||[]).map((r, idx) => {
+    const name = r['Nickname'] || `${r['First Name']||''} ${r['Last Name']||''}`.trim();
+    const norm = normName(name);
+    const hist = historicalModel[norm] || {};
+    const custom = projMap.get(norm) || {};
+    const salary = Number(r['Salary'] || 0);
+    const fppg = Number(r['FPPG'] || 0);
+    let proj = Number(custom.projection ?? hist.hist_proj ?? fppg);
+    const std = Number(hist.recent_fd_std ?? Math.max(6, proj * 0.28));
+    const ceil = Number(custom.ceiling ?? hist.hist_ceiling ?? (proj + 1.28*std));
+    const ownership = Number(custom.ownership ?? 0);
+    const injury = r['Injury Indicator'] || '';
+    if(injury==='Q') proj -= 2.5;
+    if(injury==='P') proj -= 0.5;
+    const playable = !['O','D'].includes(injury) && salary > 0 && proj > 0;
+    const valueScore = proj / Math.max(1, salary/1000);
+    return {
+      id:r['Id']||String(idx), name, norm,
+      position:r['Position']||'', rosterPosition:r['Roster Position']||'',
+      salary, proj, ceil, std, ownership, fppg,
+      team:r['Team']||'', opp:r['Opponent']||'', game:r['Game']||'', injury, playable, valueScore,
+      recentMean:Number(hist.recent_fd_mean ?? fppg*0.95),
+      recentMinutes:Number(hist.recent_minutes ?? 26),
+      recentUsage:Number(hist.recent_usg ?? 0.22),
+      matchupAdj:Number(hist.matchup_adj ?? 0)
     };
+  }).filter(p=>p.playable);
+  if(!players.some(p=>p.ownership>0)) estimateOwnership(players);
+  enrichLeverage(players);
+  state.players = players;
+  state.basePlayers = JSON.parse(JSON.stringify(players));
+  document.getElementById('loadedPlayers').textContent = String(players.length);
+  renderGameLocks();
+  renderPlayersTable();
+}
 
-    const state = {
-      site: 'DK',
-      contest: 'GPP',
-      leverage: 'tournament',
-      stack: 'bringback',
-      slate: 'main',
-      lineupCount: 20,
-      simCount: 10000,
-      fragilityCap: 55,
-      currentLineupIndex: 1,
-      players: [],
-      generatedPortfolio: [],
-      lastGeneratedLineup: [],
-      uploads: {
-        historicalGameLogs: null,
-        ownershipHistory: null,
-        contestResults: null,
-        injuryHistory: null,
-        slatePlayerCsv: null,
-        lineupTemplate: null
+function exposurePenalty(player, exposures, targetCount, maxExpPct){
+  const used = exposures[player.id] || 0;
+  const cap = Math.floor(targetCount * maxExpPct / 100);
+  if(used >= cap) return -999;
+  return -used * 0.18;
+}
+
+function lineupUniqueEnough(lineup, lineups, minUnique){
+  for(const l of lineups){
+    const ids = new Set(lineup.players.map(p=>p.id)); let overlap=0;
+    for(const p of l.players) if(ids.has(p.id)) overlap++;
+    if((9 - overlap) < minUnique) return false;
+  }
+  return true;
+}
+
+function makeLineup(adjustedMap, exposures, lineupTarget, maxExpPct, minSalary, leverageWeight, dupPenalty){
+  const used = new Set(), teamCounts = {}, players=[]; let salary=0, proj=0, lev=0, own=0;
+  for(let i=0;i<SLOT_ORDER.length;i++){
+    const slot = SLOT_ORDER[i];
+    let best=null, bestScore=-1e9;
+    for(const p of state.players){
+      if(used.has(p.id)) continue;
+      if(!eligible(p.rosterPosition, slot)) continue;
+      if((teamCounts[p.team]||0) >= MAX_TEAM) continue;
+      if(salary + p.salary > CAP) continue;
+      const remain = SLOT_ORDER.length - (i+1);
+      if(salary + p.salary + remain * 3500 > CAP) continue;
+      const expAdj = exposurePenalty(p, exposures, lineupTarget, maxExpPct);
+      if(expAdj < -900) continue;
+      const ownPenalty = (p.ownership / 100) * dupPenalty * 2.0;
+      const levBoost = (p.leverage / 10) * leverageWeight;
+      const corrBoost = players.reduce((t, existing) => t + pairCorrelation(existing, p), 0) * 4.5;
+      const score = (adjustedMap[p.id] ?? p.proj) + levBoost - ownPenalty + expAdj + corrBoost;
+      if(score > bestScore){best=p; bestScore=score;}
+    }
+    if(!best) return null;
+    players.push({slot, ...best});
+    used.add(best.id); salary += best.salary; proj += best.proj; lev += best.leverage; own += best.ownership;
+    teamCounts[best.team] = (teamCounts[best.team] || 0) + 1;
+  }
+  if(salary < minSalary) return null;
+  const lineupProductOwn = players.reduce((acc,p)=>acc * Math.max(0.001, p.ownership/100), 1);
+  const dupScore = -Math.log(lineupProductOwn);
+  const corrScore = lineupCorrelation(players);
+  const tournScore = proj + (lev/10)*leverageWeight + dupScore*dupPenalty - own*0.01*dupPenalty + corrScore*8;
+  return {players, salary, proj, avgOwn:own/9, totalOwn:own, leverage:lev, dupScore, corrScore, tournScore, key:[...used].sort().join('|')};
+}
+
+function simulatePortfolio(lineups, simCount){
+  const uniq = new Map(), gameKeys = new Map(), teamKeys = new Map();
+  lineups.forEach(l=>l.players.forEach(p=>{uniq.set(p.id,p); gameKeys.set(p.game,true); teamKeys.set(p.team,true);}));
+  const games = [...gameKeys.keys()], teams = [...teamKeys.keys()];
+  const playerDraws = new Map();
+
+  // Correlated player outcomes: player-specific + team factor + game environment factor
+  uniq.forEach((p,id)=>{
+    const arr = new Float32Array(simCount);
+    const teamWeight = 0.18;
+    const gameWeight = 0.14;
+    const indivWeight = Math.sqrt(Math.max(0.01, 1 - teamWeight*teamWeight - gameWeight*gameWeight));
+    for(let i=0;i<simCount;i++){
+      if(!playerDraws.has('__game__'+p.game)) playerDraws.set('__game__'+p.game, new Float32Array(simCount));
+      if(!playerDraws.has('__team__'+p.team)) playerDraws.set('__team__'+p.team, new Float32Array(simCount));
+    }
+    playerDraws.set(id, arr);
+  });
+
+  // pre-generate shared factors
+  const shared = {};
+  games.forEach(g=>{ const arr = new Float32Array(simCount); for(let i=0;i<simCount;i++) arr[i]=gaussian(); shared['game_'+g]=arr; });
+  teams.forEach(t=>{ const arr = new Float32Array(simCount); for(let i=0;i<simCount;i++) arr[i]=gaussian(); shared['team_'+t]=arr; });
+
+  uniq.forEach((p,id)=>{
+    const arr = playerDraws.get(id);
+    const g = shared['game_'+p.game];
+    const t = shared['team_'+p.team];
+    for(let i=0;i<simCount;i++){
+      const x = indivWeight*gaussian() + 0.18*t[i] + 0.14*g[i];
+      arr[i] = Math.max(0, p.proj + p.std * x);
+    }
+  });
+
+  lineups.forEach(l=>{
+    const totals = new Float32Array(simCount);
+    for(const p of l.players){
+      const arr = playerDraws.get(p.id);
+      for(let i=0;i<simCount;i++) totals[i] += arr[i];
+    }
+    l.totals = totals;
+    l.simMean = mean(totals);
+    l.p90 = percentile(totals, 90);
+  });
+
+  const wins = new Array(lineups.length).fill(0);
+  for(let s=0;s<simCount;s++){
+    const scores = lineups.map((l,idx)=>({idx, score:l.totals[s] + (l.leverage*0.03) + (l.dupScore*0.25) + (l.corrScore*1.75)})).sort((a,b)=>b.score-a.score);
+    const topN = Math.min(10, scores.length);
+    for(let i=0;i<topN;i++) wins[scores[i].idx]++;
+  }
+  lineups.forEach((l,idx)=>l.top10Rate = wins[idx]/simCount);
+}
+
+function buildPortfolio(){
+  const lineupTarget = Math.max(1, Math.min(150, Number(document.getElementById('lineupCount').value)||20));
+  const simCount = Math.max(1000, Number(document.getElementById('simCount').value)||20000);
+  const minUnique = Math.max(1, Number(document.getElementById('uniqueness').value)||2);
+  const maxExpPct = Math.max(1, Number(document.getElementById('maxExposure').value)||60);
+  const randomness = (Number(document.getElementById('randomness').value)||18) / 100;
+  const minSalary = Number(document.getElementById('minSalary').value)||59000;
+  const leverageWeight = Number(document.getElementById('leverageWeight').value)||2.0;
+  const dupPenalty = Number(document.getElementById('dupPenalty').value)||1.4;
+
+  const exposures = {}; const lineups=[]; const seen=new Set();
+  const attemptsPerLineup = lineupTarget > 75 ? 160 : 260;
+
+  for(let n=0;n<lineupTarget;n++){
+    let best = null;
+    for(let k=0;k<attemptsPerLineup;k++){
+      const adjusted = {};
+      for(const p of state.players){
+        adjusted[p.id] = p.proj + gaussian() * (p.std * randomness);
       }
-    };
-
-    function weightedMedian(values, weights) {
-      const pairs = values.map((value, i) => ({ value: Number(value), weight: Number(weights[i] ?? 0) }))
-        .filter(pair => Number.isFinite(pair.value) && Number.isFinite(pair.weight) && pair.weight >= 0)
-        .sort((a, b) => a.value - b.value);
-      if (!pairs.length) return 0;
-      const totalWeight = pairs.reduce((sum, pair) => sum + pair.weight, 0) || pairs.length;
-      let cumulative = 0;
-      for (const pair of pairs) {
-        cumulative += pair.weight || 1;
-        if (cumulative >= totalWeight / 2) return pair.value;
-      }
-      return pairs[pairs.length - 1].value;
+      const lineup = makeLineup(adjusted, exposures, lineupTarget, maxExpPct, minSalary, leverageWeight, dupPenalty);
+      if(!lineup) continue;
+      if(seen.has(lineup.key)) continue;
+      if(!lineupUniqueEnough(lineup, lineups, minUnique)) continue;
+      if(!best || lineup.tournScore > best.tournScore) best = lineup;
     }
+    if(!best) break;
+    lineups.push(best); seen.add(best.key); best.players.forEach(p=>exposures[p.id]=(exposures[p.id]||0)+1);
+  }
+  if(!lineups.length) throw new Error('No legal lineups were generated. Lower min salary, lower uniqueness, or raise max exposure.');
+  simulatePortfolio(lineups, simCount);
+  lineups.sort((a,b)=>(b.top10Rate-a.top10Rate)||(b.tournScore-a.tournScore)||(b.simMean-a.simMean));
+  state.lineups = lineups;
+  state.csvDownload = buildLineupCsv(lineups);
+  renderLineups(lineups);
+  renderExposure(lineups);
+  setSummary(
+    `Generated ${lineups.length} lineups\n` +
+    `Sim count: ${simCount.toLocaleString()}\n` +
+    `Top lineup proj: ${lineups[0].proj.toFixed(1)}\n` +
+    `Top lineup top-10 rate: ${(lineups[0].top10Rate*100).toFixed(1)}%\n` +
+    `Top lineup avg ownership: ${lineups[0].avgOwn.toFixed(1)}%\n` +
+    `Top lineup leverage score: ${lineups[0].leverage.toFixed(1)}\nTop lineup correlation score: ${lineups[0].corrScore.toFixed(2)}\nHistorical model active: yes\nCorrelation model active: yes`
+  );
+}
 
-    function median(values) {
-      const sorted = values.filter(Number.isFinite).slice().sort((a, b) => a - b);
-      if (!sorted.length) return 0;
-      const mid = Math.floor(sorted.length / 2);
-      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-    }
+function buildLineupCsv(lineups){
+  const header=['Lineup','PG','PG','SG','SG','SF','SF','PF','PF','C','Salary','Projection','SimMean','Top10Rate','AvgOwnership','Leverage','DupScore'];
+  const lines=[header.join(',')];
+  lineups.forEach((l,idx)=>{
+    lines.push([idx+1,...l.players.map(p=>`"${p.name}"`),l.salary,l.proj.toFixed(2),l.simMean.toFixed(2),(l.top10Rate*100).toFixed(2),l.avgOwn.toFixed(2),l.leverage.toFixed(2),l.dupScore.toFixed(2)].join(','));
+  });
+  return lines.join('\n');
+}
 
-    function mad(values) {
-      const m = median(values);
-      return median(values.map(v => Math.abs(v - m)));
-    }
-
-    function quantile(sortedValues, q) {
-      if (!sortedValues.length) return 0;
-      const arr = sortedValues;
-      const pos = (arr.length - 1) * q;
-      const base = Math.floor(pos);
-      const rest = pos - base;
-      if (arr[base + 1] !== undefined) return arr[base] + rest * (arr[base + 1] - arr[base]);
-      return arr[base];
-    }
-
-    function randn() {
-      let u = 0, v = 0;
-      while (u === 0) u = Math.random();
-      while (v === 0) v = Math.random();
-      return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-    }
-
-    function clamp(value, min, max) {
-      return Math.max(min, Math.min(max, value));
-    }
-
-    function formatMoney(value) { return '$' + Math.round(value).toLocaleString(); }
-    function formatPct(value) { return (value * 100).toFixed(1).replace('.0', '') + '%'; }
-    function formatNumber(value) { return Number(value).toLocaleString(); }
-    function fragilityLabel(score) { return score < 0.28 ? 'Low' : score < 0.5 ? 'Med' : 'High'; }
-    function fragilityDisplayLabel(percent) { return percent < 35 ? 'Low' : percent < 70 ? 'Medium' : 'High'; }
-
-    function getSlateConfig(slate) {
-      if (slate === 'turbo') return { games: 3, paceBoost: 1.03, defenseBoost: 1.01, label: 'Turbo Slate · 3 Games' };
-      if (slate === 'showdown') return { games: 1, paceBoost: 1.05, defenseBoost: 1.02, label: 'Showdown · 1 Game' };
-      return { games: 8, paceBoost: 1.00, defenseBoost: 1.00, label: 'Main Slate · 8 Games' };
-    }
-
-    function eligibilityForSlot(player, slot) {
-      if (slot === 'UTIL') return true;
-      if (slot === 'G') return player.positions.includes('PG') || player.positions.includes('SG');
-      if (slot === 'F') return player.positions.includes('SF') || player.positions.includes('PF');
-      return player.positions.includes(slot);
-    }
-
-    function contestProfile() {
-      const isCash = state.contest === 'Cash';
-      const isSE = state.contest === 'SE';
-      return {
-        alphaUsage: isCash ? 0.40 : 0.50,
-        betaPace: isCash ? 0.35 : 0.50,
-        betaDef: isCash ? 0.25 : 0.40,
-        salaryBoomK: isCash ? 4.6 : isSE ? 5.0 : 5.3,
-        objectiveWeights: isCash ? { p50: 0.68, p90: 0.10, lev: 0.05, frag: 0.17 } : isSE ? { p50: 0.40, p90: 0.33, lev: 0.16, frag: 0.11 } : { p50: 0.30, p90: 0.42, lev: 0.20, frag: 0.08 }
-      };
-    }
-
-    function effectiveSimCount() {
-      const poolSize = state.players.length || state.uploads.slatePlayerCsv?.players?.length || RAW_PLAYERS.length;
-      if (poolSize > 250) return Math.min(state.simCount, 120);
-      if (poolSize > 180) return Math.min(state.simCount, 150);
-      if (poolSize > 120) return Math.min(state.simCount, 200);
-      if (poolSize > 80) return Math.min(state.simCount, 250);
-      return Math.min(state.simCount, 300);
-    }
-
-    function getRowValue(row, keys) {
-      for (const key of keys) {
-        if (row[key] != null && String(row[key]).trim() !== '') return String(row[key]).trim();
-      }
-      return '';
-    }
-
-    function parsePositions(raw) {
-      const txt = String(raw || '').toUpperCase();
-      const found = ['PG','SG','SF','PF','C'].filter(pos => txt.includes(pos));
-      return found.length ? found : ['UTIL'];
-    }
-
-    function canonicalizeSlateRows(rows, siteHint) {
-      const players = [];
-      let site = siteHint || state.site;
-      for (const row of rows) {
-        const keys = Object.keys(row);
-        const joined = keys.join('|');
-        if (!siteHint) {
-          if (joined.includes('teamabbrev') || joined.includes('gameinfo') || joined.includes('avgpointspergame')) site = 'DK';
-          if (joined.includes('fppg') || joined.includes('nickname') || joined.includes('injuryindicator')) site = 'FD';
-        }
-        const name = getRowValue(row, ['name','nickname','player','playername']);
-        const salary = Number(getRowValue(row, ['salary','salarydk','salaryfd']));
-        const posRaw = getRowValue(row, ['position','rosterposition','positions']);
-        if (!name || !Number.isFinite(salary) || salary <= 0 || !posRaw) continue;
-        const team = getRowValue(row, ['teamabbrev','team','teamaabbr']) || 'TEAM';
-        const opp = getRowValue(row, ['opp','opponent','oppteam']) || (getRowValue(row, ['gameinfo','game']) || '').split('@').find(x => x && x !== team) || 'OPP';
-        const gameInfo = getRowValue(row, ['gameinfo','game']) || `${team}@${opp}`;
-        const siteAvg = Number(getRowValue(row, ['avgpointspergame','fppg','sitefppg','avgfp']));
-        const own = clamp(Number(getRowValue(row, ['own_proj','ownership','projectedownership','projected_ownership','own'])) > 1 ? Number(getRowValue(row, ['own_proj','ownership','projectedownership','projected_ownership','own']))/100 : Number(getRowValue(row, ['own_proj','ownership','projectedownership','projected_ownership','own'])) || 0.12, 0.01, 0.85);
-        const baseline = Number.isFinite(siteAvg) && siteAvg > 0 ? siteAvg : Math.max(10, salary / (site === 'FD' ? 175 : 185));
-        const minutesBase = clamp(18 + baseline * 0.42, 16, 38);
-        const fppmBase = clamp(baseline / Math.max(minutesBase, 1), 0.65, 1.9);
-        const usageBase = clamp(14 + fppmBase * 9, 12, 36);
-        const id = getRowValue(row, ['id','playerid','playeridfd','playeriddk']) || String(300000 + players.length);
-        players.push({
-          name,
-          team,
-          opp,
-          gameId: gameInfo.replace(/\s+/g, ''),
-          positions: parsePositions(posRaw),
-          salaryDK: site === 'DK' ? salary : Math.round(salary * 0.9),
-          salaryFD: site === 'FD' ? salary : Math.round(salary * 1.1),
-          own,
-          minutes: [minutesBase - 2, minutesBase, minutesBase + 1],
-          fppm: [Math.max(0.5, fppmBase - 0.06), fppmBase, fppmBase + 0.05],
-          usg: [Math.max(10, usageBase - 1.5), usageBase, usageBase + 1.2],
-          usgBase: usageBase,
-          paceTeam: LEAGUE_PACE + ((players.length % 7) - 3) * 0.7,
-          paceOpp: LEAGUE_PACE + ((players.length % 5) - 2) * 0.8,
-          defrtgOpp: LEAGUE_DEFRTG + ((players.length % 9) - 4) * 1.3,
-          injury: getRowValue(row, ['injurystatus','injuryindicator','injury_status','status']),
-          dkId: site === 'DK' ? id : String(100000 + players.length),
-          fdId: site === 'FD' ? id : String(200000 + players.length)
-        });
-      }
-      return { players, site };
-    }
-
-    function applyUploadedData(player) {
-      const out = { ...player };
-      const ownFile = state.uploads.ownershipHistory;
-      if (ownFile && ownFile.byName.has(player.name.toLowerCase())) {
-        const row = ownFile.byName.get(player.name.toLowerCase());
-        const ownCol = ['own_proj','ownership','projected_ownership','own','pct_drafted'].find(k => row[k] != null);
-        if (ownCol) out.own = clamp(Number(row[ownCol]) > 1 ? Number(row[ownCol]) / 100 : Number(row[ownCol]), 0.01, 0.85);
-      }
-      const histFile = state.uploads.historicalGameLogs;
-      if (histFile && histFile.grouped.has(player.name.toLowerCase())) {
-        const rows = histFile.grouped.get(player.name.toLowerCase()).slice(-20);
-        const mins = rows.map(r => Number(r.minutes ?? r.min ?? r.mins)).filter(Number.isFinite);
-        const fps = rows.map(r => Number(r.fppm ?? r.fp_per_min ?? r.fantasy_points_per_min)).filter(Number.isFinite);
-        const usgs = rows.map(r => Number(r.usg_pct ?? r.usg ?? r.usage)).filter(Number.isFinite);
-        if (mins.length >= 3) out.minutes = [median(mins), median(mins.slice(-10)), median(mins.slice(-3))];
-        if (fps.length >= 3) out.fppm = [median(fps), median(fps.slice(-10)), median(fps.slice(-5))];
-        if (usgs.length >= 3) {
-          out.usg = [median(usgs), median(usgs.slice(-10)), median(usgs.slice(-3))];
-          out.usgBase = median(usgs);
-        }
-      }
-      const injuryFile = state.uploads.injuryHistory;
-      if (injuryFile && injuryFile.byName.has(player.name.toLowerCase())) {
-        const row = injuryFile.byName.get(player.name.toLowerCase());
-        const status = row.status || row.injury_status || row.notes_status || row.injury;
-        if (status) out.injury = String(status);
-      }
-      return out;
-    }
-
-    function simulatePlayerDistribution(player, projection, sigma) {
-      return [];
-    }
-
-    function computePlayerMetrics(rawPlayer) {
-      const player = applyUploadedData(rawPlayer);
-      const slateCfg = getSlateConfig(state.slate);
-      const profile = contestProfile();
-      const minuteWeights = [0.40, 0.35, 0.25];
-      const fppmWeights = [0.45, 0.35, 0.20];
-      const usgWeights = [0.45, 0.35, 0.20];
-
-      const minMed = weightedMedian(player.minutes, minuteWeights);
-      const fppmMed = weightedMedian(player.fppm, fppmWeights);
-      const usgMed = weightedMedian(player.usg, usgWeights);
-
-      const aUsage = 1 + profile.alphaUsage * ((usgMed - player.usgBase) / Math.max(player.usgBase, 1));
-      const paceGame = ((player.paceTeam + player.paceOpp) / 2);
-      const aPace = Math.pow(Math.max(0.94, paceGame / LEAGUE_PACE), profile.betaPace) * slateCfg.paceBoost;
-      const aDef = Math.pow(Math.max(0.94, player.defrtgOpp / LEAGUE_DEFRTG), profile.betaDef) * slateCfg.defenseBoost;
-
-      const siteSalary = state.site === 'FD' ? player.salaryFD : player.salaryDK;
-      const injuryPenalty = player.injury && String(player.injury).toUpperCase().includes('Q') ? 0.965 : 1;
-      const fragilityPenalty = 1 - (player.minutes.length ? player.minutes.length / 1000 : 0) - (state.fragilityCap / 100) * ((player.own < 0.09 ? 0.02 : 0) + 0.16 * clamp((0.65 - Math.min(...player.fppm)) / 2, 0, 1));
-
-      const fpMed = minMed * fppmMed * aUsage * aPace * aDef * injuryPenalty * fragilityPenalty;
-      const sigmaMin = Math.max(1.2, 1.4826 * mad(player.minutes));
-      const sigmaFppm = Math.max(0.035, 1.4826 * mad(player.fppm));
-      const sigmaFp = Math.max(2.0, Math.sqrt(Math.pow(sigmaMin * fppmMed, 2) + Math.pow(minMed * sigmaFppm, 2)));
-
-      const floor = Math.max(0, fpMed - 1.2816 * sigmaFp);
-      const p50 = fpMed;
-      const p75 = fpMed + 0.6745 * sigmaFp;
-      const p90 = fpMed + 1.2816 * sigmaFp;
-      const p95 = fpMed + 1.6449 * sigmaFp;
-
-      const boomThreshold = profile.salaryBoomK * (siteSalary / 1000);
-      const zBoom = (boomThreshold - fpMed) / Math.max(sigmaFp, 1);
-      const boomProb = clamp(1 / (1 + Math.exp(1.35 * zBoom)), 0.01, 0.99);
-      const bustThreshold = Math.max(0, floor * (state.contest === 'Cash' ? 1.02 : 0.96));
-      const zBust = (bustThreshold - fpMed) / Math.max(sigmaFp, 1);
-      const bustProb = clamp(1 / (1 + Math.exp(-1.35 * zBust)), 0.01, 0.99);
-
-      const levBias = state.leverage === 'tournament' ? 1.15 : state.leverage === 'fade' ? 0.95 : 1.00;
-      const adjustedOwn = clamp(player.own * (state.contest === 'Cash' ? 1.08 : 0.98), 0.01, 0.85);
-      const leverage = Math.log((boomProb + 0.01) / (adjustedOwn + 0.01)) * 10 * levBias;
-      const value = fpMed / (siteSalary / 1000);
-      const fragilityScore = clamp(bustProb + (sigmaFp / Math.max(fpMed, 1)) * 0.25, 0.05, 0.95);
-
-      const tagType = leverage > 1.6 ? 'hot' : value > 5.2 ? 'good' : fragilityScore > 0.55 ? 'warn' : 'good';
-      const tagText = leverage > 1.6 ? 'Leverage' : value > 5.2 ? 'Value' : fragilityScore > 0.55 ? 'Fragile' : 'Core';
-
-      const scoreWeights = profile.objectiveWeights;
-      const buildScore = (scoreWeights.p50 * p50) + (scoreWeights.p90 * p90) + (scoreWeights.lev * Math.max(leverage, -3)) - (scoreWeights.frag * fragilityScore * 20);
-
-      return {
-        ...player,
-        salary: siteSalary,
-        minMed, fppmMed, usgMed,
-        median: fpMed,
-        p50, p75, p90, p95,
-        floor, ceiling: p90,
-        boomProb, bustProb,
-        leverage,
-        ownership: adjustedOwn,
-        dupScore: Math.log(adjustedOwn + 1e-3),
-        sigmaFp,
-        value,
-        fragilityScore,
-        fragilityText: fragilityLabel(fragilityScore),
-        tagType,
-        tagText,
-        buildScore,
-        simulations: []
-      };
-    }
-
-    function refreshPlayers() {
-      const sourcePlayers = (state.uploads.slatePlayerCsv?.players?.length ? state.uploads.slatePlayerCsv.players : RAW_PLAYERS);
-      state.players = sourcePlayers.map(computePlayerMetrics).sort((a, b) => b.buildScore - a.buildScore);
-      renderPlayerPool();
-      renderMathSummary();
-      updateStatusBlocks();
-    }
-
-    function renderPlayerPool() {
-      const tbody = document.getElementById('playerPoolBody');
-      tbody.innerHTML = state.players.map(player => `
-        <tr>
-          <td><strong>${player.name}</strong><div class="tiny muted">${player.positions.join(' / ')}</div></td>
-          <td>${player.team}</td>
-          <td>${formatMoney(player.salary)}</td>
-          <td>${player.median.toFixed(1)}</td>
-          <td>${formatPct(player.ownership)}</td>
-          <td>${player.leverage.toFixed(1)}</td>
-          <td>${player.fragilityText}</td>
-          <td><span class="tag ${player.tagType}">${player.tagText}</span></td>
-        </tr>
-      `).join('');
-      document.getElementById('playerPoolTimestamp').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    }
-
-    function renderMathSummary() {
-      const avgMedian = state.players.reduce((sum, p) => sum + p.median, 0) / Math.max(state.players.length, 1);
-      const avgLev = state.players.reduce((sum, p) => sum + p.leverage, 0) / Math.max(state.players.length, 1);
-      const avgOwn = state.players.reduce((sum, p) => sum + p.ownership, 0) / Math.max(state.players.length, 1);
-      document.getElementById('summaryProjectionMode').textContent = state.leverage === 'tournament' ? 'Tournament' : state.leverage === 'fade' ? 'Chalk Fade' : 'Neutral';
-      document.getElementById('summaryAvgMedian').textContent = avgMedian.toFixed(1);
-      document.getElementById('summaryAvgLev').textContent = avgLev.toFixed(1);
-      document.getElementById('summaryAvgOwn').textContent = formatPct(avgOwn);
-      document.getElementById('projectionBlendInfo').textContent = 'Minutes 40/35/25 · FPPM 45/35/20 · USG 45/35/20';
-      document.getElementById('mathEngineSummary').textContent = `${state.site} ${state.contest} build using ${formatNumber(effectiveSimCount())} effective simulations, weighted-median minutes/FPPM, boom-prob leverage, MAD volatility, and ${fragilityDisplayLabel(state.fragilityCap).toLowerCase()} fragility cap.`;
-    }
-
-    function lineupSummary(lineup) {
-      let salary = 0, ownershipSum = 0, leverageSum = 0, fragility = 0, proj = 0, variance = 0;
-      lineup.forEach(({ player }) => {
-        salary += player.salary;
-        ownershipSum += player.ownership;
-        leverageSum += player.leverage;
-        fragility += player.fragilityScore;
-        proj += player.median;
-        variance += Math.pow(player.sigmaFp, 2);
-      });
-      const sigma = Math.sqrt(Math.max(variance, 1));
-      const p50 = proj;
-      const p75 = proj + 0.6745 * sigma;
-      const p90 = proj + 1.2816 * sigma;
-      const p95 = proj + 1.6449 * sigma;
-      return {
-        salary,
-        proj,
-        ownershipAvg: ownershipSum / lineup.length,
-        leverageAvg: leverageSum / lineup.length,
-        fragilityAvg: fragility / lineup.length,
-        dupScore: ownershipSum > 0 ? Math.log(ownershipSum + EPS) : 0,
-        p50, p75, p90, p95,
-        legal: salary <= SITE_CONFIG[state.site].cap,
-        sigma
-      };
-    }
-
-    function generateOneLineup(lineupIndex = 0) {
-      const cfg = SITE_CONFIG[state.site];
-      const maxTeam = state.stack === 'teamstack' ? 4 : 3;
-      const salaryFloor = cfg.cap - (state.site === 'FD' ? 5000 : 3500);
-      const exposureScale = Math.max(1, state.generatedPortfolio.length);
-      const candidates = [...state.players].sort((a, b) => {
-        const penA = (a._usedCount || 0) / exposureScale * 6;
-        const penB = (b._usedCount || 0) / exposureScale * 6;
-        return (b.buildScore - penB + Math.random() * 1.8) - (a.buildScore - penA + Math.random() * 1.8);
-      });
-
-      let best = null;
-      const tries = 90;
-      for (let t = 0; t < tries; t++) {
-        const used = new Set();
-        const teamCounts = new Map();
-        const gameCounts = new Map();
-        const lineup = [];
-        let salary = 0;
-        let failed = false;
-
-        for (let slotIndex = 0; slotIndex < cfg.slots.length; slotIndex++) {
-          const slot = cfg.slots[slotIndex];
-          const remaining = cfg.slots.length - slotIndex - 1;
-          const minFutureSalary = remaining * (state.site === 'FD' ? 3500 : 3000);
-          const eligible = candidates.filter(player => {
-            if (!eligibilityForSlot(player, slot)) return false;
-            if (used.has(player.name)) return false;
-            if (salary + player.salary + minFutureSalary > cfg.cap) return false;
-            const teamCount = teamCounts.get(player.team) || 0;
-            if (teamCount >= maxTeam) return false;
-            if (state.stack === 'bringback' && lineup.length >= 1) {
-              const anchor = lineup[0].player;
-              const sameGameCount = gameCounts.get(anchor.gameId) || 0;
-              if (sameGameCount < 2 && slotIndex <= 3 && player.gameId !== anchor.gameId) return false;
-            }
-            return true;
-          });
-
-          if (!eligible.length) {
-            failed = true;
-            break;
-          }
-
-          const windowSize = Math.min(eligible.length, slotIndex < 2 ? 18 : 26);
-          const choice = eligible[Math.floor(Math.random() * windowSize)];
-          lineup.push({ slot, player: choice });
-          used.add(choice.name);
-          salary += choice.salary;
-          teamCounts.set(choice.team, (teamCounts.get(choice.team) || 0) + 1);
-          gameCounts.set(choice.gameId, (gameCounts.get(choice.gameId) || 0) + 1);
-        }
-
-        if (failed || lineup.length !== cfg.slots.length) continue;
-        const summary = lineupSummary(lineup);
-        if (!summary.legal) continue;
-        if (summary.salary < salaryFloor && t < tries - 10) continue;
-        const objective = summary.p90 + summary.leverageAvg * 5 - summary.fragilityAvg * 14 - Math.abs(cfg.cap - summary.salary) * 0.002;
-        if (!best || objective > best.objective) best = { lineup, summary, objective };
-      }
-      return best;
-    }
-
-    function generatePortfolio() {
-      state.generatedPortfolio = [];
-      const requested = Math.max(1, Math.min(150, state.lineupCount));
-      const seenKeys = new Set();
-      const maxExposure = state.contest === 'Cash' ? 0.88 : state.contest === 'SE' ? 0.55 : 0.72;
-      state.players.forEach(p => { p._usedCount = 0; });
-
-      let attempts = 0;
-      const hardCap = Math.max(400, requested * 8);
-      while (state.generatedPortfolio.length < requested && attempts < hardCap) {
-        attempts += 1;
-        const built = generateOneLineup(state.generatedPortfolio.length);
-        if (!built) continue;
-        const key = built.lineup.map(item => item.player.name).sort().join('|');
-        if (seenKeys.has(key)) continue;
-
-        let violates = false;
-        for (const item of built.lineup) {
-          const nextCount = (item.player._usedCount || 0) + 1;
-          const nextExposure = nextCount / Math.max(1, state.generatedPortfolio.length + 1);
-          if (nextExposure > maxExposure) { violates = true; break; }
-        }
-        if (violates && attempts < hardCap * 0.8) continue;
-
-        seenKeys.add(key);
-        built.lineup.forEach(item => { item.player._usedCount = (item.player._usedCount || 0) + 1; });
-        state.generatedPortfolio.push(built);
-      }
-
-      if (state.generatedPortfolio.length < requested && state.players.length) {
-        const relaxedMaxExposure = 0.95;
-        let backfill = 0;
-        while (state.generatedPortfolio.length < requested && backfill < requested * 4) {
-          backfill += 1;
-          const built = generateOneLineup(state.generatedPortfolio.length);
-          if (!built) continue;
-          const key = built.lineup.map(item => item.player.name).sort().join('|');
-          if (seenKeys.has(key)) continue;
-          let violates = false;
-          for (const item of built.lineup) {
-            const nextCount = (item.player._usedCount || 0) + 1;
-            const nextExposure = nextCount / Math.max(1, state.generatedPortfolio.length + 1);
-            if (nextExposure > relaxedMaxExposure) { violates = true; break; }
-          }
-          if (violates) continue;
-          seenKeys.add(key);
-          built.lineup.forEach(item => { item.player._usedCount = (item.player._usedCount || 0) + 1; });
-          state.generatedPortfolio.push(built);
-        }
-      }
-
-      state.generatedPortfolio.sort((a, b) => b.summary.p90 - a.summary.p90);
-      state.currentLineupIndex = state.generatedPortfolio.length ? 1 : 0;
-      state.lastGeneratedLineup = state.generatedPortfolio[0]?.lineup || [];
-      renderLineup();
-      updateStatusBlocks();
-    }
-
-    function renderLineup() {
-      if (!state.generatedPortfolio.length) {
-        document.getElementById('generatedLineup').innerHTML = `<div class="muted">No lineup generated yet. Click <strong>Generate Lineups</strong>.</div>`;
-        document.getElementById('lineupPosition').textContent = `Lineup 0 of 0`;
-        document.getElementById('lineupMedian').textContent = `0.0 P50`;
-        document.getElementById('lineupSummaryText').textContent = `P75 0.0 · P90 0.0 · P95 0.0 · Leverage 0.0 · Fragility 0.0 · Salary $0 · Avg ownership 0%`;
-        renderPortfolioList();
-        return;
-      }
-      const idx = clamp(state.currentLineupIndex - 1, 0, state.generatedPortfolio.length - 1);
-      const selected = state.generatedPortfolio[idx];
-      state.lastGeneratedLineup = selected.lineup;
-      const container = document.getElementById('generatedLineup');
-      container.innerHTML = selected.lineup.map(item => `
-        <div class="lineup-row"><span>${item.slot} · ${item.player.name}</span><strong>${item.player.median.toFixed(1)}</strong></div>
-      `).join('');
-      document.getElementById('lineupMedian').textContent = `${selected.summary.p50.toFixed(1)} P50`;
-      document.getElementById('lineupSummaryText').textContent = `P75 ${selected.summary.p75.toFixed(1)} · P90 ${selected.summary.p90.toFixed(1)} · P95 ${selected.summary.p95.toFixed(1)} · Leverage ${selected.summary.leverageAvg.toFixed(1)} · Fragility ${selected.summary.fragilityAvg.toFixed(2)} · Salary ${formatMoney(selected.summary.salary)} · Avg ownership ${formatPct(selected.summary.ownershipAvg)}`;
-      document.getElementById('lineupPosition').textContent = `Lineup ${idx + 1} of ${state.generatedPortfolio.length}`;
-      document.getElementById('legalityTag').textContent = selected.summary.legal ? 'Legal Build' : 'Over Cap';
-      document.getElementById('legalityTag').className = `tag ${selected.summary.legal ? 'good' : 'hot'}`;
-      document.getElementById('contestTag').textContent = state.contest;
-      document.getElementById('siteTag').textContent = state.site;
-      renderPortfolioList();
-    }
-
-    function renderPortfolioList() {
-      const list = document.getElementById('portfolioList');
-      const countText = document.getElementById('portfolioCountText');
-      if (!state.generatedPortfolio.length) {
-        list.innerHTML = '';
-        countText.textContent = '0 lineups generated';
-        return;
-      }
-      countText.textContent = `${state.generatedPortfolio.length} lineups generated${state.uploads.lineupTemplate ? ` · template ${state.uploads.lineupTemplate.fileName}` : ''}`;
-      list.innerHTML = state.generatedPortfolio.map((entry, idx) => `
-        <div class="portfolio-item ${idx + 1 === state.currentLineupIndex ? 'active' : ''}" data-lineup-index="${idx + 1}">
-          <div>
-            <strong>L${idx + 1}</strong>
-            <div class="tiny muted">P50 ${entry.summary.p50.toFixed(1)} · P90 ${entry.summary.p90.toFixed(1)} · ${formatMoney(entry.summary.salary)}</div>
-          </div>
-          <div class="tiny muted">Own ${formatPct(entry.summary.ownershipAvg)}</div>
+function renderLineups(lineups){
+  document.getElementById('lineupsOut').innerHTML = lineups.slice(0,20).map((l,idx)=>`
+    <div class="lineup-card">
+      <div class="lineup-head">
+        <div>
+          <h3>Lineup ${idx+1}</h3>
+          <div class="small">Salary $${l.salary.toLocaleString()} • Proj ${l.proj.toFixed(1)} • Sim Mean ${l.simMean.toFixed(1)} • P90 ${l.p90.toFixed(1)}</div>
+          <div class="small">Avg Own ${l.avgOwn.toFixed(1)}% • Leverage ${l.leverage.toFixed(1)} • Dup Score ${l.dupScore.toFixed(1)}</div>
         </div>
-      `).join('');
-      list.querySelectorAll('[data-lineup-index]').forEach(el => {
-        el.addEventListener('click', () => {
-          state.currentLineupIndex = Number(el.dataset.lineupIndex);
-          renderLineup();
-        });
-      });
-    }
+        <div class="badge">Top-10 ${(l.top10Rate*100).toFixed(1)}%</div>
+      </div>
+      <table>
+        <thead><tr><th>Slot</th><th>Player</th><th>Team</th><th>Opp</th><th>Salary</th><th>Proj</th><th>Own</th><th>Lev</th><th>Corr*</th></tr></thead>
+        <tbody>${l.players.map(p=>`<tr><td>${p.slot}</td><td>${p.name}</td><td>${p.team}</td><td>${p.opp}</td><td>$${p.salary.toLocaleString()}</td><td>${p.proj.toFixed(1)}</td><td>${p.ownership.toFixed(1)}%</td><td>${p.leverage.toFixed(1)}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>`).join('');
+}
 
-    function updateStatusBlocks() {
-      const slateCfg = getSlateConfig(state.slate);
-      const poolCount = state.players.length;
-      const portfolioCount = state.generatedPortfolio.length;
-      const loadedSlateFile = state.uploads.slatePlayerCsv?.fileName || 'demo pool';
-      const effectiveSims = effectiveSimCount();
-      document.getElementById('slateStatusValue').textContent = `${slateCfg.label} · ${state.site} ${state.contest}`;
-      document.getElementById('slateStatusSub').textContent = `Requested sims ${formatNumber(state.simCount)} · Effective sims ${formatNumber(effectiveSims)} · Last sync ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-      document.getElementById('slateStatusMeta').textContent = `Pool ${formatNumber(poolCount)} · Portfolio ${formatNumber(portfolioCount)} · Fragility ${fragilityDisplayLabel(state.fragilityCap)} · Source ${loadedSlateFile}`;
-      document.getElementById('heroLineupCount').textContent = String(state.lineupCount);
-      document.getElementById('fragilityDisplay').textContent = fragilityDisplayLabel(state.fragilityCap);
-      document.getElementById('simCountDisplay').textContent = formatNumber(state.simCount);
-    }
+function renderExposure(lineups){
+  const map={};
+  lineups.forEach(l=>l.players.forEach(p=>{if(!map[p.id]) map[p.id]={name:p.name,team:p.team,salary:p.salary,proj:p.proj,own:p.ownership,lev:p.leverage,count:0}; map[p.id].count++;}));
+  const rows=Object.values(map).map(r=>({...r, exp:r.count/lineups.length*100})).sort((a,b)=>b.exp-a.exp || b.lev-a.lev);
+  document.getElementById('exposureTab').innerHTML = `<div style="overflow:auto;max-height:820px"><table><thead><tr><th>Player</th><th>Team</th><th>Salary</th><th>Proj</th><th>Own</th><th>Lev</th><th>Exposure</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.name}</td><td>${r.team}</td><td>$${r.salary.toLocaleString()}</td><td>${r.proj.toFixed(1)}</td><td>${r.own.toFixed(1)}%</td><td>${r.lev.toFixed(1)}</td><td>${r.exp.toFixed(1)}%</td></tr>`).join('')}</tbody></table></div>`;
+}
 
-    function setActiveChip(group, value) {
-      document.querySelectorAll(`.chip[data-group="${group}"]`).forEach(chip => {
-        chip.classList.toggle('active', chip.dataset.value === value);
-      });
-    }
 
-    function parseCsvLine(line) {
-      const out = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') {
-          if (inQuotes && line[i + 1] === '"') {
-            current += '"';
-            i++;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (ch === ',' && !inQuotes) {
-          out.push(current);
-          current = '';
-        } else {
-          current += ch;
-        }
+function renderGameLocks(){
+  const games = [...new Set(state.players.map(p => p.game).filter(Boolean))].sort();
+  const box = document.getElementById('gameLocks');
+  if(!games.length){ box.textContent = 'Load a FanDuel slate to see game lock toggles.'; return; }
+  box.innerHTML = games.map(g => `
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;background:rgba(255,255,255,.04);padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.06)">
+      <input type="checkbox" data-game-lock="${g}" ${state.gameLocks.has(g) ? 'checked' : ''}/>
+      <span>${g}</span>
+    </label>
+  `).join('');
+  box.querySelectorAll('[data-game-lock]').forEach(cb => cb.addEventListener('change', e => {
+    const g = e.target.dataset.gameLock;
+    if(e.target.checked) state.gameLocks.add(g); else state.gameLocks.delete(g);
+    document.getElementById('swapStatus').textContent = `Locked games: ${[...state.gameLocks].join(', ') || 'none'}`;
+  }));
+}
+
+function applyNewsAdjustments(){
+  const raw = document.getElementById('newsInput').value.trim();
+  if(!raw){ document.getElementById('newsStatus').textContent = 'No news lines entered.'; return; }
+  const lines = raw.split(/\n+/).map(x => x.trim()).filter(Boolean);
+  let updated = 0, ruledOutTeams = {};
+  lines.forEach(line => {
+    const parts = line.split(',');
+    if(parts.length < 2) return;
+    const name = normName(parts[0]);
+    const status = parts[1].trim().toUpperCase();
+    const p = state.players.find(x => x.norm === name);
+    if(!p) return;
+    updated++;
+    if(['O','OUT','D','DOUBTFUL'].includes(status)){
+      p.injury = 'O';
+      p.playable = false;
+      ruledOutTeams[p.team] = (ruledOutTeams[p.team] || 0) + 1;
+    }else if(['Q','QUESTIONABLE'].includes(status)){
+      p.injury = 'Q';
+      p.proj = Math.max(0, p.proj - 2.5);
+    }else if(['P','PROBABLE'].includes(status)){
+      p.injury = 'P';
+      p.proj = Math.max(0, p.proj - 0.5);
+    }else{
+      p.injury = '';
+      p.playable = true;
+    }
+  });
+  // small teammate bump for ruled-out players
+  Object.keys(ruledOutTeams).forEach(team => {
+    state.players.forEach(p => {
+      if(p.team === team && p.playable){
+        p.proj += 1.5 * ruledOutTeams[team];
+        p.recentMinutes = (p.recentMinutes || 26) + 1.2 * ruledOutTeams[team];
+        p.leverage += 0.6 * ruledOutTeams[team];
       }
-      out.push(current);
-      return out;
+    });
+  });
+  state.players = state.players.filter(p => p.playable !== false);
+  document.getElementById('loadedPlayers').textContent = String(state.players.length);
+  renderPlayersTable();
+  renderGameLocks();
+  document.getElementById('newsStatus').textContent = `Applied ${updated} news update(s). Ruled-out teammate bumps applied where relevant.`;
+}
+
+function resetNewsPool(){
+  state.players = JSON.parse(JSON.stringify(state.basePlayers));
+  document.getElementById('loadedPlayers').textContent = String(state.players.length);
+  renderPlayersTable();
+  renderGameLocks();
+  document.getElementById('newsStatus').textContent = 'Player pool reset to the original loaded slate state.';
+}
+
+function lateSwapLineup(baseLineup, lineupTarget, maxExpPct, minSalary, leverageWeight, dupPenalty){
+  const locked = baseLineup.players.filter(p => state.gameLocks.has(p.game));
+  const openSlots = baseLineup.players.filter(p => !state.gameLocks.has(p.game)).map(p => p.slot);
+  if(!openSlots.length) return baseLineup;
+
+  const used = new Set(locked.map(p => p.id));
+  const players = locked.map(p => ({...p}));
+  let salary = locked.reduce((t,p) => t + p.salary, 0);
+  let proj = locked.reduce((t,p) => t + p.proj, 0);
+  let lev = locked.reduce((t,p) => t + p.leverage, 0);
+  let own = locked.reduce((t,p) => t + p.ownership, 0);
+  const teamCounts = {};
+  locked.forEach(p => teamCounts[p.team] = (teamCounts[p.team] || 0) + 1);
+
+  for(let i=0;i<openSlots.length;i++){
+    const slot = openSlots[i];
+    let best = null, bestScore = -1e9;
+    for(const p of state.players){
+      if(used.has(p.id)) continue;
+      if(!eligible(p.rosterPosition, slot)) continue;
+      if((teamCounts[p.team] || 0) >= MAX_TEAM) continue;
+      if(salary + p.salary > CAP) continue;
+      const remain = openSlots.length - (i + 1);
+      if(salary + p.salary + remain * 3500 > CAP) continue;
+      const corrBoost = players.reduce((t, existing) => t + pairCorrelation(existing, p), 0) * 4.5;
+      const score = p.proj + (p.leverage/10)*leverageWeight - (p.ownership/100)*dupPenalty*2 + corrBoost;
+      if(score > bestScore){ best = p; bestScore = score; }
     }
+    if(!best) return null;
+    players.push({slot, ...best});
+    used.add(best.id); salary += best.salary; proj += best.proj; lev += best.leverage; own += best.ownership;
+    teamCounts[best.team] = (teamCounts[best.team] || 0) + 1;
+  }
+  if(salary < minSalary) return null;
+  players.sort((a,b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot));
+  const dupScore = -Math.log(players.reduce((acc,p) => acc * Math.max(0.001, p.ownership/100), 1));
+  const corrScore = lineupCorrelation(players);
+  return {players, salary, proj, avgOwn:own/9, totalOwn:own, leverage:lev, dupScore, corrScore, tournScore:proj + (lev/10)*leverageWeight + dupScore*dupPenalty - own*0.01*dupPenalty + corrScore*8, key:[...used].sort().join('|')};
+}
 
-    function normalizeHeader(value) {
-      return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
-    }
+function runLateSwap(){
+  if(!state.lineups.length) throw new Error('Generate lineups first.');
+  if(!state.gameLocks.size) throw new Error('Lock at least one game first.');
+  const lineupTarget = state.lineups.length;
+  const maxExpPct = Math.max(1, Number(document.getElementById('maxExposure').value)||60);
+  const minSalary = Number(document.getElementById('minSalary').value)||59000;
+  const leverageWeight = Number(document.getElementById('leverageWeight').value)||2.0;
+  const dupPenalty = Number(document.getElementById('dupPenalty').value)||1.4;
+  const simCount = Math.max(1000, Number(document.getElementById('simCount').value)||20000);
 
-    function detectTemplateSpec(rows) {
-      const headers = rows.length ? Object.keys(rows[0]) : [];
-      const normalized = headers.map(h => ({ original: h, key: normalizeHeader(h) }));
-      const rowCount = rows.length;
-      const slotRank = {
-        pg: 1, pg1: 1, pg2: 2,
-        sg: 3, sg1: 3, sg2: 4,
-        sf: 5, sf1: 5, sf2: 6,
-        pf: 7, pf1: 7, pf2: 8,
-        c: 9, c1: 9,
-        g: 10, f: 11, util: 12,
-        cpt: 1, captain: 1, mvp: 1, star: 2, pro: 3, flex: 4, flex1: 4, flex2: 5, flex3: 6, flex4: 7, flex5: 8
-      };
+  const swapped = [];
+  for(const l of state.lineups){
+    const s = lateSwapLineup(l, lineupTarget, maxExpPct, minSalary, leverageWeight, dupPenalty);
+    if(s) swapped.push(s);
+  }
+  if(!swapped.length) throw new Error('No late swap lineups could be rebuilt with the current locks and player pool.');
+  simulatePortfolio(swapped, simCount);
+  swapped.sort((a,b)=>(b.top10Rate-a.top10Rate)||(b.tournScore-a.tournScore)||(b.simMean-a.simMean));
+  state.lineups = swapped;
+  state.csvDownload = buildLineupCsv(swapped);
+  renderLineups(swapped);
+  renderExposure(swapped);
+  document.getElementById('swapStatus').textContent = `Late swap complete. ${swapped.length} lineups rebuilt while preserving locked-game players.`;
+}
 
-      const slotAliases = {
-        pg: ['pg','pg1','pg2','pointguard'],
-        sg: ['sg','sg1','sg2','shootingguard'],
-        sf: ['sf','sf1','sf2','smallforward'],
-        pf: ['pf','pf1','pf2','powerforward'],
-        c: ['c','c1','center'],
-        g: ['g','guard'],
-        f: ['f','forward'],
-        util: ['util','utility'],
-        cpt: ['cpt','captain'],
-        mvp: ['mvp'],
-        star: ['star'],
-        pro: ['pro'],
-        flex: ['flex','flex1','flex2','flex3','flex4','flex5']
-      };
+function runBacktest(){
+  if(!state.lineups.length) throw new Error('Generate lineups first.');
+  if(!state.actualMap.size) throw new Error('Upload an actual-results CSV first.');
 
-      const matched = [];
-      normalized.forEach(item => {
-        for (const [slot, aliases] of Object.entries(slotAliases)) {
-          if (aliases.includes(item.key)) {
-            matched.push({ header: item.original, slot, rank: slotRank[item.key] || slotRank[slot] || 999, key: item.key });
-            break;
-          }
-        }
-      });
+  state.lineups.forEach(l => {
+    l.actual = l.players.reduce((t,p) => t + (state.actualMap.get(p.norm) ?? state.actualMap.get(normName(p.name)) ?? 0), 0);
+    l.actualMatched = l.players.filter(p => state.actualMap.has(p.norm) || state.actualMap.has(normName(p.name))).length;
+  });
 
-      let site = 'DK';
-      const joinedHeaders = normalized.map(h => h.key).join('|');
-      if (joinedHeaders.includes('entryid') || joinedHeaders.includes('contestid') || matched.some(m => m.slot === 'g' || m.slot === 'f' || m.slot === 'util' || m.slot === 'cpt')) {
-        site = 'DK';
-      } else if (joinedHeaders.includes('entryid') || joinedHeaders.includes('contestname') || matched.filter(m => ['pg','sg','sf','pf'].includes(m.slot)).length >= 8) {
-        site = matched.some(m => m.slot === 'g' || m.slot === 'f' || m.slot === 'util') ? 'DK' : 'FD';
-      }
+  const scored = state.lineups.filter(l => l.actualMatched > 0);
+  if(!scored.length) throw new Error('No lineup players matched the actual-results file.');
 
-      matched.sort((a, b) => a.rank - b.rank || a.header.localeCompare(b.header));
+  scored.sort((a,b) => b.actual - a.actual);
+  const best = scored[0];
+  const avg = scored.reduce((t,l) => t + l.actual, 0) / scored.length;
+  const med = scored.map(l => l.actual).sort((a,b)=>a-b)[Math.floor(scored.length/2)];
 
-      let format = 'classic';
-      if (matched.some(m => ['cpt','captain','mvp','star','pro','flex'].includes(m.slot))) format = 'showdown';
+  setSummary(
+    `Backtest complete\n` +
+    `Scored lineups: ${scored.length}\n` +
+    `Best actual lineup score: ${best.actual.toFixed(2)}\n` +
+    `Average actual lineup score: ${avg.toFixed(2)}\n` +
+    `Median actual lineup score: ${med.toFixed(2)}`
+  );
 
-      const slotColumns = matched.map(m => m.header);
-      const orderedSlots = matched.map(m => m.slot === 'captain' ? 'cpt' : m.slot);
-      return { headers, normalized, site, format, rowCount, slotColumns, orderedSlots };
-    }
+  document.getElementById('swapStatus').textContent = `Backtest complete. Best actual lineup score: ${best.actual.toFixed(2)}`;
+  renderLineups(scored);
+  renderExposure(scored);
+}
+function renderPlayersTable(){
+  const rows=[...state.players].sort((a,b)=>(b.leverage-a.leverage)||(b.valueScore-a.valueScore)).slice(0,140);
+  document.getElementById('playersTab').innerHTML = `<div style="overflow:auto;max-height:820px"><table><thead><tr><th>Player</th><th>Pos</th><th>Team</th><th>Salary</th><th>Proj</th><th>Recent</th><th>Min</th><th>USG</th><th>Matchup</th><th>Own</th><th>Lev</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.name}</td><td>${r.rosterPosition}</td><td>${r.team}</td><td>$${r.salary.toLocaleString()}</td><td>${r.proj.toFixed(1)}</td><td>${r.recentMean.toFixed(1)}</td><td>${r.recentMinutes.toFixed(1)}</td><td>${(r.recentUsage*100).toFixed(1)}%</td><td>${r.matchupAdj.toFixed(1)}</td><td>${r.ownership.toFixed(1)}%</td><td>${r.leverage.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`;
+}
 
-    function formatTemplatePlayerValue(player, templateSpec, columnName) {
-      const key = normalizeHeader(columnName);
-      if (templateSpec.site === 'FD') {
-        if (key === 'mvp' || key === 'star' || key === 'pro' || key.startsWith('flex')) {
-          return player.fdId ? `${player.name} (${player.fdId})` : player.name;
-        }
-        return player.fdId || player.name;
-      }
-      if (key === 'cpt' || key === 'captain') {
-        return player.dkId ? `${player.name} (${player.dkId})` : player.name;
-      }
-      return player.dkId ? `${player.name} (${player.dkId})` : player.name;
-    }
+document.getElementById('fdInput').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  state.fdRaw = await parseFile(file);
+  document.getElementById('fdFileBox').textContent = `${file.name} • ${state.fdRaw.length} rows`;
+  buildPlayers();
+  setOptimizerState('Slate Loaded');
+  updateStatus(`FanDuel slate loaded.\nRows: ${state.fdRaw.length}\nPlayable players detected: ${state.players.length}\nHistorical model fields preloaded for current slate players.`);
+});
+document.getElementById('actualInput').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  state.actualRaw = await parseFile(file); state.actualMap = new Map();
+  state.actualRaw.forEach(r => { const x = inferActualRow(r); if(x && x.name) state.actualMap.set(normName(x.name), x.actual); });
+  document.getElementById('actualFileBox').textContent = `${file.name} • ${state.actualMap.size} mapped actual scores`;
+  document.getElementById('newsStatus').textContent = `Actual-results file loaded. Mapped players: ${state.actualMap.size}`;
+});
+document.getElementById('projInput').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  state.projRaw = await parseFile(file); state.customProjMap = new Map();
+  state.projRaw.forEach(r=>{const x=inferProjectionRow(r); if(x && x.name && x.projection!=null) state.customProjMap.set(normName(x.name), x);});
+  document.getElementById('projFileBox').textContent = `${file.name} • ${state.customProjMap.size} mapped rows`;
+  if(state.fdRaw.length) buildPlayers();
+  updateStatus(`Custom projection / ownership file loaded.\nMapped players: ${state.customProjMap.size}`);
+});
 
-    function simpleCsvParse(text) {
-      const lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-      const nonEmpty = lines
-        .map((line, idx) => ({ line, idx }))
-        .filter(item => item.line.trim().length);
-      if (!nonEmpty.length) return { headers: [], rows: [], headerIndex: -1 };
-
-      const expectedKeys = ['entryid','contestid','contestname','pg','sg','sf','pf','c','g','f','util','mvp','star','pro','flex','id','playerid','nickname','name','position','salary','team','teamabbrev','gameinfo','fppg'];
-      let headerIndex = -1;
-      let headers = [];
-
-      for (const item of nonEmpty.slice(0, 30)) {
-        const cells = parseCsvLine(item.line).map(h => h.trim());
-        const normalized = cells.map(normalizeHeader);
-        const hitCount = normalized.filter(cell => expectedKeys.includes(cell)).length;
-        const distinctCount = new Set(normalized.filter(Boolean)).size;
-        if (hitCount >= 2 || (distinctCount >= 4 && normalized.some(cell => ['position','salary','name','nickname','team','teamabbrev','pg','sg','sf','pf','c','g','f','util','mvp','flex'].includes(cell)))) {
-          headerIndex = item.idx;
-          headers = cells;
-          break;
-        }
-      }
-
-      if (headerIndex === -1) {
-        headerIndex = nonEmpty[0].idx;
-        headers = parseCsvLine(nonEmpty[0].line).map(h => h.trim());
-      }
-
-      const normalizedHeaders = headers.map(h => normalizeHeader(h));
-      const rows = [];
-      for (let i = headerIndex + 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line || !line.trim()) continue;
-        const vals = parseCsvLine(line);
-        const row = {};
-        normalizedHeaders.forEach((h, idx) => row[h] = (vals[idx] ?? '').trim());
-        if (Object.values(row).some(Boolean)) rows.push(row);
-      }
-      return { headers: normalizedHeaders, rows, headerIndex };
-    }
-
-    async function handleUpload(inputId, statusId, type) {
-      const file = document.getElementById(inputId).files?.[0];
-      const statusEl = document.getElementById(statusId);
-      if (!file) {
-        state.uploads[type] = null;
-        statusEl.textContent = 'No file loaded';
-        if (type === 'lineupTemplate') {
-          document.getElementById('lineupTemplateRows').textContent = 'Template rows: 0';
-          document.getElementById('templateMappingStatus').textContent = 'Template mapping: waiting for CSV';
-          document.getElementById('templateParseStatus').textContent = 'Template parser: no file loaded';
-        }
-        if (type === 'slatePlayerCsv') {
-          document.getElementById('slatePlayerRows').textContent = 'Player rows: 0';
-          document.getElementById('slatePlayerParseStatus').textContent = 'Slate parser: no file loaded';
-          document.getElementById('slatePlayerMappingStatus').textContent = 'Slate mapping: waiting for salary export';
-        }
-        refreshPlayers();
-        return;
-      }
-      statusEl.textContent = `Loading ${file.name}...`;
-      await new Promise(resolve => setTimeout(resolve, 0));
-      const text = await file.text();
-      const parsed = simpleCsvParse(text);
-      const rows = parsed.rows;
-      const parseStatusEl = document.getElementById('templateParseStatus');
-      if (type === 'slatePlayerCsv') {
-        const canonical = canonicalizeSlateRows(rows);
-        state.uploads[type] = { rows, players: canonical.players, fileName: file.name, headers: parsed.headers, headerIndex: parsed.headerIndex, site: canonical.site };
-        document.getElementById('slatePlayerRows').textContent = `Player rows: ${canonical.players.length.toLocaleString()}`;
-        document.getElementById('slatePlayerParseStatus').textContent = parsed.headerIndex >= 0
-          ? `Slate parser: detected header row ${parsed.headerIndex + 1}`
-          : 'Slate parser: could not find a header row';
-        document.getElementById('slatePlayerMappingStatus').textContent = canonical.players.length
-          ? `Slate mapping: ${canonical.site} salary export ingested · player pool replaced`
-          : 'Slate mapping: could not map name, position, and salary columns';
-        if (canonical.site && canonical.site !== state.site) {
-          state.site = canonical.site;
-          setActiveChip('site', canonical.site);
-        }
-        statusEl.textContent = canonical.players.length
-          ? `${file.name} loaded · ${canonical.players.length.toLocaleString()} players ingested`
-          : `${file.name} loaded but no valid players were ingested`;
-        refreshPlayers();
-        window.setTimeout(() => generatePortfolio(), 80);
-        document.getElementById(inputId).value = '';
-        return;
-      } else if (type === 'historicalGameLogs') {
-        const grouped = new Map();
-        rows.forEach(row => {
-          const name = (row.player_name || row.player || row.name || '').toLowerCase();
-          if (!name) return;
-          if (!grouped.has(name)) grouped.set(name, []);
-          grouped.get(name).push(row);
-        });
-        state.uploads[type] = { rows, grouped, fileName: file.name };
-      } else if (type === 'lineupTemplate') {
-        const spec = detectTemplateSpec(rows);
-        state.uploads[type] = { rows, fileName: file.name, headers: parsed.headers, spec, headerIndex: parsed.headerIndex };
-        document.getElementById('lineupTemplateRows').textContent = `Template rows: ${rows.length.toLocaleString()}`;
-        document.getElementById('lineupTemplateStatus').textContent = rows.length ? `${file.name} loaded` : `${file.name} loaded with 0 rows`;
-        parseStatusEl.textContent = parsed.headerIndex >= 0
-          ? `Template parser: detected header row ${parsed.headerIndex + 1}`
-          : 'Template parser: could not find a header row';
-        document.getElementById('templateMappingStatus').textContent = spec.slotColumns.length
-          ? `Template mapping: ${spec.site} ${spec.format} · ${spec.slotColumns.join(', ')}`
-          : 'Template mapping: no roster columns detected';
-        if (!Number(document.getElementById('lineupCountInput').value || 0)) {
-          document.getElementById('lineupCountInput').value = state.lineupCount;
-        }
-        if (spec.site && state.site !== spec.site) {
-          state.site = spec.site;
-          setActiveChip('site', spec.site);
-        }
-        refreshPlayers();
-        window.setTimeout(() => generatePortfolio(), 80);
-        if (rows.length && spec.slotColumns.length) {
-          statusEl.textContent = `${file.name} loaded · template mapped · lineup count stays at ${state.lineupCount}`;
-        } else {
-          statusEl.textContent = `${file.name} loaded · template needs a valid header row`;
-        }
-        document.getElementById(inputId).value = '';
-        return;
-      } else {
-        const byName = new Map();
-        rows.forEach(row => {
-          const name = (row.player_name || row.player || row.name || '').toLowerCase();
-          if (name) byName.set(name, row);
-        });
-        state.uploads[type] = { rows, byName, fileName: file.name };
-      }
-      statusEl.textContent = `${file.name} loaded · ${rows.length.toLocaleString()} rows`;
-      refreshPlayers();
-      if (state.generatedPortfolio.length) generatePortfolio();
-      document.getElementById(inputId).value = '';
-    }
-
-    function bindChipGroups() {
-      document.querySelectorAll('.chip[data-group]').forEach(chip => {
-        chip.addEventListener('click', () => {
-          const group = chip.dataset.group;
-          const value = chip.dataset.value;
-          state[group] = value;
-          setActiveChip(group, value);
-          refreshPlayers();
-          if (state.generatedPortfolio.length) generatePortfolio();
-        });
-      });
-    }
-
-    function bindInputs() {
-      document.getElementById('slateSelect').addEventListener('change', (e) => {
-        state.slate = e.target.value;
-        refreshPlayers();
-        if (state.generatedPortfolio.length) generatePortfolio();
-      });
-      document.getElementById('lineupCountInput').addEventListener('input', (e) => {
-        state.lineupCount = Math.max(1, Math.min(150, Number(e.target.value || 1)));
-        updateStatusBlocks();
-      });
-      document.getElementById('simCountRange').addEventListener('input', (e) => {
-        state.simCount = Number(e.target.value);
-        refreshPlayers();
-        if (state.generatedPortfolio.length) generatePortfolio();
-      });
-      document.getElementById('fragilityRange').addEventListener('input', (e) => {
-        state.fragilityCap = Number(e.target.value);
-        refreshPlayers();
-        if (state.generatedPortfolio.length) generatePortfolio();
-      });
-      document.getElementById('generateLineupsBtn').addEventListener('click', generatePortfolio);
-      document.getElementById('generateAnotherBtn').addEventListener('click', () => {
-        if (!state.generatedPortfolio.length) { generatePortfolio(); return; }
-        state.currentLineupIndex = state.currentLineupIndex >= state.generatedPortfolio.length ? 1 : state.currentLineupIndex + 1;
-        renderLineup();
-      });
-      document.getElementById('resetRulesBtn').addEventListener('click', () => {
-        state.site = 'DK'; state.contest = 'GPP'; state.leverage = 'tournament'; state.stack = 'bringback';
-        state.slate = 'main'; state.lineupCount = 20; state.simCount = 10000; state.fragilityCap = 55; state.currentLineupIndex = 1;
-        document.getElementById('lineupCountInput').value = 20;
-        document.getElementById('simCountRange').value = 10000;
-        document.getElementById('fragilityRange').value = 55;
-        document.getElementById('slateSelect').value = 'main';
-        ['site','contest','leverage','stack'].forEach(group => setActiveChip(group, state[group]));
-        refreshPlayers();
-        generatePortfolio();
-      });
-      ['heroGenerateBtn', 'demoBuildBtn', 'startOptimizeBtn'].forEach(id => {
-        document.getElementById(id).addEventListener('click', generatePortfolio);
-      });
-      document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
-      document.getElementById('saveBuildBtn').addEventListener('click', () => alert('Build saved to this browser session.'));
-      const uploadMap = [
-        ['historicalGameLogs', 'historicalGameLogsStatus', 'historicalGameLogs'],
-        ['ownershipHistory', 'ownershipHistoryStatus', 'ownershipHistory'],
-        ['contestResults', 'contestResultsStatus', 'contestResults'],
-        ['injuryHistory', 'injuryHistoryStatus', 'injuryHistory'],
-        ['slatePlayerCsv', 'slatePlayerStatus', 'slatePlayerCsv'],
-        ['lineupTemplateCsv', 'lineupTemplateStatus', 'lineupTemplate']
-      ];
-      uploadMap.forEach(([inputId, statusId, type]) => {
-        document.getElementById(inputId).addEventListener('change', () => handleUpload(inputId, statusId, type));
-      });
-    }
-
-    function csvEscape(value) {
-      const str = String(value ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return '"' + str.replace(/"/g, '""') + '"';
-      }
-      return str;
-    }
-
-    function exportCsv() {
-      if (!state.generatedPortfolio.length) return;
-
-      const template = state.uploads.lineupTemplate;
-      let headers = [];
-      let rows = [];
-
-      if (template && template.rows.length) {
-        const spec = template.spec || detectTemplateSpec(template.rows);
-        const templateHeaders = template.headers?.length ? template.headers : Object.keys(template.rows[0]);
-        headers = [...templateHeaders];
-        rows = Array.from({ length: state.generatedPortfolio.length }, (_, idx) => {
-          const templateRow = template.rows[idx] || template.rows[idx % template.rows.length] || {};
-          const entry = { ...templateRow };
-          const lineup = state.generatedPortfolio[idx].lineup;
-          spec.slotColumns.forEach((col, colIdx) => {
-            const item = lineup[colIdx];
-            if (item) entry[col] = formatTemplatePlayerValue(item.player, spec, col);
-          });
-          entry.optimizer_lineup = idx + 1;
-          entry.optimizer_site = spec.site;
-          entry.optimizer_format = spec.format;
-          entry.optimizer_p50 = state.generatedPortfolio[idx].summary.p50.toFixed(1);
-          entry.optimizer_p90 = state.generatedPortfolio[idx].summary.p90.toFixed(1);
-          entry.optimizer_salary = state.generatedPortfolio[idx].summary.salary;
-          return entry;
-        });
-        const extraHeaders = ['optimizer_lineup','optimizer_site','optimizer_format','optimizer_p50','optimizer_p90','optimizer_salary'];
-        headers = [...headers, ...extraHeaders.filter(h => !headers.includes(h))];
-      } else {
-        headers = ['lineup_index','slot','player','team','salary','p50','p90','ownership'];
-        rows = [];
-        state.generatedPortfolio.forEach((portfolioEntry, idx) => {
-          portfolioEntry.lineup.forEach(item => {
-            rows.push({
-              lineup_index: idx + 1,
-              slot: item.slot,
-              player: item.player.name,
-              team: item.player.team,
-              salary: item.player.salary,
-              p50: item.player.p50.toFixed(1),
-              p90: item.player.p90.toFixed(1),
-              ownership: formatPct(item.player.ownership)
-            });
-          });
-        });
-      }
-
-      const csv = [headers.map(csvEscape).join(',')].concat(
-        rows.map(row => headers.map(h => csvEscape(row[h] ?? '')).join(','))
-      ).join('\n');
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = template
-        ? `court-edge-${state.site.toLowerCase()}-${state.contest.toLowerCase()}-template-filled-${state.generatedPortfolio.length}-lineups.csv`
-        : `court-edge-${state.site.toLowerCase()}-${state.contest.toLowerCase()}-${state.generatedPortfolio.length}-lineups.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }
-
-    bindChipGroups();
-    bindInputs();
-    refreshPlayers();
-    renderLineup();
-  </script>
-
+document.getElementById('runBtn').addEventListener('click', async ()=>{
+  try{
+    if(!state.fdRaw.length) throw new Error('Upload a FanDuel CSV first.');
+    setOptimizerState('Running'); setSummary('Optimizer running...');
+    await new Promise(r=>setTimeout(r,20));
+    buildPortfolio();
+    setOptimizerState('Complete');
+  }catch(err){ setOptimizerState('Error'); setSummary(err.message || String(err));}
+});
+document.getElementById('applyNewsBtn').addEventListener('click', () => { try{ applyNewsAdjustments(); } catch(err){ document.getElementById('newsStatus').textContent = err.message || String(err); } });
+document.getElementById('resetNewsBtn').addEventListener('click', () => { try{ resetNewsPool(); } catch(err){ document.getElementById('newsStatus').textContent = err.message || String(err); } });
+document.getElementById('lateSwapBtn').addEventListener('click', async () => {
+  try{
+    setOptimizerState('Late Swap');
+    document.getElementById('swapStatus').textContent = 'Running late swap...';
+    await new Promise(r=>setTimeout(r,20));
+    runLateSwap();
+    setOptimizerState('Complete');
+  }catch(err){
+    setOptimizerState('Error');
+    document.getElementById('swapStatus').textContent = err.message || String(err);
+  }
+});
+document.getElementById('backtestBtn').addEventListener('click', () => {
+  try{
+    runBacktest();
+  }catch(err){
+    setSummary(err.message || String(err));
+  }
+});
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  if(!state.csvDownload){setSummary('Run the optimizer first.'); return;}
+  const blob = new Blob([state.csvDownload], {type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='court_edge_lineups.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+document.querySelectorAll('.tabbtn').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+  const tab=btn.dataset.tab; document.getElementById('exposureTab').style.display = tab==='exposure'?'block':'none'; document.getElementById('playersTab').style.display = tab==='players'?'block':'none';
+}));
+</script>
 </body>
 </html>
