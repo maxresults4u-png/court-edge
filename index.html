@@ -371,6 +371,51 @@
       padding: 26px 0 8px;
     }
 
+
+    .portfolio-list {
+      display: grid;
+      gap: 8px;
+      max-height: 260px;
+      overflow: auto;
+      margin-top: 10px;
+      padding-right: 4px;
+    }
+
+    .portfolio-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.025);
+      cursor: pointer;
+      transition: border-color .15s ease, transform .15s ease, background .15s ease;
+    }
+
+    .portfolio-item:hover, .portfolio-item.active {
+      border-color: rgba(109,255,207,0.35);
+      background: rgba(109,255,207,0.08);
+      transform: translateY(-1px);
+    }
+
+    .template-box {
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.025);
+    }
+
+    .template-meta {
+      display: grid;
+      gap: 6px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
     @media (max-width: 1180px) {
       .hero, .optimizer-shell, .workflow, .feature-grid, .mini-stats, .summary-grid {
         grid-template-columns: 1fr;
@@ -547,6 +592,16 @@
           <input class="input" type="number" id="lineupCountInput" min="1" max="150" value="20" />
         </div>
 
+        <div class="template-box">
+          <div class="status-label">Lineup Upload Template</div>
+          <p class="tiny muted">Upload your DraftKings or FanDuel entry template CSV here. The optimizer will use the row count from the template and export the full portfolio, not just one lineup.</p>
+          <input type="file" id="lineupTemplateCsv" accept=".csv" />
+          <div class="template-meta">
+            <span id="lineupTemplateStatus">No lineup template loaded</span>
+            <span id="lineupTemplateRows">Template rows: 0</span>
+          </div>
+        </div>
+
         <div class="field">
           <label>Simulation Count</label>
           <div class="range-row">
@@ -675,6 +730,13 @@
           <span class="tag hot" id="siteTag">DK</span>
         </div>
 
+        <div class="template-box">
+          <div class="status-label">Portfolio Queue</div>
+          <p class="tiny muted">Click any lineup below to inspect it. Export now writes every generated lineup into one CSV file.</p>
+          <div id="portfolioCountText" class="helper">0 lineups generated</div>
+          <div class="portfolio-list" id="portfolioList"></div>
+        </div>
+
         <div class="actions-stack">
           <button class="btn primary full" id="exportCsvBtn">Export CSV</button>
           <button class="btn full" id="generateAnotherBtn">Generate Another</button>
@@ -761,7 +823,8 @@
         historicalGameLogs: null,
         ownershipHistory: null,
         contestResults: null,
-        injuryHistory: null
+        injuryHistory: null,
+        lineupTemplate: null
       }
     };
 
@@ -1068,23 +1131,31 @@
 
     function generatePortfolio() {
       state.generatedPortfolio = [];
-      const maxExposure = state.contest === 'Cash' ? 0.8 : 0.6;
+      const requested = state.uploads.lineupTemplate?.rows?.length ? Math.min(150, state.uploads.lineupTemplate.rows.length) : state.lineupCount;
+      const maxExposure = state.contest === 'Cash' ? 0.8 : 0.7;
+      const seenKeys = new Set();
       state.players.forEach(p => p._usedCount = 0);
-      for (let i = 0; i < state.lineupCount; i++) {
-        const built = generateOneLineup(i);
+      let attempts = 0;
+      while (state.generatedPortfolio.length < requested && attempts < requested * 18) {
+        attempts += 1;
+        const built = generateOneLineup(state.generatedPortfolio.length);
         if (!built) break;
-        const exposureCheck = new Map();
-        built.lineup.forEach(item => {
-          const count = (item.player._usedCount || 0) + 1;
-          exposureCheck.set(item.player.name, count);
-        });
-        const totalProjected = i + 1;
-        let violates = false;
-        exposureCheck.forEach((count) => { if (count / totalProjected > maxExposure) violates = true; });
-        if (violates && i > 0) {
-          state.players.forEach(p => p.buildScore += Math.random() * 0.05);
+        const key = built.lineup.map(item => item.player.name).sort().join('|');
+        if (seenKeys.has(key)) {
+          state.players.forEach(p => p.buildScore += Math.random() * 0.12 - 0.06);
           continue;
         }
+        let violates = false;
+        built.lineup.forEach(item => {
+          const nextCount = (item.player._usedCount || 0) + 1;
+          const nextExposure = nextCount / Math.max(1, state.generatedPortfolio.length + 1);
+          if (nextExposure > maxExposure) violates = true;
+        });
+        if (violates && attempts < requested * 18) {
+          built.lineup.forEach(item => { item.player.buildScore -= 0.08 + Math.random() * 0.08; });
+          continue;
+        }
+        seenKeys.add(key);
         built.lineup.forEach(item => { item.player._usedCount = (item.player._usedCount || 0) + 1; });
         state.generatedPortfolio.push(built);
       }
@@ -1113,6 +1184,33 @@
       document.getElementById('legalityTag').className = `tag ${selected.summary.legal ? 'good' : 'hot'}`;
       document.getElementById('contestTag').textContent = state.contest;
       document.getElementById('siteTag').textContent = state.site;
+      renderPortfolioList();
+    }
+
+    function renderPortfolioList() {
+      const list = document.getElementById('portfolioList');
+      const countText = document.getElementById('portfolioCountText');
+      if (!state.generatedPortfolio.length) {
+        list.innerHTML = '';
+        countText.textContent = '0 lineups generated';
+        return;
+      }
+      countText.textContent = `${state.generatedPortfolio.length} lineups generated${state.uploads.lineupTemplate ? ` · template ${state.uploads.lineupTemplate.fileName}` : ''}`;
+      list.innerHTML = state.generatedPortfolio.map((entry, idx) => `
+        <div class="portfolio-item ${idx + 1 === state.currentLineupIndex ? 'active' : ''}" data-lineup-index="${idx + 1}">
+          <div>
+            <strong>L${idx + 1}</strong>
+            <div class="tiny muted">P50 ${entry.summary.p50.toFixed(1)} · P90 ${entry.summary.p90.toFixed(1)} · ${formatMoney(entry.summary.salary)}</div>
+          </div>
+          <div class="tiny muted">Own ${formatPct(entry.summary.ownershipAvg)}</div>
+        </div>
+      `).join('');
+      list.querySelectorAll('[data-lineup-index]').forEach(el => {
+        el.addEventListener('click', () => {
+          state.currentLineupIndex = Number(el.dataset.lineupIndex);
+          renderLineup();
+        });
+      });
     }
 
     function updateStatusBlocks() {
@@ -1130,12 +1228,36 @@
       });
     }
 
+    function parseCsvLine(line) {
+      const out = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          out.push(current);
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      out.push(current);
+      return out;
+    }
+
     function simpleCsvParse(text) {
-      const lines = text.split(/\r?\n/).filter(Boolean);
+      const lines = text.split(/\r?\n/).filter(line => line.trim().length);
       if (!lines.length) return [];
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
       return lines.slice(1).map(line => {
-        const vals = line.split(',');
+        const vals = parseCsvLine(line);
         const row = {};
         headers.forEach((h, i) => row[h] = (vals[i] ?? '').trim());
         return row;
@@ -1161,14 +1283,25 @@
           if (!grouped.has(name)) grouped.set(name, []);
           grouped.get(name).push(row);
         });
-        state.uploads[type] = { rows, grouped };
+        state.uploads[type] = { rows, grouped, fileName: file.name };
+      } else if (type === 'lineupTemplate') {
+        state.uploads[type] = { rows, fileName: file.name, headers: rows.length ? Object.keys(rows[0]) : [] };
+        document.getElementById('lineupTemplateRows').textContent = `Template rows: ${rows.length.toLocaleString()}`;
+        document.getElementById('lineupTemplateStatus').textContent = `${file.name} loaded`;
+        if (rows.length) {
+          state.lineupCount = Math.max(1, Math.min(150, rows.length));
+          document.getElementById('lineupCountInput').value = state.lineupCount;
+        }
+        refreshPlayers();
+        generatePortfolio();
+        return;
       } else {
         const byName = new Map();
         rows.forEach(row => {
           const name = (row.player_name || row.player || row.name || '').toLowerCase();
           if (name) byName.set(name, row);
         });
-        state.uploads[type] = { rows, byName };
+        state.uploads[type] = { rows, byName, fileName: file.name };
       }
       statusEl.textContent = `${file.name} loaded · ${rows.length.toLocaleString()} rows`;
       refreshPlayers();
@@ -1234,23 +1367,82 @@
         ['historicalGameLogs', 'historicalGameLogsStatus', 'historicalGameLogs'],
         ['ownershipHistory', 'ownershipHistoryStatus', 'ownershipHistory'],
         ['contestResults', 'contestResultsStatus', 'contestResults'],
-        ['injuryHistory', 'injuryHistoryStatus', 'injuryHistory']
+        ['injuryHistory', 'injuryHistoryStatus', 'injuryHistory'],
+        ['lineupTemplateCsv', 'lineupTemplateStatus', 'lineupTemplate']
       ];
       uploadMap.forEach(([inputId, statusId, type]) => {
         document.getElementById(inputId).addEventListener('change', () => handleUpload(inputId, statusId, type));
       });
     }
 
+    function csvEscape(value) {
+      const str = String(value ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    }
+
     function exportCsv() {
-      if (!state.lastGeneratedLineup.length) generatePortfolio();
-      const headers = ['Slot', 'Player', 'Team', 'Salary', 'P50', 'P90', 'Ownership'];
-      const rows = state.lastGeneratedLineup.map(item => [item.slot, item.player.name, item.player.team, item.player.salary, item.player.p50.toFixed(1), item.player.p90.toFixed(1), formatPct(item.player.ownership)]);
-      const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+      if (!state.generatedPortfolio.length) generatePortfolio();
+      if (!state.generatedPortfolio.length) return;
+
+      const template = state.uploads.lineupTemplate;
+      let headers = [];
+      let rows = [];
+
+      if (template && template.rows.length) {
+        const templateHeaders = Object.keys(template.rows[0]);
+        const slotColumns = templateHeaders.filter(h => {
+          const key = h.toLowerCase();
+          return ['pg','sg','sf','pf','c','g','f','util'].includes(key) || key.startsWith('pg') || key.startsWith('sg') || key.startsWith('sf') || key.startsWith('pf') || key === 'cpt' || key === 'mvp' || key === 'star' || key === 'pro';
+        });
+        headers = templateHeaders;
+        rows = template.rows.slice(0, state.generatedPortfolio.length).map((templateRow, idx) => {
+          const entry = { ...templateRow };
+          const lineup = state.generatedPortfolio[idx].lineup;
+          slotColumns.forEach((col, colIdx) => {
+            const item = lineup[colIdx];
+            if (item) entry[col] = item.player.name;
+          });
+          entry.optimizer_lineup = idx + 1;
+          entry.optimizer_p50 = state.generatedPortfolio[idx].summary.p50.toFixed(1);
+          entry.optimizer_p90 = state.generatedPortfolio[idx].summary.p90.toFixed(1);
+          entry.optimizer_salary = state.generatedPortfolio[idx].summary.salary;
+          return entry;
+        });
+        const extraHeaders = ['optimizer_lineup','optimizer_p50','optimizer_p90','optimizer_salary'];
+        headers = [...headers, ...extraHeaders.filter(h => !headers.includes(h))];
+      } else {
+        headers = ['lineup_index','slot','player','team','salary','p50','p90','ownership'];
+        rows = [];
+        state.generatedPortfolio.forEach((portfolioEntry, idx) => {
+          portfolioEntry.lineup.forEach(item => {
+            rows.push({
+              lineup_index: idx + 1,
+              slot: item.slot,
+              player: item.player.name,
+              team: item.player.team,
+              salary: item.player.salary,
+              p50: item.player.p50.toFixed(1),
+              p90: item.player.p90.toFixed(1),
+              ownership: formatPct(item.player.ownership)
+            });
+          });
+        });
+      }
+
+      const csv = [headers.map(csvEscape).join(',')].concat(
+        rows.map(row => headers.map(h => csvEscape(row[h] ?? '')).join(','))
+      ).join('\n');
+
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `court-edge-${state.site.toLowerCase()}-${state.contest.toLowerCase()}-portfolio-lineup-${state.currentLineupIndex}.csv`;
+      link.download = template
+        ? `court-edge-${state.site.toLowerCase()}-${state.contest.toLowerCase()}-template-filled-${state.generatedPortfolio.length}-lineups.csv`
+        : `court-edge-${state.site.toLowerCase()}-${state.contest.toLowerCase()}-${state.generatedPortfolio.length}-lineups.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
