@@ -569,9 +569,21 @@
           <input class="input" type="number" id="lineupCountInput" min="1" max="150" value="20" />
         </div>
 
+        <div class="template-box" style="margin-bottom:14px;">
+          <div class="status-label">Slate Player CSV</div>
+          <p class="tiny muted">Upload the actual DK or FD salary export here. This file feeds the player pool and replaces the demo players inside the optimizer.</p>
+          <input type="file" id="slatePlayerCsv" accept=".csv" />
+          <div class="template-meta">
+            <span id="slatePlayerStatus">No slate player CSV loaded</span>
+            <span id="slatePlayerRows">Player rows: 0</span>
+          </div>
+          <div class="helper" id="slatePlayerParseStatus" style="margin-top:8px; font-size:12px;">Slate parser: no file loaded</div>
+          <div class="helper" id="slatePlayerMappingStatus" style="margin-top:6px; font-size:12px;">Slate mapping: waiting for salary export</div>
+        </div>
+
         <div class="template-box">
           <div class="status-label">Lineup Upload Template</div>
-          <p class="tiny muted">Upload your DraftKings or FanDuel entry template CSV here. The loader now scans the file to find the real header row, uses the template row count automatically up to 50 builds for speed, and exports the full portfolio.</p>
+          <p class="tiny muted">Upload your DraftKings or FanDuel entry template CSV here. This file controls export rows and lineup count. It does not replace the player pool by itself.</p>
           <input type="file" id="lineupTemplateCsv" accept=".csv" />
           <div class="template-meta">
             <span id="lineupTemplateStatus">No lineup template loaded</span>
@@ -807,6 +819,7 @@
         ownershipHistory: null,
         contestResults: null,
         injuryHistory: null,
+        slatePlayerCsv: null,
         lineupTemplate: null
       }
     };
@@ -889,6 +902,77 @@
       };
     }
 
+    function effectiveSimCount() {
+      const poolSize = state.players.length || state.uploads.slatePlayerCsv?.players?.length || RAW_PLAYERS.length;
+      if (poolSize > 250) return Math.min(state.simCount, 600);
+      if (poolSize > 180) return Math.min(state.simCount, 900);
+      if (poolSize > 120) return Math.min(state.simCount, 1200);
+      if (poolSize > 80) return Math.min(state.simCount, 1800);
+      if (poolSize > 40) return Math.min(state.simCount, 3000);
+      return state.simCount;
+    }
+
+    function getRowValue(row, keys) {
+      for (const key of keys) {
+        if (row[key] != null && String(row[key]).trim() !== '') return String(row[key]).trim();
+      }
+      return '';
+    }
+
+    function parsePositions(raw) {
+      const txt = String(raw || '').toUpperCase();
+      const found = ['PG','SG','SF','PF','C'].filter(pos => txt.includes(pos));
+      return found.length ? found : ['UTIL'];
+    }
+
+    function canonicalizeSlateRows(rows, siteHint) {
+      const players = [];
+      let site = siteHint || state.site;
+      for (const row of rows) {
+        const keys = Object.keys(row);
+        const joined = keys.join('|');
+        if (!siteHint) {
+          if (joined.includes('teamabbrev') || joined.includes('gameinfo') || joined.includes('avgpointspergame')) site = 'DK';
+          if (joined.includes('fppg') || joined.includes('nickname') || joined.includes('injuryindicator')) site = 'FD';
+        }
+        const name = getRowValue(row, ['name','nickname','player','playername']);
+        const salary = Number(getRowValue(row, ['salary','salarydk','salaryfd']));
+        const posRaw = getRowValue(row, ['position','rosterposition','positions']);
+        if (!name || !Number.isFinite(salary) || salary <= 0 || !posRaw) continue;
+        const team = getRowValue(row, ['teamabbrev','team','teamaabbr']) || 'TEAM';
+        const opp = getRowValue(row, ['opp','opponent','oppteam']) || (getRowValue(row, ['gameinfo','game']) || '').split('@').find(x => x && x !== team) || 'OPP';
+        const gameInfo = getRowValue(row, ['gameinfo','game']) || `${team}@${opp}`;
+        const siteAvg = Number(getRowValue(row, ['avgpointspergame','fppg','sitefppg','avgfp']));
+        const own = clamp(Number(getRowValue(row, ['own_proj','ownership','projectedownership','projected_ownership','own'])) > 1 ? Number(getRowValue(row, ['own_proj','ownership','projectedownership','projected_ownership','own']))/100 : Number(getRowValue(row, ['own_proj','ownership','projectedownership','projected_ownership','own'])) || 0.12, 0.01, 0.85);
+        const baseline = Number.isFinite(siteAvg) && siteAvg > 0 ? siteAvg : Math.max(10, salary / (site === 'FD' ? 175 : 185));
+        const minutesBase = clamp(18 + baseline * 0.42, 16, 38);
+        const fppmBase = clamp(baseline / Math.max(minutesBase, 1), 0.65, 1.9);
+        const usageBase = clamp(14 + fppmBase * 9, 12, 36);
+        const id = getRowValue(row, ['id','playerid','playeridfd','playeriddk']) || String(300000 + players.length);
+        players.push({
+          name,
+          team,
+          opp,
+          gameId: gameInfo.replace(/\s+/g, ''),
+          positions: parsePositions(posRaw),
+          salaryDK: site === 'DK' ? salary : Math.round(salary * 0.9),
+          salaryFD: site === 'FD' ? salary : Math.round(salary * 1.1),
+          own,
+          minutes: [minutesBase - 2, minutesBase, minutesBase + 1],
+          fppm: [Math.max(0.5, fppmBase - 0.06), fppmBase, fppmBase + 0.05],
+          usg: [Math.max(10, usageBase - 1.5), usageBase, usageBase + 1.2],
+          usgBase: usageBase,
+          paceTeam: LEAGUE_PACE + ((players.length % 7) - 3) * 0.7,
+          paceOpp: LEAGUE_PACE + ((players.length % 5) - 2) * 0.8,
+          defrtgOpp: LEAGUE_DEFRTG + ((players.length % 9) - 4) * 1.3,
+          injury: getRowValue(row, ['injurystatus','injuryindicator','injury_status','status']),
+          dkId: site === 'DK' ? id : String(100000 + players.length),
+          fdId: site === 'FD' ? id : String(200000 + players.length)
+        });
+      }
+      return { players, site };
+    }
+
     function applyUploadedData(player) {
       const out = { ...player };
       const ownFile = state.uploads.ownershipHistory;
@@ -921,9 +1005,10 @@
 
     function simulatePlayerDistribution(player, projection, sigma) {
       const samples = [];
+      const simTotal = effectiveSimCount();
       const gameStd = 0.07 + (player.paceTeam > LEAGUE_PACE ? 0.01 : 0);
       const idioStd = Math.max(0.05, sigma / Math.max(projection, 1));
-      for (let i = 0; i < state.simCount; i++) {
+      for (let i = 0; i < simTotal; i++) {
         const gameShock = 1 + randn() * gameStd;
         const playerShock = 1 + randn() * idioStd;
         const points = Math.max(0, projection * gameShock * playerShock);
@@ -1006,7 +1091,8 @@
     }
 
     function refreshPlayers() {
-      state.players = RAW_PLAYERS.map(computePlayerMetrics).sort((a, b) => b.buildScore - a.buildScore);
+      const sourcePlayers = (state.uploads.slatePlayerCsv?.players?.length ? state.uploads.slatePlayerCsv.players : RAW_PLAYERS);
+      state.players = sourcePlayers.map(computePlayerMetrics).sort((a, b) => b.buildScore - a.buildScore);
       renderPlayerPool();
       renderMathSummary();
       updateStatusBlocks();
@@ -1038,11 +1124,12 @@
       document.getElementById('summaryAvgLev').textContent = avgLev.toFixed(1);
       document.getElementById('summaryAvgOwn').textContent = formatPct(avgOwn);
       document.getElementById('projectionBlendInfo').textContent = 'Minutes 40/35/25 · FPPM 45/35/20 · USG 45/35/20';
-      document.getElementById('mathEngineSummary').textContent = `${state.site} ${state.contest} build using ${formatNumber(state.simCount)} simulations, weighted-median minutes/FPPM, boom-prob leverage, MAD volatility, and ${fragilityDisplayLabel(state.fragilityCap).toLowerCase()} fragility cap.`;
+      document.getElementById('mathEngineSummary').textContent = `${state.site} ${state.contest} build using ${formatNumber(effectiveSimCount())} effective simulations, weighted-median minutes/FPPM, boom-prob leverage, MAD volatility, and ${fragilityDisplayLabel(state.fragilityCap).toLowerCase()} fragility cap.`;
     }
 
     function lineupSummary(lineup) {
-      const totals = new Array(state.simCount).fill(0);
+      const simTotal = state.players[0]?.simulations?.length || effectiveSimCount();
+      const totals = new Array(simTotal).fill(0);
       let salary = 0, ownershipSum = 0, leverageSum = 0, fragility = 0, proj = 0;
       lineup.forEach(({ player }) => {
         salary += player.salary;
@@ -1050,7 +1137,7 @@
         leverageSum += player.leverage;
         fragility += player.fragilityScore;
         proj += player.median;
-        for (let i = 0; i < state.simCount; i++) totals[i] += player.simulations[i];
+        for (let i = 0; i < simTotal; i++) totals[i] += player.simulations[i] || 0;
       });
       totals.sort((a, b) => a - b);
       const p50 = quantile(totals, 0.50);
@@ -1380,6 +1467,11 @@
           document.getElementById('templateMappingStatus').textContent = 'Template mapping: waiting for CSV';
           document.getElementById('templateParseStatus').textContent = 'Template parser: no file loaded';
         }
+        if (type === 'slatePlayerCsv') {
+          document.getElementById('slatePlayerRows').textContent = 'Player rows: 0';
+          document.getElementById('slatePlayerParseStatus').textContent = 'Slate parser: no file loaded';
+          document.getElementById('slatePlayerMappingStatus').textContent = 'Slate mapping: waiting for salary export';
+        }
         refreshPlayers();
         return;
       }
@@ -1387,7 +1479,27 @@
       const parsed = simpleCsvParse(text);
       const rows = parsed.rows;
       const parseStatusEl = document.getElementById('templateParseStatus');
-      if (type === 'historicalGameLogs') {
+      if (type === 'slatePlayerCsv') {
+        const canonical = canonicalizeSlateRows(rows);
+        state.uploads[type] = { rows, players: canonical.players, fileName: file.name, headers: parsed.headers, headerIndex: parsed.headerIndex, site: canonical.site };
+        document.getElementById('slatePlayerRows').textContent = `Player rows: ${canonical.players.length.toLocaleString()}`;
+        document.getElementById('slatePlayerParseStatus').textContent = parsed.headerIndex >= 0
+          ? `Slate parser: detected header row ${parsed.headerIndex + 1}`
+          : 'Slate parser: could not find a header row';
+        document.getElementById('slatePlayerMappingStatus').textContent = canonical.players.length
+          ? `Slate mapping: ${canonical.site} salary export ingested · player pool replaced`
+          : 'Slate mapping: could not map name, position, and salary columns';
+        if (canonical.site && canonical.site !== state.site) {
+          state.site = canonical.site;
+          setActiveChip('site', canonical.site);
+        }
+        statusEl.textContent = canonical.players.length
+          ? `${file.name} loaded · ${canonical.players.length.toLocaleString()} players ingested`
+          : `${file.name} loaded but no valid players were ingested`;
+        refreshPlayers();
+        document.getElementById(inputId).value = '';
+        return;
+      } else if (type === 'historicalGameLogs') {
         const grouped = new Map();
         rows.forEach(row => {
           const name = (row.player_name || row.player || row.name || '').toLowerCase();
@@ -1497,6 +1609,7 @@
         ['ownershipHistory', 'ownershipHistoryStatus', 'ownershipHistory'],
         ['contestResults', 'contestResultsStatus', 'contestResults'],
         ['injuryHistory', 'injuryHistoryStatus', 'injuryHistory'],
+        ['slatePlayerCsv', 'slatePlayerStatus', 'slatePlayerCsv'],
         ['lineupTemplateCsv', 'lineupTemplateStatus', 'lineupTemplate']
       ];
       uploadMap.forEach(([inputId, statusId, type]) => {
