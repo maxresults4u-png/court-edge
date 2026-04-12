@@ -571,7 +571,7 @@
 
         <div class="template-box">
           <div class="status-label">Lineup Upload Template</div>
-          <p class="tiny muted">Upload your DraftKings or FanDuel entry template CSV here. The loader now scans the file to find the real header row, uses the template row count automatically, and exports the full portfolio.</p>
+          <p class="tiny muted">Upload your DraftKings or FanDuel entry template CSV here. The loader now scans the file to find the real header row, uses the template row count automatically up to 50 builds for speed, and exports the full portfolio.</p>
           <input type="file" id="lineupTemplateCsv" accept=".csv" />
           <div class="template-meta">
             <span id="lineupTemplateStatus">No lineup template loaded</span>
@@ -1071,50 +1071,65 @@
 
     function generateOneLineup(lineupIndex = 0) {
       const cfg = SITE_CONFIG[state.site];
-      const candidates = [...state.players].sort((a, b) => {
-        const exposurePenalty = (a._usedCount || 0) * 1.4;
-        const exposurePenaltyB = (b._usedCount || 0) * 1.4;
-        return (b.buildScore - exposurePenaltyB + Math.random() * 0.25) - (a.buildScore - exposurePenalty + Math.random() * 0.25);
+      const randomizedCandidates = [...state.players].sort((a, b) => {
+        const exposurePenaltyA = (a._usedCount || 0) * 1.5;
+        const exposurePenaltyB = (b._usedCount || 0) * 1.5;
+        return (b.buildScore - exposurePenaltyB + Math.random() * 0.6) - (a.buildScore - exposurePenaltyA + Math.random() * 0.6);
       });
 
+      const perSlotPools = cfg.slots.map(slot => randomizedCandidates
+        .filter(player => eligibilityForSlot(player, slot))
+        .slice(0, 18));
+
       let best = null;
-      function dfs(slotIndex, used, salary, teamCounts, current) {
-        if (slotIndex === cfg.slots.length) {
-          if (salary > cfg.cap) return;
-          const summary = lineupSummary(current);
-          const objective = summary.p90 + summary.leverageAvg * 4 - summary.fragilityAvg * 18 - Math.max(0, summary.salary - (cfg.cap - 800)) * 0.005;
-          if (!best || objective > best.objective) best = { lineup: current.slice(), summary, objective };
-          return;
-        }
-        const slot = cfg.slots[slotIndex];
-        for (const player of candidates) {
-          if (used.has(player.name)) continue;
-          if (!eligibilityForSlot(player, slot)) continue;
-          const nextSalary = salary + player.salary;
-          if (nextSalary > cfg.cap) continue;
-          const teamCount = teamCounts.get(player.team) || 0;
-          if (teamCount >= 3 && state.stack !== 'teamstack') continue;
-          if (state.stack === 'bringback' && current.length >= 1) {
-            const primary = current[0].player;
-            if (current.length === 1 && player.gameId !== primary.gameId && candidates.length > cfg.slots.length + 2) continue;
+      const tries = 140;
+      for (let t = 0; t < tries; t++) {
+        const used = new Set();
+        const teamCounts = new Map();
+        const lineup = [];
+        let salary = 0;
+        let failed = false;
+
+        for (let slotIndex = 0; slotIndex < cfg.slots.length; slotIndex++) {
+          const slot = cfg.slots[slotIndex];
+          const pool = perSlotPools[slotIndex]
+            .filter(player => {
+              if (used.has(player.name)) return false;
+              if (salary + player.salary > cfg.cap) return false;
+              const teamCount = teamCounts.get(player.team) || 0;
+              if (teamCount >= 3 && state.stack !== 'teamstack') return false;
+              if (state.stack === 'bringback' && lineup.length === 1) {
+                const primary = lineup[0].player;
+                if (player.gameId !== primary.gameId && perSlotPools[slotIndex].length > 2) return false;
+              }
+              return true;
+            });
+
+          if (!pool.length) {
+            failed = true;
+            break;
           }
-          used.add(player.name);
-          teamCounts.set(player.team, teamCount + 1);
-          current.push({ slot, player });
-          dfs(slotIndex + 1, used, nextSalary, teamCounts, current);
-          current.pop();
-          teamCounts.set(player.team, teamCount);
-          if (teamCount === 0) teamCounts.delete(player.team);
-          used.delete(player.name);
+
+          const sliceWidth = Math.min(pool.length, Math.max(3, 8 - Math.floor(slotIndex / 2)));
+          const selected = pool[Math.floor(Math.random() * sliceWidth)];
+          used.add(selected.name);
+          salary += selected.salary;
+          teamCounts.set(selected.team, (teamCounts.get(selected.team) || 0) + 1);
+          lineup.push({ slot, player: selected });
         }
+
+        if (failed || lineup.length !== cfg.slots.length) continue;
+        const summary = lineupSummary(lineup);
+        if (!summary.legal) continue;
+        const objective = summary.p90 + summary.leverageAvg * 4 - summary.fragilityAvg * 18 - Math.max(0, summary.salary - (cfg.cap - 700)) * 0.005;
+        if (!best || objective > best.objective) best = { lineup, summary, objective };
       }
-      dfs(0, new Set(), 0, new Map(), []);
       return best;
     }
 
     function generatePortfolio() {
       state.generatedPortfolio = [];
-      const requested = state.uploads.lineupTemplate?.rows?.length ? Math.min(150, state.uploads.lineupTemplate.rows.length) : state.lineupCount;
+      const requested = state.uploads.lineupTemplate?.rows?.length ? Math.min(50, state.uploads.lineupTemplate.rows.length) : Math.min(50, state.lineupCount);
       const maxExposure = state.contest === 'Cash' ? 0.8 : 0.7;
       const seenKeys = new Set();
       state.players.forEach(p => p._usedCount = 0);
@@ -1312,15 +1327,46 @@
     }
 
     function simpleCsvParse(text) {
-      const lines = text.split(/\r?\n/).filter(line => line.trim().length);
-      if (!lines.length) return [];
-      const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
-      return lines.slice(1).map(line => {
+      const lines = text.split(/
+?
+/);
+      const nonEmpty = lines
+        .map((line, idx) => ({ line, idx }))
+        .filter(item => item.line.trim().length);
+      if (!nonEmpty.length) return { headers: [], rows: [], headerIndex: -1 };
+
+      const expectedKeys = ['entry id','entryid','contest id','contestid','contest name','contestname','pg','sg','sf','pf','c','g','f','util','mvp','star','pro','flex','id','player id','nickname','name'];
+      let headerIndex = -1;
+      let headers = [];
+
+      for (const item of nonEmpty.slice(0, 25)) {
+        const cells = parseCsvLine(item.line).map(h => h.trim());
+        const normalized = cells.map(normalizeHeader);
+        const hitCount = normalized.filter(cell => expectedKeys.includes(cell)).length;
+        const distinctCount = new Set(normalized.filter(Boolean)).size;
+        if (hitCount >= 2 || (distinctCount >= 6 && normalized.some(cell => ['pg','sg','sf','pf','c','g','f','util','mvp','flex'].includes(cell)))) {
+          headerIndex = item.idx;
+          headers = cells;
+          break;
+        }
+      }
+
+      if (headerIndex === -1) {
+        headerIndex = nonEmpty[0].idx;
+        headers = parseCsvLine(nonEmpty[0].line).map(h => h.trim());
+      }
+
+      const normalizedHeaders = headers.map(h => h.trim().toLowerCase());
+      const rows = [];
+      for (let i = headerIndex + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line || !line.trim()) continue;
         const vals = parseCsvLine(line);
         const row = {};
-        headers.forEach((h, i) => row[h] = (vals[i] ?? '').trim());
-        return row;
-      });
+        normalizedHeaders.forEach((h, idx) => row[h] = (vals[idx] ?? '').trim());
+        if (Object.values(row).some(Boolean)) rows.push(row);
+      }
+      return { headers: normalizedHeaders, rows, headerIndex };
     }
 
     async function handleUpload(inputId, statusId, type) {
@@ -1371,9 +1417,8 @@
         }
         refreshPlayers();
         if (rows.length && spec.slotColumns.length) {
-          generatePortfolio();
-        }
-        if (!rows.length || !spec.slotColumns.length) {
+          statusEl.textContent = `${file.name} loaded · ready to generate ${Math.max(1, Math.min(150, rows.length))} lineups`;
+        } else {
           statusEl.textContent = `${file.name} loaded · template needs a valid header row`;
         }
         document.getElementById(inputId).value = '';
