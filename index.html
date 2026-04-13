@@ -65,7 +65,7 @@
       <h2>Uploads</h2>
       <div class="row3">
         <div class="drop">
-          <input id="fdInput" type="file" accept=".csv"/>
+          <input id="fdInput" type="file" accept=".csv,.txt"/>
           <h3>FanDuel Slate CSV</h3>
           <p>Required. Current FanDuel NBA players list export.</p>
           <div class="filebox" id="fdFileBox">No file loaded</div>
@@ -77,10 +77,10 @@
           <div class="filebox" id="projFileBox">No custom projection file loaded</div>
         </div>
         <div class="drop">
-          <input id="actualInput" type="file" accept=".csv,.txt"/>
+          <input id="actualInput" type="file" accept=".csv"/>
           <h3>Actual Results CSV</h3>
           <p>Optional. For backtesting. Supports columns like player, fantasy, actual, fpts.</p>
-          <div class="filebox" id="actualFileBox">No actual-results file loaded</div><div class="filebox" id="actualPreviewBox" style="margin-top:8px;color:#aac1e8">Awaiting actual-results file</div>
+          <div class="filebox" id="actualFileBox">No actual-results file loaded</div>
         </div>
       </div>
       <div style="margin-top:16px">
@@ -162,45 +162,16 @@ const CAP = 60000, MAX_TEAM = 4;
 
 function normName(s){return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w\s']/g,' ').replace(/\b(jr|sr|ii|iii)\b/g,' ').replace(/\s+/g,' ').trim();}
 function detectDelimiter(text){
-  const firstLine = (text || '').split(/
-?
-/).find(x => x && x.trim()) || '';
+  const firstLine = (text || '').split(/\r?\n/).find(x => x && x.trim()) || '';
   const counts = [
     {d:',', c:(firstLine.match(/,/g)||[]).length},
-    {d:'	', c:(firstLine.match(/	/g)||[]).length},
+    {d:'\t', c:(firstLine.match(/\t/g)||[]).length},
     {d:';', c:(firstLine.match(/;/g)||[]).length},
     {d:'|', c:(firstLine.match(/\|/g)||[]).length}
   ].sort((a,b)=>b.c-a.c);
   return counts[0].c > 0 ? counts[0].d : ',';
 }
-function csvToRows(text){
-  const delim = detectDelimiter(text);
-  const rows=[]; let row=[], cell='', inQ=false;
-  for(let i=0;i<text.length;i++){
-    const c=text[i], n=text[i+1];
-    if(c=='"'){
-      if(inQ && n=='"'){cell+='"'; i++;} else inQ=!inQ;
-    }else if(c===delim && !inQ){
-      row.push(cell); cell='';
-    }else if((c=='
-'||c=='
-')&&!inQ){
-      if(c=='
-'&&n=='
-') i++;
-      row.push(cell);
-      if(row.some(v=>String(v).trim()!=='')) rows.push(row);
-      row=[]; cell='';
-    }else{
-      cell+=c;
-    }
-  }
-  if(cell.length || row.length){
-    row.push(cell);
-    if(row.some(v=>String(v).trim()!=='')) rows.push(row);
-  }
-  return rows;
-}
+function csvToRows(text){const delim=detectDelimiter(text); const rows=[]; let row=[], cell='', inQ=false; for(let i=0;i<text.length;i++){const c=text[i], n=text[i+1]; if(c=='"'){if(inQ && n=='"'){cell+='"'; i++;} else inQ=!inQ;} else if(c===delim&&!inQ){row.push(cell); cell='';} else if((c=='\n'||c=='\r')&&!inQ){if(c=='\r'&&n=='\n') i++; row.push(cell); if(row.some(v=>String(v).trim()!=='')) rows.push(row); row=[]; cell='';} else cell+=c;} if(cell.length||row.length){row.push(cell); if(row.some(v=>String(v).trim()!=='')) rows.push(row);} return rows;}
 function rowsToObjects(rows){const h=rows[0]||[]; return rows.slice(1).map(r=>{const o={}; h.forEach((x,i)=>o[x]=r[i]??''); return o;});}
 function parseFile(file){return file.text().then(t=>rowsToObjects(csvToRows(t)));}
 function updateStatus(msg){document.getElementById('statusBox').textContent=msg;}
@@ -705,10 +676,12 @@ document.getElementById('actualInput').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file) return;
   state.actualRaw = await parseFile(file); state.actualMap = new Map();
   state.actualRaw.forEach(r => { const x = inferActualRow(r); if(x && x.name) state.actualMap.set(normName(x.name), x.actual); });
-  const firstKeys = state.actualRaw.length ? Object.keys(state.actualRaw[0]).slice(0,8).join(', ') : 'No columns found';
-  document.getElementById('actualFileBox').textContent = `${file.name} • ${state.actualMap.size} mapped actual scores`;
-  document.getElementById('actualPreviewBox').textContent = `Detected columns: ${firstKeys}`;
-  document.getElementById('newsStatus').textContent = `Actual-results file loaded. Mapped players: ${state.actualMap.size}. If this stays low, the file format may not be player-level results.`;
+  const cols = state.actualRaw.length ? Object.keys(state.actualRaw[0]).slice(0,10).join(', ') : 'No columns detected';
+  document.getElementById('actualFileBox').textContent = `${file.name} • ${state.actualMap.size} mapped actual scores • Columns: ${cols}`;
+  updateStatus(`Actual results loaded.
+Rows: ${state.actualRaw.length}
+Mapped scores: ${state.actualMap.size}
+Columns: ${cols}`);
 });
 document.getElementById('projInput').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file) return;
