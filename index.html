@@ -5,28 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Court Edge Optimizer</title>
 <style>
-  :root{--bg:#0a1120;--panel:#111a31;--panel2:#18274a;--text:#eef5ff;--muted:#9db2db;--accent:#7eb1ff;--accent2:#89f0ff;}
-  *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#08111f,#0a1120);color:var(--text)}
+  :root{--bg:#08111f;--panel:#10192d;--panel2:#1b2d56;--text:#eef5ff;--muted:#9db2db;--accent:#7eb1ff;--accent2:#89f0ff;--accent3:#7ef0b8;--warm:#ffb25f;--rose:#ff7db8;}
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:radial-gradient(circle at top right, rgba(126,177,255,.12), transparent 26%), radial-gradient(circle at top left, rgba(255,125,184,.08), transparent 22%), linear-gradient(180deg,#08111f,#0a1120);color:var(--text)}
   .wrap{max-width:1500px;margin:0 auto;padding:24px}
   .hero,.grid,.results-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
-  .card{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015)), var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
   .row2,.row3,.row4,.uploads-grid{display:grid;gap:14px}.row2{grid-template-columns:1fr 1fr}.row3{grid-template-columns:1fr 1fr 1fr}.row4{grid-template-columns:1fr 1fr 1fr 1fr}.uploads-grid{grid-template-columns:1fr 1fr}
   h1,h2,h3{margin:0 0 10px} p{margin:0;color:var(--muted);line-height:1.5}
-  .pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.pill{padding:9px 12px;border-radius:999px;background:#18284a;border:1px solid rgba(255,255,255,.07);font-size:.9rem}
-  .metric{display:flex;justify-content:space-between;gap:10px;padding:14px 16px;background:var(--panel2);border-radius:15px;margin-bottom:12px}.metric b{color:var(--accent2)}
+  .pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.pill{padding:9px 12px;border-radius:999px;background:linear-gradient(135deg, rgba(126,177,255,.16), rgba(137,240,255,.10));border:1px solid rgba(255,255,255,.07);font-size:.9rem}
+  .metric{display:flex;justify-content:space-between;gap:10px;padding:14px 16px;background:linear-gradient(135deg, rgba(126,177,255,.18), rgba(255,125,184,.10)), var(--panel2);border-radius:15px;margin-bottom:12px}.metric b{color:var(--accent2)}
   label{display:block;font-size:.9rem;color:#c9dafb;margin-bottom:7px}
   input,select,textarea{width:100%;padding:12px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--text)}
   textarea{min-height:84px}
-  .drop{position:relative;border:1.5px dashed rgba(126,177,255,.35);border-radius:18px;padding:16px;min-height:170px;background:linear-gradient(180deg,rgba(126,177,255,.06),rgba(255,255,255,.02))}
+  .drop{position:relative;border:1.5px dashed rgba(126,177,255,.35);border-radius:18px;padding:16px;min-height:170px;background:linear-gradient(180deg,rgba(126,177,255,.10),rgba(255,255,255,.02))}
   .drop input{position:absolute;inset:0;opacity:0;cursor:pointer}.filebox{margin-top:12px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);font-size:.9rem}
   .btns{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px} button{padding:13px 16px;border:0;border-radius:12px;font-weight:700;cursor:pointer}
   .primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#08101d}.secondary{background:rgba(255,255,255,.06);color:var(--text);border:1px solid rgba(255,255,255,.08)}
-  .status{margin-top:14px;padding:14px 16px;border-radius:14px;background:#16233f;color:#cfe0ff;white-space:pre-wrap}
+  .status{margin-top:14px;padding:14px 16px;border-radius:14px;background:linear-gradient(135deg, rgba(126,177,255,.12), rgba(126,240,184,.08)), #16233f;color:#cfe0ff;white-space:pre-wrap}
   table{width:100%;border-collapse:collapse;font-size:.92rem} th,td{padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;vertical-align:top} th{color:#c4d5f3}
-  .lineup-card{padding:16px;border:1px solid rgba(255,255,255,.08);background:#10192c;border-radius:18px;margin-bottom:12px}
-  .lineup-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}.badge{padding:8px 10px;border-radius:999px;background:#1b305b;color:var(--accent2);font-weight:700;white-space:nowrap}
+  .lineup-card{padding:16px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)), #10192c;border-radius:18px;margin-bottom:12px}
+  .lineup-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}.badge{padding:8px 10px;border-radius:999px;background:linear-gradient(135deg, rgba(255,178,95,.18), rgba(255,125,184,.18));color:#fff3da;font-weight:700;white-space:nowrap}
   .small{font-size:.9rem;color:var(--muted)} .tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.tabbtn.active{outline:2px solid rgba(126,177,255,.35)}
   @media (max-width:1080px){.hero,.grid,.results-grid,.row2,.row3,.row4,.uploads-grid{grid-template-columns:1fr}}
+.card h2{color:#dff2ff}.card h3{color:#f4f8ff}.small{font-size:.9rem;color:var(--muted)} table thead tr{background:rgba(126,177,255,.06)} .hero .card:first-child{background:linear-gradient(135deg, rgba(126,177,255,.10), rgba(255,125,184,.06)), var(--panel)}
 </style>
 </head>
 <body>
@@ -389,13 +390,13 @@ function simulatePortfolio(lineups, simCount){
   lineups.forEach(l=>l.players.forEach(p=>{uniq.set(p.id,p); gameKeys.set(p.game,true); teamKeys.set(p.team,true);}));
   const games = [...gameKeys.keys()], teams = [...teamKeys.keys()];
   const playerDraws = new Map();
+  const teamWeight = 0.18;
+  const gameWeight = 0.14;
+  const indivWeight = Math.sqrt(Math.max(0.01, 1 - teamWeight*teamWeight - gameWeight*gameWeight));
 
   // Correlated player outcomes: player-specific + team factor + game environment factor
   uniq.forEach((p,id)=>{
     const arr = new Float32Array(simCount);
-    const teamWeight = 0.18;
-    const gameWeight = 0.14;
-    const indivWeight = Math.sqrt(Math.max(0.01, 1 - teamWeight*teamWeight - gameWeight*gameWeight));
     for(let i=0;i<simCount;i++){
       if(!playerDraws.has('__game__'+p.game)) playerDraws.set('__game__'+p.game, new Float32Array(simCount));
       if(!playerDraws.has('__team__'+p.team)) playerDraws.set('__team__'+p.team, new Float32Array(simCount));
