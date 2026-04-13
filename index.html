@@ -145,7 +145,7 @@
         <button class="secondary" id="entryHistoryBtn">Review Entry History</button>
         <button class="secondary" id="calibrateBtn">Calibrate Brain</button>
         <button class="secondary" id="playerCalibrateBtn">Player Calibration</button>
-        <button class="secondary" id="downloadBtn">Download Lineups CSV</button>
+        <button class="secondary" id="downloadBtn">Download FD Edit CSV</button>
       </div>
       <div class="status" id="summaryBox">No optimizer run yet.</div>
     </div>
@@ -1143,9 +1143,30 @@ document.getElementById('fetchOddsBtn').addEventListener('click', async ()=>{
   }
 });
 document.getElementById('downloadBtn').addEventListener('click', ()=>{
-  if(!state.csvDownload){setSummary('Run the optimizer first.'); return;}
-  const blob = new Blob([state.csvDownload], {type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a');
-  a.href=url; a.download='court_edge_lineups.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  try{
+    if((!state.csvDownload || !state.csvDownload.trim()) && state.lineups && state.lineups.length){
+      state.csvDownload = buildLineupCsv(state.lineups);
+    }
+    if(!state.csvDownload || !state.csvDownload.trim()){
+      setSummary('No lineup CSV is ready yet. Run the optimizer first.');
+      return;
+    }
+    const blob = new Blob([state.csvDownload], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `court_edge_lineups_${new Date().toISOString().slice(0,10)}.csv`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 800);
+    updateStatus(`FanDuel edit-helper CSV download started. ${state.lineups.length} lineups exported. Paste these 9 roster columns into FanDuel's downloaded CSV template.`);
+  }catch(err){
+    setSummary(err.message || String(err));
+  }
 });
 document.querySelectorAll('.tabbtn').forEach(btn=>btn.addEventListener('click',()=>{
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
