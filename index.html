@@ -492,8 +492,11 @@ function renderGameLocks(){
 function applyNewsAdjustments(){
   const raw = document.getElementById('newsInput').value.trim();
   if(!raw){ document.getElementById('newsStatus').textContent = 'No news lines entered.'; return; }
-  const lines = raw.split(/\n+/).map(x => x.trim()).filter(Boolean);
-  let updated = 0, ruledOutTeams = {};
+  const lines = raw.split(/
++/).map(x => x.trim()).filter(Boolean);
+  let updated = 0;
+  const outPlayers = [];
+
   lines.forEach(line => {
     const parts = line.split(',');
     if(parts.length < 2) return;
@@ -505,10 +508,11 @@ function applyNewsAdjustments(){
     if(['O','OUT','D','DOUBTFUL'].includes(status)){
       p.injury = 'O';
       p.playable = false;
-      ruledOutTeams[p.team] = (ruledOutTeams[p.team] || 0) + 1;
+      outPlayers.push({...p});
     }else if(['Q','QUESTIONABLE'].includes(status)){
       p.injury = 'Q';
       p.proj = Math.max(0, p.proj - 2.5);
+      p.std = Math.max(6, p.std * 1.08);
     }else if(['P','PROBABLE'].includes(status)){
       p.injury = 'P';
       p.proj = Math.max(0, p.proj - 0.5);
@@ -517,21 +521,48 @@ function applyNewsAdjustments(){
       p.playable = true;
     }
   });
-  // small teammate bump for ruled-out players
-  Object.keys(ruledOutTeams).forEach(team => {
-    state.players.forEach(p => {
-      if(p.team === team && p.playable){
-        p.proj += 1.5 * ruledOutTeams[team];
-        p.recentMinutes = (p.recentMinutes || 26) + 1.2 * ruledOutTeams[team];
-        p.leverage += 0.6 * ruledOutTeams[team];
-      }
+
+  // Mathematical teammate redistribution for ruled-out players.
+  outPlayers.forEach(op => {
+    const mates = state.players.filter(p => p.team === op.team && p.playable && p.id !== op.id);
+    if(!mates.length) return;
+
+    const outMinutes = Math.min(38, Math.max(18, op.recentMinutes || op.proj || 26));
+    const redistMinutes = outMinutes * 0.72; // not all minutes are concentrated in direct replacements
+    const outUsage = Math.max(0.18, op.recentUsage || 0.22);
+
+    const outPos = (op.rosterPosition || '').split('/');
+    const weights = mates.map(p => {
+      const pos = (p.rosterPosition || '').split('/');
+      const posMatch = pos.some(x => outPos.includes(x)) ? 1.25 : 1.0;
+      const usageFactor = 0.55 + Math.max(0, (p.recentUsage || 0.22) * 2.0);
+      const minFactor = 0.35 + Math.max(0, (p.recentMinutes || 24) / 36);
+      const valueFactor = 0.35 + Math.max(0, (p.valueScore || 3.5) / 8);
+      return posMatch * usageFactor * minFactor * valueFactor;
+    });
+    const totalW = weights.reduce((a,b) => a + b, 0) || 1;
+
+    mates.forEach((p, idx) => {
+      const share = weights[idx] / totalW;
+      const minAdd = redistMinutes * share;
+      const usageAdd = (outUsage * 0.28) * share; // share of missing creation/scoring load
+      p.recentMinutes = (p.recentMinutes || 26) + minAdd;
+      p.recentUsage = (p.recentUsage || 0.22) + usageAdd;
+      p.matchupAdj = p.matchupAdj || 0;
+      // Convert redistributed role into projection and volatility
+      p.proj += (minAdd * 0.85) + (usageAdd * 18);
+      p.std = Math.max(6, p.std + minAdd * 0.18);
+      p.leverage += minAdd * 0.12;
+      p.valueScore = p.proj / Math.max(1, p.salary / 1000);
     });
   });
+
   state.players = state.players.filter(p => p.playable !== false);
+  // Recompute leverage after updates
+  enrichLeverage(state.players);
   document.getElementById('loadedPlayers').textContent = String(state.players.length);
   renderPlayersTable();
-  renderGameLocks();
-  document.getElementById('newsStatus').textContent = `Applied ${updated} news update(s). Ruled-out teammate bumps applied where relevant.`;
+  document.getElementById('newsStatus').textContent = `Applied ${updated} news update(s). Minutes and usage now redistribute mathematically across active teammates when a player is ruled out.`;
 }
 
 function resetNewsPool(){
