@@ -99,6 +99,7 @@
     <div class="card">
       <h2>Optimizer Controls</h2>
       <div class="row4">
+        <div><label for="contestType">Contest type</label><select id="contestType"><option>Large-Field GPP</option><option>Small-Field GPP</option><option>Cash / H2H</option></select></div>
         <div><label for="simCount">Sim count</label><input id="simCount" type="number" min="1000" step="1000" value="20000"/></div>
         <div><label for="lineupCount">Lineups</label><input id="lineupCount" type="number" min="1" max="150" value="20"/></div>
         <div><label for="uniqueness">Min unique players</label><input id="uniqueness" type="number" min="1" max="8" value="2"/></div>
@@ -267,8 +268,23 @@ function inferProjectionRow(row){
   const projKey=keys.find(k=>/projection|proj|fpts|fantasy/i.test(k));
   const ceilKey=keys.find(k=>/ceiling/i.test(k));
   const ownKey=keys.find(k=>/ownership|own/i.test(k));
+  const pieKey=keys.find(k=>/^pie$|player impact estimate/i.test(k));
+  const bpmKey=keys.find(k=>/^bpm$|box plus/i.test(k));
+  const offKey=keys.find(k=>/offensive rating|offrating|off rating/i.test(k));
+  const defKey=keys.find(k=>/defensive rating|defrating|def rating/i.test(k));
+  const raptorKey=keys.find(k=>/raptor/i.test(k));
   if(!nameKey || !projKey) return null;
-  return {name:row[nameKey], projection:Number(row[projKey])||null, ceiling:Number(row[ceilKey])||null, ownership:Number(row[ownKey])||null};
+  return {
+    name:row[nameKey],
+    projection:Number(row[projKey])||null,
+    ceiling:Number(row[ceilKey])||null,
+    ownership:Number(row[ownKey])||null,
+    pie:Number(row[pieKey])||null,
+    bpm:Number(row[bpmKey])||null,
+    offRating:Number(row[offKey])||null,
+    defRating:Number(row[defKey])||null,
+    raptor:Number(row[raptorKey])||null
+  };
 }
 
 function eligible(rp, slot){
@@ -308,6 +324,16 @@ function buildPlayers(){
     const salary = Number(r['Salary'] || 0);
     const fppg = Number(r['FPPG'] || 0);
     let proj = Number(custom.projection ?? hist.hist_proj ?? fppg);
+    const pie = Number(custom.pie ?? 0);
+    const bpm = Number(custom.bpm ?? 0);
+    const offRating = Number(custom.offRating ?? 0);
+    const defRating = Number(custom.defRating ?? 0);
+    const raptor = Number(custom.raptor ?? 0);
+    proj += Math.max(-2.5, Math.min(2.5, pie * 0.12));
+    proj += Math.max(-2.0, Math.min(2.0, bpm * 0.28));
+    proj += Math.max(-1.5, Math.min(1.5, raptor * 0.22));
+    proj += Math.max(-1.0, Math.min(1.0, (offRating - 110) * 0.04));
+    proj += Math.max(-1.0, Math.min(1.0, (110 - defRating) * 0.04));
     const std = Number(hist.recent_fd_std ?? Math.max(6, proj * 0.28));
     const ceil = Number(custom.ceiling ?? hist.hist_ceiling ?? (proj + 1.28*std));
     const ownership = Number(custom.ownership ?? 0);
@@ -324,7 +350,8 @@ function buildPlayers(){
       recentMean:Number(hist.recent_fd_mean ?? fppg*0.95),
       recentMinutes:Number(hist.recent_minutes ?? 26),
       recentUsage:Number(hist.recent_usg ?? 0.22),
-      matchupAdj:Number(hist.matchup_adj ?? 0)
+      matchupAdj:Number(hist.matchup_adj ?? 0),
+      pie, bpm, offRating, defRating, raptor
     };
   }).filter(p=>p.playable);
   if(!players.some(p=>p.ownership>0)) estimateOwnership(players);
@@ -444,10 +471,25 @@ function buildPortfolio(){
   const simCount = Math.max(1000, Number(document.getElementById('simCount').value)||20000);
   const minUnique = Math.max(1, Number(document.getElementById('uniqueness').value)||2);
   const maxExpPct = Math.max(1, Number(document.getElementById('maxExposure').value)||60);
-  const randomness = (Number(document.getElementById('randomness').value)||18) / 100;
+  let randomness = (Number(document.getElementById('randomness').value)||18) / 100;
   const minSalary = Number(document.getElementById('minSalary').value)||59000;
-  const leverageWeight = Number(document.getElementById('leverageWeight').value)||2.0;
-  const dupPenalty = Number(document.getElementById('dupPenalty').value)||1.4;
+  let leverageWeight = Number(document.getElementById('leverageWeight').value)||2.0;
+  let dupPenalty = Number(document.getElementById('dupPenalty').value)||1.4;
+  const contestType = document.getElementById('contestType').value;
+
+  if(contestType === 'Cash / H2H'){
+    randomness *= 0.65;
+    leverageWeight *= 0.45;
+    dupPenalty *= 0.45;
+  }else if(contestType === 'Small-Field GPP'){
+    randomness *= 0.9;
+    leverageWeight *= 0.85;
+    dupPenalty *= 0.8;
+  }else{
+    randomness *= 1.15;
+    leverageWeight *= 1.2;
+    dupPenalty *= 1.15;
+  }
 
   const exposures = {}; const lineups=[]; const seen=new Set();
   const attemptsPerLineup = lineupTarget > 75 ? 160 : 260;
@@ -476,6 +518,7 @@ function buildPortfolio(){
   renderLineups(lineups);
   renderExposure(lineups);
   setSummary(
+    `Contest type: ${contestType}\n` +
     `Generated ${lineups.length} lineups\n` +
     `Sim count: ${simCount.toLocaleString()}\n` +
     `Top lineup proj: ${lineups[0].proj.toFixed(1)}\n` +
@@ -549,6 +592,7 @@ function runEntryHistoryReview(){
 }
 
 function compareEntryHistoryToLineups(parsed){
+  const contestType = document.getElementById('contestType') ? document.getElementById('contestType').value : 'Large-Field GPP';
   if(!state.lineups.length){
     document.getElementById('entryCompareBox').textContent = 'Entry history parsed, but no Court Edge lineups have been generated yet.';
     return;
@@ -573,6 +617,7 @@ function compareEntryHistoryToLineups(parsed){
   const beat75 = simScores.filter(x => x > p75Hist).length;
 
   document.getElementById('entryCompareBox').textContent =
+    `Contest type benchmark: ${contestType}\n` +
     `Historical entries: ${historyScores.length}\n` +
     `Historical average score: ${avgHist.toFixed(2)}\n` +
     `Historical median score: ${medHist.toFixed(2)}\n` +
@@ -759,7 +804,7 @@ function runBacktest(){
 }
 function renderPlayersTable(){
   const rows=[...state.players].sort((a,b)=>(b.leverage-a.leverage)||(b.valueScore-a.valueScore)).slice(0,140);
-  document.getElementById('playersTab').innerHTML = `<div style="overflow:auto;max-height:820px"><table><thead><tr><th>Player</th><th>Pos</th><th>Team</th><th>Salary</th><th>Proj</th><th>Recent</th><th>Min</th><th>USG</th><th>Matchup</th><th>Own</th><th>Lev</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.name}</td><td>${r.rosterPosition}</td><td>${r.team}</td><td>$${r.salary.toLocaleString()}</td><td>${r.proj.toFixed(1)}</td><td>${r.recentMean.toFixed(1)}</td><td>${r.recentMinutes.toFixed(1)}</td><td>${(r.recentUsage*100).toFixed(1)}%</td><td>${r.matchupAdj.toFixed(1)}</td><td>${r.ownership.toFixed(1)}%</td><td>${r.leverage.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`;
+  document.getElementById('playersTab').innerHTML = `<div style="overflow:auto;max-height:820px"><table><thead><tr><th>Player</th><th>Pos</th><th>Team</th><th>Salary</th><th>Proj</th><th>Recent</th><th>Min</th><th>USG</th><th>Matchup</th><th>PIE</th><th>BPM</th><th>RAPTOR</th><th>Own</th><th>Lev</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.name}</td><td>${r.rosterPosition}</td><td>${r.team}</td><td>$${r.salary.toLocaleString()}</td><td>${r.proj.toFixed(1)}</td><td>${r.recentMean.toFixed(1)}</td><td>${r.recentMinutes.toFixed(1)}</td><td>${(r.recentUsage*100).toFixed(1)}%</td><td>${r.matchupAdj.toFixed(1)}</td><td>${(r.pie||0).toFixed(1)}</td><td>${(r.bpm||0).toFixed(1)}</td><td>${(r.raptor||0).toFixed(1)}</td><td>${r.ownership.toFixed(1)}%</td><td>${r.leverage.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 document.getElementById('fdInput').addEventListener('change', async e=>{
