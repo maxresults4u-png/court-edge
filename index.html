@@ -161,7 +161,46 @@ const SLOT_ORDER = ['PG','PG','SG','SG','SF','SF','PF','PF','C'];
 const CAP = 60000, MAX_TEAM = 4;
 
 function normName(s){return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w\s']/g,' ').replace(/\b(jr|sr|ii|iii)\b/g,' ').replace(/\s+/g,' ').trim();}
-function csvToRows(text){const rows=[]; let row=[], cell='', inQ=false; for(let i=0;i<text.length;i++){const c=text[i], n=text[i+1]; if(c=='"'){if(inQ && n=='"'){cell+='"'; i++;} else inQ=!inQ;} else if(c==','&&!inQ){row.push(cell); cell='';} else if((c=='\n'||c=='\r')&&!inQ){if(c=='\r'&&n=='\n') i++; row.push(cell); if(row.some(v=>v!=='')) rows.push(row); row=[]; cell='';} else cell+=c;} if(cell.length||row.length){row.push(cell); if(row.some(v=>v!=='')) rows.push(row);} return rows;}
+function detectDelimiter(text){
+  const firstLine = (text || '').split(/
+?
+/).find(x => x && x.trim()) || '';
+  const counts = [
+    {d:',', c:(firstLine.match(/,/g)||[]).length},
+    {d:'	', c:(firstLine.match(/	/g)||[]).length},
+    {d:';', c:(firstLine.match(/;/g)||[]).length},
+    {d:'|', c:(firstLine.match(/\|/g)||[]).length}
+  ].sort((a,b)=>b.c-a.c);
+  return counts[0].c > 0 ? counts[0].d : ',';
+}
+function csvToRows(text){
+  const delim = detectDelimiter(text);
+  const rows=[]; let row=[], cell='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i], n=text[i+1];
+    if(c=='"'){
+      if(inQ && n=='"'){cell+='"'; i++;} else inQ=!inQ;
+    }else if(c===delim && !inQ){
+      row.push(cell); cell='';
+    }else if((c=='
+'||c=='
+')&&!inQ){
+      if(c=='
+'&&n=='
+') i++;
+      row.push(cell);
+      if(row.some(v=>String(v).trim()!=='')) rows.push(row);
+      row=[]; cell='';
+    }else{
+      cell+=c;
+    }
+  }
+  if(cell.length || row.length){
+    row.push(cell);
+    if(row.some(v=>String(v).trim()!=='')) rows.push(row);
+  }
+  return rows;
+}
 function rowsToObjects(rows){const h=rows[0]||[]; return rows.slice(1).map(r=>{const o={}; h.forEach((x,i)=>o[x]=r[i]??''); return o;});}
 function parseFile(file){return file.text().then(t=>rowsToObjects(csvToRows(t)));}
 function updateStatus(msg){document.getElementById('statusBox').textContent=msg;}
