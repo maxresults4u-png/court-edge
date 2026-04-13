@@ -295,12 +295,8 @@ async function fetchVegasOdds(){
   parseOddsFeed(data, book);
   if(state.fdRaw.length) buildPlayers();
   const lines = state.oddsEvents.slice(0,8).map(ev => `${ev.game} • total ${ev.total?.toFixed(1) || '-'} • ${ev.away} ${ev.awayImplied?.toFixed(1) || '-'} / ${ev.home} ${ev.homeImplied?.toFixed(1) || '-'}`);
-  document.getElementById('oddsStatus').textContent = `Live odds loaded. Games mapped: ${state.oddsEvents.length}
-` + (lines.join('
-') || 'No matching NBA events found.');
-  updateStatus(`Vegas odds loaded.
-Games mapped: ${state.oddsEvents.length}
-Implied team totals are now active in Court Edge projections.`);
+  document.getElementById('oddsStatus').textContent = `Live odds loaded. Games mapped: ${state.oddsEvents.length}\n` + (lines.join('\n') || 'No matching NBA events found.');
+  updateStatus(`Vegas odds loaded.\nGames mapped: ${state.oddsEvents.length}\nImplied team totals are now active in Court Edge projections.`);
 }
 
 function splitSlots(rp){return (rp||'').split('/');}
