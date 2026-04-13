@@ -206,12 +206,18 @@ function erf(x){const sign = x<0?-1:1; x=Math.abs(x); const a1=0.254829592,a2=-0
 
 function inferActualRow(row){
   const keys = Object.keys(row);
-  const nameKey = keys.find(k => /player|name/i.test(k));
-  const scoreKey = keys.find(k => /actual|fpts|fantasy|score/i.test(k));
+  const lower = keys.map(k => ({orig:k, low:k.toLowerCase().trim()}));
+
+  const nameKey = (lower.find(k => /^(player|nickname|name|player name)$/.test(k.low)) ||
+                   lower.find(k => /player|nickname|name/.test(k.low)) || {}).orig;
+
+  const scoreKey = (lower.find(k => /^(fantasy points|fantasy|fpts|fd points|fdpts|actual fantasy points|actual points|actual score|score)$/.test(k.low)) ||
+                    lower.find(k => /fantasy|fpts|fd points|fdpts|actual|score/.test(k.low)) || {}).orig;
+
   if(!nameKey || !scoreKey) return null;
-  const score = Number(row[scoreKey]);
+  const score = Number(String(row[scoreKey]).replace(/[^0-9.\-]/g, ''));
   if(Number.isNaN(score)) return null;
-  return {name: row[nameKey], actual: score};
+  return {name: row[nameKey], actual: score, nameKey, scoreKey};
 }
 function inferProjectionRow(row){
   const keys=Object.keys(row);
@@ -342,13 +348,13 @@ function simulatePortfolio(lineups, simCount){
   lineups.forEach(l=>l.players.forEach(p=>{uniq.set(p.id,p); gameKeys.set(p.game,true); teamKeys.set(p.team,true);}));
   const games = [...gameKeys.keys()], teams = [...teamKeys.keys()];
   const playerDraws = new Map();
-  const teamWeight = 0.18;
-  const gameWeight = 0.14;
-  const indivWeight = Math.sqrt(Math.max(0.01, 1 - teamWeight*teamWeight - gameWeight*gameWeight));
 
   // Correlated player outcomes: player-specific + team factor + game environment factor
   uniq.forEach((p,id)=>{
     const arr = new Float32Array(simCount);
+    const teamWeight = 0.18;
+    const gameWeight = 0.14;
+    const indivWeight = Math.sqrt(Math.max(0.01, 1 - teamWeight*teamWeight - gameWeight*gameWeight));
     for(let i=0;i<simCount;i++){
       if(!playerDraws.has('__game__'+p.game)) playerDraws.set('__game__'+p.game, new Float32Array(simCount));
       if(!playerDraws.has('__team__'+p.team)) playerDraws.set('__team__'+p.team, new Float32Array(simCount));
@@ -493,9 +499,7 @@ function applyNewsAdjustments(){
   const raw = document.getElementById('newsInput').value.trim();
   if(!raw){ document.getElementById('newsStatus').textContent = 'No news lines entered.'; return; }
   const lines = raw.split(/\n+/).map(x => x.trim()).filter(Boolean);
-  let updated = 0;
-  const outPlayers = [];
-
+  let updated = 0, ruledOutTeams = {};
   lines.forEach(line => {
     const parts = line.split(',');
     if(parts.length < 2) return;
@@ -507,11 +511,10 @@ function applyNewsAdjustments(){
     if(['O','OUT','D','DOUBTFUL'].includes(status)){
       p.injury = 'O';
       p.playable = false;
-      outPlayers.push({...p});
+      ruledOutTeams[p.team] = (ruledOutTeams[p.team] || 0) + 1;
     }else if(['Q','QUESTIONABLE'].includes(status)){
       p.injury = 'Q';
       p.proj = Math.max(0, p.proj - 2.5);
-      p.std = Math.max(6, p.std * 1.08);
     }else if(['P','PROBABLE'].includes(status)){
       p.injury = 'P';
       p.proj = Math.max(0, p.proj - 0.5);
@@ -520,48 +523,21 @@ function applyNewsAdjustments(){
       p.playable = true;
     }
   });
-
-  // Mathematical teammate redistribution for ruled-out players.
-  outPlayers.forEach(op => {
-    const mates = state.players.filter(p => p.team === op.team && p.playable && p.id !== op.id);
-    if(!mates.length) return;
-
-    const outMinutes = Math.min(38, Math.max(18, op.recentMinutes || op.proj || 26));
-    const redistMinutes = outMinutes * 0.72; // not all minutes are concentrated in direct replacements
-    const outUsage = Math.max(0.18, op.recentUsage || 0.22);
-
-    const outPos = (op.rosterPosition || '').split('/');
-    const weights = mates.map(p => {
-      const pos = (p.rosterPosition || '').split('/');
-      const posMatch = pos.some(x => outPos.includes(x)) ? 1.25 : 1.0;
-      const usageFactor = 0.55 + Math.max(0, (p.recentUsage || 0.22) * 2.0);
-      const minFactor = 0.35 + Math.max(0, (p.recentMinutes || 24) / 36);
-      const valueFactor = 0.35 + Math.max(0, (p.valueScore || 3.5) / 8);
-      return posMatch * usageFactor * minFactor * valueFactor;
-    });
-    const totalW = weights.reduce((a,b) => a + b, 0) || 1;
-
-    mates.forEach((p, idx) => {
-      const share = weights[idx] / totalW;
-      const minAdd = redistMinutes * share;
-      const usageAdd = (outUsage * 0.28) * share; // share of missing creation/scoring load
-      p.recentMinutes = (p.recentMinutes || 26) + minAdd;
-      p.recentUsage = (p.recentUsage || 0.22) + usageAdd;
-      p.matchupAdj = p.matchupAdj || 0;
-      // Convert redistributed role into projection and volatility
-      p.proj += (minAdd * 0.85) + (usageAdd * 18);
-      p.std = Math.max(6, p.std + minAdd * 0.18);
-      p.leverage += minAdd * 0.12;
-      p.valueScore = p.proj / Math.max(1, p.salary / 1000);
+  // small teammate bump for ruled-out players
+  Object.keys(ruledOutTeams).forEach(team => {
+    state.players.forEach(p => {
+      if(p.team === team && p.playable){
+        p.proj += 1.5 * ruledOutTeams[team];
+        p.recentMinutes = (p.recentMinutes || 26) + 1.2 * ruledOutTeams[team];
+        p.leverage += 0.6 * ruledOutTeams[team];
+      }
     });
   });
-
   state.players = state.players.filter(p => p.playable !== false);
-  // Recompute leverage after updates
-  enrichLeverage(state.players);
   document.getElementById('loadedPlayers').textContent = String(state.players.length);
   renderPlayersTable();
-  document.getElementById('newsStatus').textContent = `Applied ${updated} news update(s). Minutes and usage now redistribute mathematically across active teammates when a player is ruled out.`;
+  renderGameLocks();
+  document.getElementById('newsStatus').textContent = `Applied ${updated} news update(s). Ruled-out teammate bumps applied where relevant.`;
 }
 
 function resetNewsPool(){
@@ -647,22 +623,29 @@ function runBacktest(){
   });
 
   const scored = state.lineups.filter(l => l.actualMatched > 0);
-  if(!scored.length) throw new Error('No lineup players matched the actual-results file.');
+  if(!scored.length) throw new Error('No lineup players matched the actual-results file. This usually means the uploaded file is not a player-level results CSV or the player-name column was not recognized.');
 
   scored.sort((a,b) => b.actual - a.actual);
   const best = scored[0];
   const avg = scored.reduce((t,l) => t + l.actual, 0) / scored.length;
   const med = scored.map(l => l.actual).sort((a,b)=>a-b)[Math.floor(scored.length/2)];
+  const avgMatched = scored.reduce((t,l)=>t+l.actualMatched,0)/scored.length;
 
   setSummary(
-    `Backtest complete\n` +
-    `Scored lineups: ${scored.length}\n` +
-    `Best actual lineup score: ${best.actual.toFixed(2)}\n` +
-    `Average actual lineup score: ${avg.toFixed(2)}\n` +
+    `Backtest complete
+` +
+    `Scored lineups: ${scored.length}
+` +
+    `Average matched players per lineup: ${avgMatched.toFixed(1)} of 9
+` +
+    `Best actual lineup score: ${best.actual.toFixed(2)}
+` +
+    `Average actual lineup score: ${avg.toFixed(2)}
+` +
     `Median actual lineup score: ${med.toFixed(2)}`
   );
 
-  document.getElementById('swapStatus').textContent = `Backtest complete. Best actual lineup score: ${best.actual.toFixed(2)}`;
+  document.getElementById('swapStatus').textContent = `Backtest complete. Best actual lineup score: ${best.actual.toFixed(2)}. Avg matched players: ${avgMatched.toFixed(1)} of 9.`;
   renderLineups(scored);
   renderExposure(scored);
 }
@@ -684,7 +667,7 @@ document.getElementById('actualInput').addEventListener('change', async e=>{
   state.actualRaw = await parseFile(file); state.actualMap = new Map();
   state.actualRaw.forEach(r => { const x = inferActualRow(r); if(x && x.name) state.actualMap.set(normName(x.name), x.actual); });
   document.getElementById('actualFileBox').textContent = `${file.name} • ${state.actualMap.size} mapped actual scores`;
-  document.getElementById('newsStatus').textContent = `Actual-results file loaded. Mapped players: ${state.actualMap.size}`;
+  document.getElementById('newsStatus').textContent = `Actual-results file loaded. Mapped players: ${state.actualMap.size}. If this stays low, the file format may not be player-level results.`;
 });
 document.getElementById('projInput').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file) return;
