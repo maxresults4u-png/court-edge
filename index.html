@@ -77,10 +77,10 @@
           <div class="filebox" id="projFileBox">No custom projection file loaded</div>
         </div>
         <div class="drop">
-          <input id="actualInput" type="file" accept=".csv"/>
+          <input id="actualInput" type="file" accept=".csv,.txt"/>
           <h3>Actual Results CSV</h3>
           <p>Optional. For backtesting. Supports columns like player, fantasy, actual, fpts.</p>
-          <div class="filebox" id="actualFileBox">No actual-results file loaded</div>
+          <div class="filebox" id="actualFileBox">No actual-results file loaded</div><div class="filebox" id="actualPreviewBox" style="margin-top:8px;color:#aac1e8">Awaiting actual-results file</div>
         </div>
       </div>
       <div style="margin-top:16px">
@@ -666,7 +666,9 @@ document.getElementById('actualInput').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file) return;
   state.actualRaw = await parseFile(file); state.actualMap = new Map();
   state.actualRaw.forEach(r => { const x = inferActualRow(r); if(x && x.name) state.actualMap.set(normName(x.name), x.actual); });
+  const firstKeys = state.actualRaw.length ? Object.keys(state.actualRaw[0]).slice(0,8).join(', ') : 'No columns found';
   document.getElementById('actualFileBox').textContent = `${file.name} • ${state.actualMap.size} mapped actual scores`;
+  document.getElementById('actualPreviewBox').textContent = `Detected columns: ${firstKeys}`;
   document.getElementById('newsStatus').textContent = `Actual-results file loaded. Mapped players: ${state.actualMap.size}. If this stays low, the file format may not be player-level results.`;
 });
 document.getElementById('projInput').addEventListener('change', async e=>{
