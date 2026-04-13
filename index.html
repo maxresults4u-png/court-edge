@@ -492,8 +492,7 @@ function renderGameLocks(){
 function applyNewsAdjustments(){
   const raw = document.getElementById('newsInput').value.trim();
   if(!raw){ document.getElementById('newsStatus').textContent = 'No news lines entered.'; return; }
-  const lines = raw.split(/
-+/).map(x => x.trim()).filter(Boolean);
+  const lines = raw.split(/\n+/).map(x => x.trim()).filter(Boolean);
   let updated = 0;
   const outPlayers = [];
 
