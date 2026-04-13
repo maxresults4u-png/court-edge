@@ -117,6 +117,11 @@
           <div><h3>Entry History</h3><p>FanDuel contest history for score and ROI comparison.</p></div>
           <div class="filebox" id="entryHistoryBox">No entry-history file loaded</div>
         </div>
+        <div class="drop">
+          <input id="entryTemplateInput" type="file" accept=".csv,.txt"/>
+          <div><h3>FD Entry Template</h3><p>Upload FanDuel's downloaded CSV Edit template for exact mapped export.</p></div>
+          <div class="filebox" id="entryTemplateBox">No FanDuel entry template loaded</div>
+        </div>
       </div>
       <div style="margin-top:12px">
         <label for="manualRules">Notes / locks / excludes</label>
@@ -145,7 +150,7 @@
         <button class="secondary" id="entryHistoryBtn">Review Entry History</button>
         <button class="secondary" id="calibrateBtn">Calibrate Brain</button>
         <button class="secondary" id="playerCalibrateBtn">Player Calibration</button>
-        <button class="secondary" id="downloadBtn">Download FD Edit CSV</button>
+        <button class="secondary" id="downloadBtn">Download Lineups CSV</button>
       </div>
       <div class="status" id="summaryBox">No optimizer run yet.</div>
     </div>
@@ -230,6 +235,27 @@ function detectDelimiter(text){
 function csvToRows(text){const delim=detectDelimiter(text); const rows=[]; let row=[], cell='', inQ=false; for(let i=0;i<text.length;i++){const c=text[i], n=text[i+1]; if(c=='"'){if(inQ && n=='"'){cell+='"'; i++;} else inQ=!inQ;} else if(c===delim&&!inQ){row.push(cell); cell='';} else if((c=='\n'||c=='\r')&&!inQ){if(c=='\r'&&n=='\n') i++; row.push(cell); if(row.some(v=>String(v).trim()!=='')) rows.push(row); row=[]; cell='';} else cell+=c;} if(cell.length||row.length){row.push(cell); if(row.some(v=>String(v).trim()!=='')) rows.push(row);} return rows;}
 function rowsToObjects(rows){const h=rows[0]||[]; return rows.slice(1).map(r=>{const o={}; h.forEach((x,i)=>o[x]=r[i]??''); return o;});}
 function parseFile(file){return file.text().then(t=>rowsToObjects(csvToRows(t)));}
+function parseTemplateFile(file){return file.text().then(t=>csvToRows(t));}
+function escapeCsv(v){ const s=String(v ?? ''); return (s.includes(',') || s.includes('\n') || s.includes('\"')) ? `\"${s.replace(/\"/g,'\"\"')}\"` : s; }
+function buildMappedFanDuelCsv(){
+  if(!state.entryTemplateRows.length) throw new Error('Upload the FanDuel entry template first.');
+  if(!state.lineups.length) throw new Error('Generate lineups first.');
+  const rows = state.entryTemplateRows.map(r => [...r]);
+  const header = rows[0] || [];
+  const slotIdx = [];
+  for(let i=0;i<header.length;i++){
+    const h = String(header[i]||'').trim().toUpperCase();
+    if(['PG','SG','SF','PF','C'].includes(h)) slotIdx.push(i);
+  }
+  if(slotIdx.length < 9) throw new Error('Could not find 9 FanDuel roster columns in the uploaded template.');
+  const usableRows = Math.min(state.lineups.length, rows.length - 1);
+  for(let i=0;i<usableRows;i++){
+    const lineup = state.lineups[i];
+    const row = rows[i+1];
+    for(let j=0;j<9;j++) row[slotIdx[j]] = String(lineup.players[j].id || '').trim();
+  }
+  return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
+}
 function updateStatus(msg){document.getElementById('statusBox').textContent=msg;}
 function setSummary(msg){document.getElementById('summaryBox').textContent=msg;}
 function setOptimizerState(msg){document.getElementById('optimizerState').textContent=msg;}
@@ -1064,6 +1090,18 @@ document.getElementById('entryHistoryInput').addEventListener('change', async e=
   document.getElementById('entryHistoryBox').textContent = `${file.name} • ${parsed.length} parsed entries • Columns: ${cols}`;
   updateStatus(`Entry history loaded.\nRows: ${state.entryHistoryRaw.length}\nParsed entries: ${parsed.length}\nColumns: ${cols}`);
 });
+document.getElementById('entryTemplateInput').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  try{
+    state.entryTemplateRows = await parseTemplateFile(file);
+    const cols = state.entryTemplateRows[0] ? state.entryTemplateRows[0].slice(0,14).join(', ') : 'No columns detected';
+    document.getElementById('entryTemplateBox').textContent = `${file.name} • ${Math.max(0,state.entryTemplateRows.length-1)} template rows • Columns: ${cols}`;
+    updateStatus(`FanDuel entry template loaded.\nRows: ${Math.max(0,state.entryTemplateRows.length-1)}\nColumns: ${cols}`);
+  }catch(err){
+    document.getElementById('entryTemplateBox').textContent = `${file.name} • failed to parse`;
+    updateStatus(`Entry template upload failed.\n${err.message || String(err)}`);
+  }
+});
 document.getElementById('actualInput').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file) return;
   state.actualRaw = await parseFile(file); state.actualMap = new Map();
@@ -1163,7 +1201,7 @@ document.getElementById('downloadBtn').addEventListener('click', ()=>{
       URL.revokeObjectURL(url);
       a.remove();
     }, 800);
-    updateStatus(`FanDuel edit-helper CSV download started. ${state.lineups.length} lineups exported. Paste these 9 roster columns into FanDuel's downloaded CSV template.`);
+    updateStatus(`Bulk lineup CSV download started. ${state.lineups.length} lineups exported.`);
   }catch(err){
     setSummary(err.message || String(err));
   }
