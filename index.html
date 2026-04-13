@@ -503,6 +503,7 @@ function buildPlayers(){
   if(!players.some(p=>p.ownership>0)) estimateOwnership(players);
   enrichLeverage(players);
   state.players = players;
+  state.basePlayers = JSON.parse(JSON.stringify(players));
   document.getElementById('loadedPlayers').textContent = String(players.length);
   renderPlayersTable();
 }
