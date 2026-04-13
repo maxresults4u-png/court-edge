@@ -10,7 +10,7 @@
   .wrap{max-width:1500px;margin:0 auto;padding:24px}
   .hero,.grid,.results-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
   .card{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
-  .row2,.row3,.row4{display:grid;gap:14px}.row2{grid-template-columns:1fr 1fr}.row3{grid-template-columns:1fr 1fr 1fr}.row4{grid-template-columns:1fr 1fr 1fr 1fr}
+  .row2,.row3,.row4,.uploads-grid{display:grid;gap:14px}.row2{grid-template-columns:1fr 1fr}.row3{grid-template-columns:1fr 1fr 1fr}.row4{grid-template-columns:1fr 1fr 1fr 1fr}.uploads-grid{grid-template-columns:1fr 1fr}
   h1,h2,h3{margin:0 0 10px} p{margin:0;color:var(--muted);line-height:1.5}
   .pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.pill{padding:9px 12px;border-radius:999px;background:#18284a;border:1px solid rgba(255,255,255,.07);font-size:.9rem}
   .metric{display:flex;justify-content:space-between;gap:10px;padding:14px 16px;background:var(--panel2);border-radius:15px;margin-bottom:12px}.metric b{color:var(--accent2)}
@@ -26,7 +26,7 @@
   .lineup-card{padding:16px;border:1px solid rgba(255,255,255,.08);background:#10192c;border-radius:18px;margin-bottom:12px}
   .lineup-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}.badge{padding:8px 10px;border-radius:999px;background:#1b305b;color:var(--accent2);font-weight:700;white-space:nowrap}
   .small{font-size:.9rem;color:var(--muted)} .tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.tabbtn.active{outline:2px solid rgba(126,177,255,.35)}
-  @media (max-width:1080px){.hero,.grid,.results-grid,.row2,.row3,.row4{grid-template-columns:1fr}}
+  @media (max-width:1080px){.hero,.grid,.results-grid,.row2,.row3,.row4,.uploads-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -63,7 +63,7 @@
   <section class="grid" style="margin-top:18px">
     <div class="card">
       <h2>Uploads</h2>
-      <div class="row4">
+      <div class="uploads-grid">
         <div class="drop">
           <input id="fdInput" type="file" accept=".csv,.txt"/>
           <h3>FanDuel Slate CSV</h3>
@@ -158,6 +158,12 @@ Jaylen Brown, Q"></textarea>
       <div id="playersTab" style="display:none"></div>
     </div>
   </section>
+
+  <section class="card" style="margin-top:18px">
+    <h2>Entry History vs Court Edge</h2>
+    <div class="status" id="entryCompareBox">No comparison yet.</div>
+  </section>
+
 </div>
 
 <script>
@@ -476,6 +482,10 @@ function buildPortfolio(){
     `Top lineup avg ownership: ${lineups[0].avgOwn.toFixed(1)}%\n` +
     `Top lineup leverage score: ${lineups[0].leverage.toFixed(1)}\nTop lineup correlation score: ${lineups[0].corrScore.toFixed(2)}\nHistorical model active: yes\nCorrelation model active: yes`
   );
+  if(state.entryHistoryRaw.length){
+    const parsed = state.entryHistoryRaw.map(inferEntryHistoryRow).filter(Boolean);
+    if(parsed.length) compareEntryHistoryToLineups(parsed);
+  }
 }
 
 function buildLineupCsv(lineups){
@@ -534,6 +544,46 @@ function runEntryHistoryReview(){
     `Total net: $${totalProfit.toFixed(2)}${avgEntries ? `\nAverage field size: ${avgEntries.toFixed(0)}` : ''}`
   );
   updateStatus(`Entry history loaded. Parsed ${parsed.length} entries. Avg score ${avgScore.toFixed(2)}. Net $${totalProfit.toFixed(2)}.`);
+  compareEntryHistoryToLineups(parsed);
+}
+
+function compareEntryHistoryToLineups(parsed){
+  if(!state.lineups.length){
+    document.getElementById('entryCompareBox').textContent = 'Entry history parsed, but no Court Edge lineups have been generated yet.';
+    return;
+  }
+  const historyScores = parsed.map(r => r.score).filter(x => !Number.isNaN(x)).sort((a,b)=>a-b);
+  if(!historyScores.length){
+    document.getElementById('entryCompareBox').textContent = 'No usable history scores found to compare.';
+    return;
+  }
+  const avgHist = historyScores.reduce((a,b)=>a+b,0)/historyScores.length;
+  const bestHist = historyScores[historyScores.length-1];
+  const medHist = historyScores[Math.floor(historyScores.length/2)];
+  const p75Hist = historyScores[Math.floor(historyScores.length*0.75)];
+  const projScores = state.lineups.map(l => l.proj).sort((a,b)=>a-b);
+  const simScores = state.lineups.map(l => l.simMean || l.proj).sort((a,b)=>a-b);
+  const avgProj = projScores.reduce((a,b)=>a+b,0)/projScores.length;
+  const avgSim = simScores.reduce((a,b)=>a+b,0)/simScores.length;
+  const topProj = projScores[projScores.length-1];
+  const topSim = simScores[simScores.length-1];
+  const beatAvg = simScores.filter(x => x > avgHist).length;
+  const beatBest = simScores.filter(x => x > bestHist).length;
+  const beat75 = simScores.filter(x => x > p75Hist).length;
+
+  document.getElementById('entryCompareBox').textContent =
+    `Historical entries: ${historyScores.length}\n` +
+    `Historical average score: ${avgHist.toFixed(2)}\n` +
+    `Historical median score: ${medHist.toFixed(2)}\n` +
+    `Historical 75th percentile score: ${p75Hist.toFixed(2)}\n` +
+    `Historical best score: ${bestHist.toFixed(2)}\n\n` +
+    `Court Edge average projection: ${avgProj.toFixed(2)}\n` +
+    `Court Edge average sim score: ${avgSim.toFixed(2)}\n` +
+    `Court Edge top projection: ${topProj.toFixed(2)}\n` +
+    `Court Edge top sim score: ${topSim.toFixed(2)}\n\n` +
+    `Generated lineups beating historical average: ${beatAvg} of ${simScores.length}\n` +
+    `Generated lineups beating historical 75th percentile: ${beat75} of ${simScores.length}\n` +
+    `Generated lineups beating historical best: ${beatBest} of ${simScores.length}`;
 }
 function renderGameLocks(){
   const games = [...new Set(state.players.map(p => p.game).filter(Boolean))].sort();
