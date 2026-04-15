@@ -165,14 +165,21 @@
     <div class="card">
       <h2>Late News Center</h2>
       <p>Paste updates one per line in the format: <span class="small">Player Name, O</span> or <span class="small">Player Name, ACTIVE</span>. Ruling a player out removes them and gives a small automatic teammate bump for the optimizer pool.</p>
-      <div style="margin-top:14px">
-        <label for="newsInput">Manual news updates</label>
-        <textarea id="newsInput" placeholder="Examples:
+      <div style="margin-top:14px" class="row2">
+        <div>
+          <label for="injuryApiKey">Live injury API key</label>
+          <input id="injuryApiKey" type="password" value="09c65ee3-dcef-4565-9551-2b0ee803aeca" placeholder="BALLDONTLIE API key"/>
+        </div>
+        <div>
+          <label for="newsInput">Manual news updates</label>
+          <textarea id="newsInput" placeholder="Examples:
 Jalen Johnson, O
 Tyrese Maxey, ACTIVE
 Jaylen Brown, Q"></textarea>
+        </div>
       </div>
       <div class="btns">
+        <button class="secondary" id="fetchInjuriesBtn">Fetch Live Injuries</button>
         <button class="secondary" id="applyNewsBtn">Apply News</button>
         <button class="secondary" id="resetNewsBtn">Reset Player Pool</button>
       </div>
@@ -820,6 +827,70 @@ function renderGameLocks(){
   }));
 }
 
+function mapApiInjuryStatus(status, description){
+  const s = `${status||''} ${description||''}`.toLowerCase();
+  if(/out|inactive|suspension|g league|doubtful/.test(s)) return 'O';
+  if(/question|day[- ]to[- ]day|game[- ]time|monitor/.test(s)) return 'Q';
+  if(/probable/.test(s)) return 'P';
+  return '';
+}
+
+async function fetchLiveInjuries(){
+  const key = document.getElementById('injuryApiKey').value.trim();
+  if(!key) throw new Error('Add your live injury API key first.');
+  if(!state.players.length) throw new Error('Load a FanDuel slate first.');
+  document.getElementById('newsStatus').textContent = 'Pulling live injuries...';
+
+  const byName = new Map(state.players.map(p => [p.norm, p]));
+  let cursor = null;
+  let pages = 0;
+  let hits = [];
+  while(pages < 5){
+    const url = new URL('https://api.balldontlie.io/v1/player_injuries');
+    url.searchParams.set('per_page', '100');
+    if(cursor) url.searchParams.set('cursor', String(cursor));
+    const res = await fetch(url.toString(), { headers: { Authorization: key } });
+    if(res.status === 401) throw new Error('Injury API rejected the key or your plan cannot access player injuries.');
+    if(!res.ok) throw new Error(`Injury API error ${res.status}`);
+    const json = await res.json();
+    const data = Array.isArray(json.data) ? json.data : [];
+    for(const item of data){
+      const pl = item.player || {};
+      const nm = normName(`${pl.first_name||''} ${pl.last_name||''}`.trim());
+      if(byName.has(nm)){
+        const mapped = mapApiInjuryStatus(item.status, item.description);
+        if(mapped) hits.push(`${pl.first_name||''} ${pl.last_name||''}, ${mapped}`);
+      }
+    }
+    cursor = json.meta && json.meta.next_cursor;
+    pages += 1;
+    if(!cursor || hits.length >= byName.size) break;
+  }
+
+  const existing = document.getElementById('newsInput').value.trim();
+  const dedup = new Map();
+  for(const line of hits){
+    const [name] = line.split(',');
+    dedup.set(normName(name), line);
+  }
+  if(existing){
+    for(const line of existing.split(/\n+/).map(x=>x.trim()).filter(Boolean)){
+      const [name] = line.split(',');
+      dedup.set(normName(name), line);
+    }
+  }
+  const combined = [...dedup.values()].join('\n');
+  document.getElementById('newsInput').value = combined;
+  if(!combined){
+    document.getElementById('newsStatus').textContent = 'Live injury pull succeeded, but no current slate players matched the returned injury list.';
+    return;
+  }
+  resetNewsPool();
+  applyNewsAdjustments();
+  document.getElementById('newsStatus').textContent += `
+Live injury pull matched ${hits.length} current-slate player(s).`;
+}
+
 function applyNewsAdjustments(){
   const raw = document.getElementById('newsInput').value.trim();
   if(!raw){ document.getElementById('newsStatus').textContent = 'No news lines entered.'; return; }
@@ -1025,6 +1096,7 @@ document.getElementById('runBtn').addEventListener('click', async ()=>{
     setOptimizerState('Complete');
   }catch(err){ setOptimizerState('Error'); setSummary(err.message || String(err));}
 });
+document.getElementById('fetchInjuriesBtn').addEventListener('click', async () => { try{ await fetchLiveInjuries(); } catch(err){ document.getElementById('newsStatus').textContent = err.message || String(err); } });
 document.getElementById('applyNewsBtn').addEventListener('click', () => { try{ applyNewsAdjustments(); } catch(err){ document.getElementById('newsStatus').textContent = err.message || String(err); } });
 document.getElementById('resetNewsBtn').addEventListener('click', () => { try{ resetNewsPool(); } catch(err){ document.getElementById('newsStatus').textContent = err.message || String(err); } });
 document.getElementById('lateSwapBtn').addEventListener('click', async () => {
