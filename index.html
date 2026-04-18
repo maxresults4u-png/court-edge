@@ -345,6 +345,7 @@ function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, str
   return scored;
 }
 
+
 function buildLineup(players, lockedNames = [], excludedNames = [], strategyType = "mixed", stackTeams = []) {
   const slots = getSlotsArray();
   const lockSet = new Set(lockedNames);
@@ -359,8 +360,50 @@ function buildLineup(players, lockedNames = [], excludedNames = [], strategyType
   if (!lockedAssignments.length) return null;
 
   let best = { score: -Infinity, lineup: null };
+  const startedAt = Date.now();
+  const TIME_BUDGET_MS = strategyType === "chalk" ? 45 : 65;
+
+  function fastGreedy(assignment) {
+    const needed = assignment.remainingSlots.slice();
+    const used = new Set(assignment.assigned.map(p => p.name));
+    const lineup = assignment.assigned.slice();
+    let salary = lineup.reduce((s, p) => s + p.salary, 0);
+
+    const bySlot = {};
+    needed.forEach(slot => {
+      bySlot[slot] = unlockedPlayers
+        .filter(p => !used.has(p.name) && p.positions.includes(slot))
+        .sort((a, b) => playerObjective(b, weights, stackTeams) - playerObjective(a, weights, stackTeams))
+        .slice(0, slot === "C" ? 10 : 12);
+    });
+
+    for (const slot of needed) {
+      const candidates = bySlot[slot] || [];
+      let picked = null;
+      const remaining = needed.length - lineup.filter(x => x.slot && needed.includes(x.slot)).length - 1;
+      for (const p of candidates) {
+        if (used.has(p.name)) continue;
+        const nextSalary = salary + p.salary;
+        const minNeed = remaining * 3500;
+        if (nextSalary > RULES.SALARY_CAP) continue;
+        if (nextSalary + minNeed > RULES.SALARY_CAP) continue;
+        picked = p;
+        break;
+      }
+      if (!picked) return null;
+      used.add(picked.name);
+      lineup.push({ ...picked, slot });
+      salary += picked.salary;
+    }
+
+    if (salary < RULES.MIN_SALARY_USED || salary > RULES.SALARY_CAP) return null;
+    if (strategyType !== "chalk" && !lineupHasStack(lineup)) return null;
+    return lineup;
+  }
 
   for (const assignment of lockedAssignments) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS && best.lineup) break;
+
     const used = new Set(assignment.assigned.map(p => p.name));
     const baseLineup = assignment.assigned.slice();
     const baseSalary = baseLineup.reduce((s, p) => s + p.salary, 0);
@@ -373,16 +416,26 @@ function buildLineup(players, lockedNames = [], excludedNames = [], strategyType
         .filter(p => !used.has(p.name) && p.positions.includes(slot))
         .map(p => ({ ...p, _slotObj: playerObjective(p, weights, stackTeams) }))
         .sort((a, b) => b._slotObj - a._slotObj);
-      const cap = slot === "C" ? 16 : strategyType === "chalk" ? 18 : 20;
+
+      const cap = slot === "C" ? 8 : strategyType === "chalk" ? 10 : 11;
       slotCandidates[slot] = raw.slice(0, cap);
     });
+
+    if (uniqueOpenSlots.some(slot => (slotCandidates[slot] || []).length === 0)) continue;
 
     const openSlots = assignment.remainingSlots.slice().sort((a, b) => (slotCandidates[a]?.length ?? 999) - (slotCandidates[b]?.length ?? 999));
     const slotMax = openSlots.map(slot => (slotCandidates[slot]?.[0]?._slotObj) || 0);
     const suffixUpper = new Array(openSlots.length + 1).fill(0);
     for (let i = openSlots.length - 1; i >= 0; i--) suffixUpper[i] = suffixUpper[i + 1] + slotMax[i];
 
+    let timedOut = false;
+
     function dfs(idx, lineup, salary, score) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) {
+        timedOut = true;
+        return;
+      }
+
       if (idx === openSlots.length) {
         if (salary < RULES.MIN_SALARY_USED || salary > RULES.SALARY_CAP) return;
         if (strategyType !== "chalk" && !lineupHasStack(lineup)) return;
@@ -408,15 +461,25 @@ function buildLineup(players, lockedNames = [], excludedNames = [], strategyType
         dfs(idx + 1, lineup, nextSalary, score + p._slotObj);
         lineup.pop();
         used.delete(p.name);
+        if (timedOut) return;
       }
     }
 
     dfs(0, baseLineup.slice(), baseSalary, baseScore);
+
+    if (timedOut && !best.lineup) {
+      const fallback = fastGreedy(assignment);
+      if (fallback) {
+        const fallbackScore = fallback.reduce((s, p) => s + playerObjective(p, weights, stackTeams), 0);
+        if (fallbackScore > best.score) best = { score: fallbackScore, lineup: fallback };
+      }
+    }
   }
 
   return best.lineup;
 }
 
+function randn() {
 function randn() {
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
@@ -424,19 +487,29 @@ function randn() {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-function simulateSlate(players, iterations = 900) {
+
+function simulateSlate(players, iterations = 240) {
   const sims = [];
+  const games = {};
+  players.forEach(p => {
+    if (!games[p.game]) games[p.game] = { teams: {} };
+    games[p.game].teams[p.team] = true;
+  });
+
   for (let i = 0; i < iterations; i++) {
     const env = {};
+    Object.keys(games).forEach(game => {
+      env[game] = { gameShock: randn() * 4.4, teamShock: {} };
+    });
+
     const outcome = {};
     for (const p of players) {
-      if (!env[p.game]) env[p.game] = { gameShock: randn() * 5.5, teamShock: {} };
-      if (!env[p.game].teamShock[p.team]) env[p.game].teamShock[p.team] = randn() * 3.8;
-      const gameShock = env[p.game].gameShock;
-      const teamShock = env[p.game].teamShock[p.team];
+      const gameKey = p.game || "NA";
+      if (!env[gameKey]) env[gameKey] = { gameShock: randn() * 4.4, teamShock: {} };
+      if (!env[gameKey].teamShock[p.team]) env[gameKey].teamShock[p.team] = randn() * 2.8;
       const mean = p.projMean ?? p.fppg ?? 0;
-      const stdev = p.stdev ?? Math.max(4.5, mean * 0.24);
-      const raw = mean + gameShock * 0.32 + teamShock * 0.48 + randn() * stdev;
+      const stdev = Math.min(12, p.stdev ?? Math.max(4.0, mean * 0.20));
+      const raw = mean + env[gameKey].gameShock * 0.26 + env[gameKey].teamShock[p.team] * 0.38 + randn() * stdev;
       outcome[p.name] = Math.max(0, raw);
     }
     sims.push(outcome);
@@ -444,6 +517,7 @@ function simulateSlate(players, iterations = 900) {
   return sims;
 }
 
+function scoreLineupAcrossSims(lineup, sims) {
 function scoreLineupAcrossSims(lineup, sims) {
   const totals = sims.map(sim => lineup.reduce((sum, p) => sum + (sim[p.name] || 0), 0)).sort((a, b) => a - b);
   const mean = totals.reduce((a, b) => a + b, 0) / Math.max(totals.length, 1);
@@ -459,28 +533,30 @@ function lineupMinUnique(a, b) {
   return Math.max(0, 9 - shared);
 }
 
+
 function selectPortfolio(candidates, desiredCount) {
   const selected = [];
   const exposure = {};
   const targetCount = Math.max(desiredCount, 1);
-  const maxExposure = desiredCount <= 3 ? 1 : desiredCount <= 20 ? 0.75 : 0.65;
-  const minUnique = desiredCount >= 20 ? 2 : 1;
+  const maxExposure = desiredCount <= 3 ? 1 : desiredCount <= 10 ? 0.8 : 0.7;
+  const minUnique = desiredCount >= 12 ? 2 : 1;
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
-
-  function canTake(lineup, relax = false) {
-    if (!relax && selected.some(existing => lineupMinUnique(existing, lineup) < minUnique)) return false;
-    if (!relax && selected.length >= Math.max(3, Math.floor(targetCount * 0.2))) {
-      for (const p of lineup) {
-        const next = (exposure[p.name] || 0) + 1;
-        if (next / targetCount > maxExposure) return false;
-      }
-    }
-    return true;
-  }
 
   for (const lu of sorted) {
     if (selected.length >= desiredCount) break;
-    if (!canTake(lu, false)) continue;
+    const tooSimilar = selected.some(existing => lineupMinUnique(existing, lu) < minUnique);
+    if (tooSimilar) continue;
+
+    let badExposure = false;
+    for (const p of lu) {
+      const next = (exposure[p.name] || 0) + 1;
+      if (next / targetCount > maxExposure) {
+        badExposure = true;
+        break;
+      }
+    }
+    if (badExposure && selected.length >= Math.max(2, Math.floor(targetCount * 0.35))) continue;
+
     selected.push(lu);
     lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
@@ -488,12 +564,15 @@ function selectPortfolio(candidates, desiredCount) {
   for (const lu of sorted) {
     if (selected.length >= desiredCount) break;
     if (selected.includes(lu)) continue;
-    if (!canTake(lu, true)) continue;
     selected.push(lu);
   }
 
   return selected.slice(0, desiredCount);
 }
+
+
+
+function generateLineups(players, count, lockedNames, excludedNames) {
 
 
 function generateLineups(players, count, lockedNames, excludedNames) {
@@ -602,6 +681,7 @@ function getBestStackGame(gamesList, players) {
 }
 
 // Generate lineups with stack awareness
+
 function generateLineupsWithStrategy(players, count, lockedNames, excludedNames, gamesList, strategy) {
   if (!players || players.length === 0 || count <= 0) return [];
 
@@ -615,17 +695,26 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   else if (strategy === "leverage") { chalkCount = 0; leverageCount = count; tournCount = 0; }
   else if (strategy === "tournament") { chalkCount = 0; leverageCount = 0; tournCount = count; }
   else {
-    chalkCount = Math.max(1, Math.round(count * 0.3));
-    leverageCount = Math.max(1, Math.round(count * 0.4));
-    tournCount = count - chalkCount - leverageCount;
+    chalkCount = Math.max(1, Math.round(count * 0.35));
+    leverageCount = Math.max(1, Math.round(count * 0.35));
+    tournCount = Math.max(0, count - chalkCount - leverageCount);
   }
 
+  const startedAt = Date.now();
+  const MAX_BUILD_MS = 1400;
+
   const buildBatch = (targetCount, type) => {
-    const attempts = Math.max(targetCount * 10, 35);
-    for (let attempt = 0; attempt < attempts && allCandidates.filter(l => l._type === type).length < targetCount * 3; attempt++) {
-      const pool = buildCandidatePool(players, lockedNames, excludedNames, stackTeams, type, attempt);
+    const attempts = Math.max(targetCount * 4, 14);
+    const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 1.5));
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (Date.now() - startedAt > MAX_BUILD_MS) break;
+      if (allCandidates.filter(l => l._type === type).length >= perTypeTarget) break;
+
+      const pool = buildCandidatePool(players, lockedNames, excludedNames, stackTeams, type, attempt).slice(0, 42);
       const lu = buildLineup(pool, lockedNames, excludedNames, type, stackTeams);
       if (!lu || lu.length !== 9) continue;
+
       const key = lineupKey(lu);
       if (used.has(key)) continue;
       used.add(key);
@@ -639,10 +728,14 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   if (chalkCount > 0) buildBatch(chalkCount, "chalk");
   if (leverageCount > 0) buildBatch(leverageCount, "leverage");
   if (tournCount > 0) buildBatch(tournCount, "tournament");
-  if (allCandidates.length === 0) return [];
 
-  const simIterations = Math.min(1800, Math.max(700, Math.round(450 + count * 10)));
-  const sims = simulateSlate(players, simIterations);
+  if (allCandidates.length === 0) {
+    const fallback = generateLineups(players, Math.min(count, 8), lockedNames, excludedNames);
+    return fallback;
+  }
+
+  const simIterations = Math.min(320, Math.max(120, 80 + count * 10));
+  const sims = simulateSlate(players.slice(0, 60), simIterations);
 
   allCandidates.forEach(lu => {
     const simScore = scoreLineupAcrossSims(lu, sims);
@@ -650,13 +743,19 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     lu._simMean = round1(simScore.mean);
     lu._simP75 = round1(simScore.p75);
     lu._simP90 = round1(simScore.p90);
-    lu._portfolioScore = simScore.mean * 0.45 + simScore.p75 * 0.15 + simScore.p90 * 0.30 + (lu._hasStack ? 3.5 : 0) - stats.avgOwn * 0.08;
+    lu._portfolioScore =
+      simScore.mean * 0.48 +
+      simScore.p75 * 0.17 +
+      simScore.p90 * 0.25 +
+      (lu._hasStack ? 2.4 : 0) -
+      stats.avgOwn * 0.07;
   });
 
   return selectPortfolio(allCandidates, count).sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
 }
 
-// Bankroll entry strategy
+
+// Bankroll entry strategy// Bankroll entry strategy
 function getEntryStrategy(bankroll, slateGrade) {
   if (!bankroll || bankroll <= 0) return null;
   const playPct = slateGrade >= 70 ? 0.15 : slateGrade >= 55 ? 0.08 : 0.03;
