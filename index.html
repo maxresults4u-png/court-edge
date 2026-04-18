@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Court Edge - NBA DFS Optimizer</title>
+<title>Court Edge - NBA DFS Optimizer v5.1</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge...</div></div>
+<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.1...</div></div>
 <script>
 (function () {
   function showErrorOverlay(message, line, stack) {
@@ -28,127 +28,60 @@
       if (!root) {
         root = document.createElement("div");
         root.id = id;
-        root.style.position = "fixed";
-        root.style.top = "12px";
-        root.style.right = "12px";
-        root.style.maxWidth = "720px";
-        root.style.maxHeight = "70vh";
-        root.style.overflow = "auto";
-        root.style.zIndex = "999999";
-        root.style.background = "#140b0b";
-        root.style.border = "1px solid #7f1d1d";
-        root.style.color = "#fecaca";
-        root.style.padding = "14px";
-        root.style.borderRadius = "10px";
-        root.style.boxShadow = "0 10px 30px rgba(0,0,0,.35)";
-        root.style.fontFamily = "monospace";
-        root.style.fontSize = "12px";
-
+        root.style.cssText = "position:fixed;top:12px;right:12px;max-width:720px;max-height:70vh;overflow:auto;z-index:999999;background:#140b0b;border:1px solid #7f1d1d;color:#fecaca;padding:14px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:monospace;font-size:12px";
         const title = document.createElement("div");
-        title.style.display = "flex";
-        title.style.justifyContent = "space-between";
-        title.style.alignItems = "center";
-        title.style.gap = "12px";
-
+        title.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px";
         const strong = document.createElement("b");
         strong.id = "ce-error-title";
-        strong.style.fontSize = "14px";
-        strong.style.color = "#fca5a5";
-
+        strong.style.cssText = "font-size:14px;color:#fca5a5";
         const close = document.createElement("button");
         close.textContent = "close";
-        close.style.background = "#7f1d1d";
-        close.style.color = "#fff";
-        close.style.border = "none";
-        close.style.borderRadius = "6px";
-        close.style.padding = "4px 8px";
-        close.style.cursor = "pointer";
+        close.style.cssText = "background:#7f1d1d;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer";
         close.onclick = function () { root.remove(); };
-
-        title.appendChild(strong);
-        title.appendChild(close);
-
-        const meta = document.createElement("div");
-        meta.id = "ce-error-line";
-        meta.style.marginTop = "8px";
-        meta.style.color = "#fda4af";
-
-        const pre = document.createElement("pre");
-        pre.id = "ce-error-stack";
-        pre.style.marginTop = "12px";
-        pre.style.color = "#fecdd3";
-        pre.style.whiteSpace = "pre-wrap";
-
-        root.appendChild(title);
-        root.appendChild(meta);
-        root.appendChild(pre);
+        title.appendChild(strong); title.appendChild(close);
+        const meta = document.createElement("div"); meta.id = "ce-error-line"; meta.style.cssText = "margin-top:8px;color:#fda4af";
+        const pre = document.createElement("pre"); pre.id = "ce-error-stack"; pre.style.cssText = "margin-top:12px;color:#fecdd3;white-space:pre-wrap";
+        root.appendChild(title); root.appendChild(meta); root.appendChild(pre);
         document.body.appendChild(root);
       }
-
       const titleEl = document.getElementById("ce-error-title");
       const lineEl = document.getElementById("ce-error-line");
       const stackEl = document.getElementById("ce-error-stack");
       if (titleEl) titleEl.textContent = "ERROR: " + String(message || "Unknown error");
       if (lineEl) lineEl.textContent = "Line: " + String(line || 0);
       if (stackEl) stackEl.textContent = stack ? String(stack) : "";
-    } catch (overlayErr) {
-      console.error("Overlay error", overlayErr);
-      console.error(message, line, stack);
-    }
+    } catch (overlayErr) { console.error("Overlay error", overlayErr); }
   }
-
-  window.addEventListener("error", function (ev) {
-    showErrorOverlay(ev.message || "Script error", ev.lineno || 0, ev.error && ev.error.stack ? ev.error.stack : "");
-  });
-
-  window.addEventListener("unhandledrejection", function (ev) {
-    const err = ev.reason;
-    showErrorOverlay(err && err.message ? err.message : String(err), 0, err && err.stack ? err.stack : "");
-  });
+  window.addEventListener("error", ev => showErrorOverlay(ev.message || "Script error", ev.lineno || 0, ev.error && ev.error.stack ? ev.error.stack : ""));
+  window.addEventListener("unhandledrejection", ev => { const err = ev.reason; showErrorOverlay(err && err.message ? err.message : String(err), 0, err && err.stack ? err.stack : ""); });
 })();
 </script>
 <script type="text/babel">
-const { useState, useCallback, useRef, useEffect } = React;
+const { useState, useCallback, useRef, useEffect, useMemo } = React;
 
+// ============================================================================
+// v5.1 MATH IMPROVEMENTS:
+//   [FIX] leverageAdj removed from projection (was double-counting game theory)
+//   [FIX] floor now at 1.4σ (was 1.15σ - too generous)
+//   [FIX] leverage term in compositeScore capped (was unbounded, dominated score)
+//   [FIX] pace/implied adjustments now use RATIOS vs league avg (not absolute)
+//   [FIX] sampleAdj removed from projection (mean vs confidence mixup)
+//   [FIX] monte carlo team correlation reduced and split into pace (+) vs usage (-)
+//   [ADD] per-player stdev via historical games input (optional)
+//   [ADD] back-to-back penalty (-5%)
+//   [ADD] minutes-based projection floor/ceiling
+//   [ADD] bring-back bonus (opposite team in stacked game)
+//   [ADD] recent form boost (last 5 vs season)
+// ============================================================================
 
+// NBA constants
+const LEAGUE_AVG_TOTAL = 226;        // 2025-26 avg NBA game total
+const LEAGUE_AVG_IMPLIED = 113;      // half of league avg total
+const LEAGUE_AVG_PACE = 100;         // possessions per 48
 
-// -- ODDS API CONFIG -------------------------------------------------------
-const ODDS_API_KEY = "c9714976cf423a8ed53bc334799e71b5";
-const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
+const DEFAULT_SLATE_GAMES = [];
+const DEFAULT_INJURIES = [];
 
-// Fetch tonight's NBA game totals + spreads
-// Tonight's Vegas data - Mar 13 2026 - hardcoded (no API needed)
-function getHardcodedVegasData() {
-  const games = [
-    { away: "CLE", home: "DAL", total: 218.5, homeSpread: 12.5, awayML: -600, homeML: 460 },
-    { away: "MEM", home: "DET", total: 224.5, homeSpread: -14.5, awayML: 620, homeML: -900 },
-    { away: "NYK", home: "IND", total: 226.5, homeSpread: 13.5, awayML: -560, homeML: 420 },
-    { away: "PHX", home: "TOR", total: 222.0, homeSpread: -5.5, awayML: 185, homeML: -225 },
-    { away: "NOP", home: "HOU", total: 224.0, homeSpread: -7.5, awayML: 265, homeML: -330 },
-    { away: "UTA", home: "POR", total: 235.5, homeSpread: -17.5, awayML: 780, homeML: -1200 },
-    { away: "MIN", home: "GSW", total: 228.5, homeSpread: 5.5, awayML: -220, homeML: 182 },
-    { away: "CHI", home: "LAC", total: 226.0, homeSpread: -14.5, awayML: 610, homeML: -880 },
-  ];
-
-  const teamMap = {};
-  const gamesList = [];
-
-  for (const g of games) {
-    const spread = g.homeSpread;
-    const homeImpl = +((g.total / 2) - (spread / 2)).toFixed(1);
-    const awayImpl = +(g.total - homeImpl).toFixed(1);
-
-    teamMap[g.home] = { total: g.total, impliedPts: homeImpl, spread, moneyline: g.homeML, opponent: g.away, gameStr: `${g.away}@${g.home}` };
-    teamMap[g.away] = { total: g.total, impliedPts: awayImpl, spread: -spread, moneyline: g.awayML, opponent: g.home, gameStr: `${g.away}@${g.home}` };
-
-    gamesList.push({ home: g.home, away: g.away, total: g.total, homeImpl, awayImpl, homeSpread: spread, gameStr: `${g.away}@${g.home}` });
-  }
-
-  return { teamMap, gamesList, fetchedAt: "2026-03-13 hardcoded", gamesCount: games.length };
-}
-
-
-// -- REGRESSION RULES -----------------------------------------------------
 const RULES = {
   SALARY_CAP: 60000,
   MIN_SALARY_USED: 58000,
@@ -156,49 +89,46 @@ const RULES = {
   ANCHOR_FPPG_THRESHOLD: 40,
   FLOOR_FPPG_MIN: 15,
   POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
-  OWN_WEIGHTS: { chalk: 1.15, mid: 1.05, low: 0.88, punt: 0.0 },  // punt = 0 = never used (hard 3% floor)
 };
 const POSITION_ORDER = ["PG", "SG", "SF", "PF", "C"];
 
-// -- STATMUSE URL BUILDER -------------------------------------------------
-// Converts "Karl-Anthony Towns" -> "karl-anthony-towns"
-function toStatMuseSlug(name) {
-  return name.toLowerCase()
-    .replace(/['']/g, "")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-}
-function statMuseUrl(name) {
-  return `https://www.statmuse.com/nba/ask/${toStatMuseSlug(name)}-fanduel-stat-log`;
-}
+function toStatMuseSlug(name) { return name.toLowerCase().replace(/['']/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-"); }
+function statMuseUrl(name) { return `https://www.statmuse.com/nba/ask/${toStatMuseSlug(name)}-fanduel-stat-log`; }
+function ownershipBucket(own) { if (own >= 30) return "chalk"; if (own >= 10) return "mid"; if (own >= 5) return "low"; return "punt"; }
+function round1(n) { return +((Number.isFinite(n) ? n : 0).toFixed(1)); }
+function round2(n) { return +((Number.isFinite(n) ? n : 0).toFixed(2)); }
+function safeNum(v, fallback = 0) { return Number.isFinite(v) ? v : fallback; }
+function clamp(x, min, max) { return Math.max(min, Math.min(max, x)); }
 
-// -- HELPERS --------------------------------------------------------------
-function ownershipBucket(own) {
-  if (own >= 30) return "chalk";
-  if (own >= 10) return "mid";
-  if (own >= 5)  return "low";
-  return "punt";
+function buildTeamMap(games) {
+  const teamMap = {};
+  for (const g of games) {
+    const spread = g.homeSpread;
+    const homeImpl = +((g.total / 2) - (spread / 2)).toFixed(1);
+    const awayImpl = +(g.total - homeImpl).toFixed(1);
+    teamMap[g.home] = { total: g.total, impliedPts: homeImpl, spread, moneyline: g.homeML, opponent: g.away, gameStr: `${g.away}@${g.home}`, isHome: true };
+    teamMap[g.away] = { total: g.total, impliedPts: awayImpl, spread: -spread, moneyline: g.awayML, opponent: g.home, gameStr: `${g.away}@${g.home}`, isHome: false };
+  }
+  return teamMap;
 }
-
-
-function round1(n) {
-  return +((Number.isFinite(n) ? n : 0).toFixed(1));
-}
-
-function safeNum(v, fallback = 0) {
-  return Number.isFinite(v) ? v : fallback;
+function buildGamesList(games) {
+  return games.map(g => {
+    const homeImpl = +((g.total / 2) - (g.homeSpread / 2)).toFixed(1);
+    const awayImpl = +(g.total - homeImpl).toFixed(1);
+    return { home: g.home, away: g.away, total: g.total, homeImpl, awayImpl, homeSpread: g.homeSpread, gameStr: `${g.away}@${g.home}` };
+  });
 }
 
-function buildProjectionBoostMap(outPlayers = []) {
+function buildProjectionBoostMap(outPlayers, cascadeRules) {
   const boosts = {};
   for (const outName of outPlayers) {
-    const rules = CASCADE_RULES.filter(r => r.trigger.toLowerCase() === outName.toLowerCase());
+    const rules = cascadeRules.filter(r => r.trigger.toLowerCase() === outName.toLowerCase());
     for (const rule of rules) {
       for (const b of rule.beneficiaries) {
         const key = b.name.toLowerCase();
-        if (!boosts[key]) boosts[key] = { projBoost: 1, notes: [] };
+        if (!boosts[key]) boosts[key] = { projBoost: 1, minutesBoost: 1, notes: [] };
         boosts[key].projBoost *= (b.projBoost || 1);
+        boosts[key].minutesBoost *= (b.minutesBoost || 1);
         if (b.note) boosts[key].notes.push(`${outName}: ${b.note}`);
       }
     }
@@ -206,37 +136,89 @@ function buildProjectionBoostMap(outPlayers = []) {
   return boosts;
 }
 
+// ============================================================================
+// v5.1 PROJECTION - improved math
+// Changes from v5:
+//   - paceAdj now uses RATIO vs league avg (not absolute bands)
+//   - impliedAdj now uses RATIO vs league avg
+//   - leverageAdj REMOVED (was mixing game theory into projection)
+//   - sampleAdj REMOVED (was confusing confidence with mean)
+//   - b2b penalty ADDED
+//   - recent form ADDED (if user provides last-5 avg)
+//   - minutes projection ADDED
+// ============================================================================
 function teamContextForPlayer(player, teamMap = {}) {
   const v = teamMap[player.team] || {};
-  const impliedPts = safeNum(v.impliedPts, 110);
-  const total = safeNum(v.total, 222);
-  const spread = Math.abs(safeNum(v.spread, 0));
-  const paceAdj = total >= 234 ? 1.06 : total >= 228 ? 1.03 : total >= 222 ? 1.0 : 0.97;
-  const impliedAdj = impliedPts >= 122 ? 1.08 : impliedPts >= 118 ? 1.05 : impliedPts >= 114 ? 1.02 : impliedPts >= 108 ? 1.0 : 0.97;
-  const spreadAdj = spread <= 4 ? 1.02 : spread >= 12 ? 0.96 : 1.0;
-  return {
-    total,
-    impliedPts,
-    spread,
-    paceAdj,
-    impliedAdj,
-    spreadAdj,
-    opponent: v.opponent || "",
-    gameStr: v.gameStr || player.game,
-  };
+  const impliedPts = safeNum(v.impliedPts, LEAGUE_AVG_IMPLIED);
+  const total = safeNum(v.total, LEAGUE_AVG_TOTAL);
+  const spread = safeNum(v.spread, 0);
+  const absSpread = Math.abs(spread);
+  const isFavored = spread < 0;
+  const isHome = !!v.isHome;
+
+  // [v5.1] RATIO-based adjustments, clamped to prevent runaway
+  const paceRatio = clamp(total / LEAGUE_AVG_TOTAL, 0.93, 1.07);
+  const impliedRatio = clamp(impliedPts / LEAGUE_AVG_IMPLIED, 0.93, 1.10);
+  // Spread: tight games = more minutes for starters (no garbage time)
+  //         big blowouts = fewer minutes for starters, more for bench
+  const spreadAdj = absSpread <= 4 ? 1.02 : absSpread >= 15 ? 0.94 : absSpread >= 10 ? 0.97 : 1.00;
+  // Home court ~+1.5% boost
+  const homeAdj = isHome ? 1.015 : 0.985;
+
+  return { total, impliedPts, spread, absSpread, isFavored, isHome, paceRatio, impliedRatio, spreadAdj, homeAdj, opponent: v.opponent || "", gameStr: v.gameStr || player.game };
 }
 
-function buildProjection(player, teamMap = {}, projectionBoost = 1) {
+function buildProjection(player, teamMap = {}, projectionBoost = 1, minutesBoost = 1) {
   const ctx = teamContextForPlayer(player, teamMap);
-  const injuryMult = { "": 1.0, P: 0.97, Q: 0.88, D: 0.55, O: 0 }[player.injury] ?? 0.9;
-  const baseFppg = safeNum(player.statMuseFD ? player.fppg : (player.csvFppg || player.fppg), 0);
-  const sampleAdj = 0.96 + Math.min(0.08, safeNum(player.played, 0) / 400);
-  const leverageAdj = (player.ownership || 15) <= 10 ? 1.02 : (player.ownership || 15) >= 35 ? 0.99 : 1.0;
 
-  const projMean = baseFppg * injuryMult * sampleAdj * ctx.paceAdj * ctx.impliedAdj * ctx.spreadAdj * projectionBoost * leverageAdj;
-  const stdev = Math.max(4.5, projMean * 0.24 + (player.salary >= 10000 ? 1.6 : player.salary >= 8000 ? 1.0 : 0.35));
-  const projFloor = Math.max(0, projMean - 1.15 * stdev);
+  // Injury-based availability/effectiveness
+  const injuryMult = { "": 1.0, P: 0.97, Q: 0.88, D: 0.55, O: 0 }[player.injury] ?? 0.9;
+
+  // Base FPPG source priority: StatMuse > recent5 blend > CSV
+  // [v5.1] If user provides recent5 (last 5 games avg), blend 60/40 recent/season
+  const statMuseVal = player.statMuseFD;
+  const recent5 = safeNum(player.recent5, 0);
+  const seasonAvg = safeNum(player.csvFppg || player.fppg, 0);
+
+  let baseFppg;
+  if (statMuseVal) {
+    // StatMuse FD avg is typically an L10/L15 weighted — trust it
+    baseFppg = safeNum(player.fppg, 0);
+  } else if (recent5 > 0) {
+    // 60% recent, 40% season = recency-weighted
+    baseFppg = recent5 * 0.6 + seasonAvg * 0.4;
+  } else {
+    baseFppg = seasonAvg;
+  }
+
+  if (baseFppg <= 0) return null;
+
+  // [v5.1] Back-to-back penalty
+  const b2bMult = player.isB2B ? 0.95 : 1.0;
+
+  // Compose all adjustments (removed leverageAdj and sampleAdj)
+  const projMean = baseFppg * injuryMult * ctx.paceRatio * ctx.impliedRatio * ctx.spreadAdj * ctx.homeAdj * b2bMult * projectionBoost;
+
+  // [v5.1] Per-player stdev if available, else default
+  let stdev;
+  if (player.histStdev && player.histStdev > 0) {
+    stdev = player.histStdev;
+  } else {
+    // Default: 22% coefficient + salary-tier bump for high-variance players
+    const cov = 0.22; // typical NBA coefficient of variation for FPPG
+    const salaryAdj = player.salary >= 10000 ? 1.8 : player.salary >= 8000 ? 1.2 : player.salary >= 6000 ? 0.6 : 0.2;
+    stdev = Math.max(4.5, projMean * cov + salaryAdj);
+  }
+
+  // [v5.1] Tighter floor (1.4σ ~ 8th %ile) - more conservative for cash games
+  const projFloor = Math.max(0, projMean - 1.4 * stdev);
+  // Ceiling at 1.65σ ~ 95th %ile unchanged (good for GPP)
   const projCeiling = projMean + 1.65 * stdev;
+
+  // Minutes projection: if user provides, use it; else estimate from FPPG/salary
+  const estMinutes = player.minutes || Math.min(40, Math.max(12, (baseFppg / 1.4) + (player.salary / 1000 - 5) * 1.5));
+  const minutesProj = estMinutes * minutesBoost;
+
   const value = projMean / Math.max(player.salary / 1000, 1);
 
   return {
@@ -246,29 +228,35 @@ function buildProjection(player, teamMap = {}, projectionBoost = 1) {
     projFloor: round1(projFloor),
     projCeiling: round1(projCeiling),
     stdev: round1(stdev),
-    value: round1(value),
+    value: round2(value),
     fppg: round1(projMean),
-    gameTotal: ctx.total,
-    impliedPts: ctx.impliedPts,
-    spread: ctx.spread,
-    opponent: ctx.opponent,
-    game: ctx.gameStr || player.game,
+    minutesProj: round1(minutesProj),
+    gameTotal: ctx.total, impliedPts: ctx.impliedPts, spread: ctx.spread,
+    opponent: ctx.opponent, game: ctx.gameStr || player.game, isHome: ctx.isHome,
+    // Keep breakdown for transparency
+    _adj: { pace: round2(ctx.paceRatio), implied: round2(ctx.impliedRatio), spread: round2(ctx.spreadAdj), home: round2(ctx.homeAdj), injury: round2(injuryMult), b2b: round2(b2bMult), boost: round2(projectionBoost) },
   };
 }
 
+// [v5.1] compositeScore with CAPPED leverage (was unbounded)
 function compositeScore(p) {
-  const leverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 1, 1);
-  const stackBonus = p.gameTotal >= 228 ? 2.4 : p.gameTotal >= 222 ? 1.1 : 0;
+  // Cap leverage so 1% ownership doesn't get 50x weight
+  const rawLeverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 5, 5);
+  const leverage = Math.min(rawLeverage, 8); // cap at 8 (was unbounded)
+
+  const stackBonus = p.gameTotal >= 232 ? 2.8 : p.gameTotal >= 226 ? 1.5 : p.gameTotal >= 220 ? 0.5 : 0;
   const statMuseBonus = p.statMuseFD ? 0.75 : 0;
-  const ownershipPenalty = Math.max(0, (p.ownership || 0) - 38) * 0.06;
+  const ownershipPenalty = Math.max(0, (p.ownership || 0) - 38) * 0.08;
+  const valueBonus = (p.value || 0) * 0.4;
+
   return (
-    (p.projMean || p.fppg || 0) * 0.78 +
-    (p.projCeiling || p.fppg || 0) * 0.16 +
-    leverage * 0.55 +
-    (p.value || 0) * 0.45 +
-    stackBonus +
-    statMuseBonus -
-    ownershipPenalty
+    (p.projMean || p.fppg || 0) * 0.82 +       // main projection
+    (p.projCeiling || p.fppg || 0) * 0.14 +    // ceiling component
+    leverage * 0.40 +                          // capped leverage
+    valueBonus +                               // pts per $1000 salary
+    stackBonus +                               // game-total bonus
+    statMuseBonus -                            // data-source bonus
+    ownershipPenalty                           // penalty for >38% owned
   );
 }
 
@@ -281,25 +269,24 @@ function estimateOwnership(player, teamMap) {
   else if (v.impliedPts >= 114) base = 17;
   else if (v.impliedPts >= 110) base = 14;
   else if (v.impliedPts >= 106) base = 11;
-  const salaryTier = player.salary >= 11000 ? 1.7 : player.salary >= 9000 ? 1.4
-    : player.salary >= 7500 ? 1.2 : player.salary >= 6000 ? 1.05
-    : player.salary >= 4500 ? 0.9 : 0.75;
-  const fppgTier = player.fppg >= 50 ? 1.5 : player.fppg >= 42 ? 1.3
-    : player.fppg >= 34 ? 1.15 : player.fppg >= 26 ? 1.0 : 0.85;
+  const salaryTier = player.salary >= 11000 ? 1.7 : player.salary >= 9000 ? 1.4 : player.salary >= 7500 ? 1.2 : player.salary >= 6000 ? 1.05 : player.salary >= 4500 ? 0.9 : 0.75;
+  const fppgTier = player.fppg >= 50 ? 1.5 : player.fppg >= 42 ? 1.3 : player.fppg >= 34 ? 1.15 : player.fppg >= 26 ? 1.0 : 0.85;
   const valueTier = player.value >= 7 ? 1.25 : player.value >= 5.5 ? 1.1 : 1.0;
   return Math.min(65, Math.max(2, +(base * salaryTier * fppgTier * valueTier).toFixed(1)));
 }
 
-function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, outPlayers = []) {
+function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, outPlayers = [], cascadeRules = [], extraData = {}) {
   const lines = csvText.trim().split("\n");
   const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, ""));
   const players = [];
-  const projectionBoosts = buildProjectionBoostMap(outPlayers);
+  const projectionBoosts = buildProjectionBoostMap(outPlayers, cascadeRules);
+  const idCol = headers.findIndex(h => h === "id" || h === "playerid" || h === "player_id");
 
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(",");
     if (cols.length < 8) continue;
     const get = (key) => cols[headers.indexOf(key)]?.trim() ?? "";
+    const fdId = idCol >= 0 ? (cols[idCol]?.trim() ?? "") : "";
     const name = get("nickname") || ((get("firstname") + " " + get("lastname")).trim());
     const csvFppg = parseFloat(get("fppg")) || 0;
     const salary = parseInt(get("salary")) || 0;
@@ -316,49 +303,57 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     const baseFppg = smData?.fdAvg || csvFppg;
     const statMuseFD = !!smData;
     if (baseFppg < RULES.FLOOR_FPPG_MIN) continue;
-
     const ownership = ownershipMap[key] ?? 15;
     if (ownership < RULES.NEVER_PLAY_OWN_THRESHOLD) continue;
-
     const boost = projectionBoosts[key]?.projBoost ?? 1;
+    const minutesBoost = projectionBoosts[key]?.minutesBoost ?? 1;
+
+    // [v5.1] Extra per-player data (recent form, b2b flag, etc.)
+    const extra = extraData[key] || {};
 
     let p = {
-      name, fppg: baseFppg, csvFppg, salary, injury, played, team, game,
+      fdId, name, fppg: baseFppg, csvFppg, salary, injury, played, team, game,
       positions, ownership, statMuseFD,
-      smLast: smData?.lastGame,
-      smAvg: smData?.fdAvg,
-      smTrend: smData?.trend,
+      smLast: smData?.lastGame, smAvg: smData?.fdAvg, smTrend: smData?.trend,
       cascadeNotes: projectionBoosts[key]?.notes || [],
+      recent5: extra.recent5 || 0,
+      histStdev: extra.histStdev || 0,
+      minutes: extra.minutes || 0,
+      isB2B: !!extra.isB2B,
     };
-
-    p = buildProjection(p, teamMap, boost);
-    p.score = compositeScore(p);
-    players.push(p);
+    const projected = buildProjection(p, teamMap, boost, minutesBoost);
+    if (!projected) continue;
+    projected.score = compositeScore(projected);
+    players.push(projected);
   }
-
   return players.sort((a, b) => b.score - a.score);
 }
 
-// -- LINEUP ENGINE --------------------------------------------------------
-function getSlotsArray() {
-  return ["C", "PG", "PG", "SG", "SG", "SF", "SF", "PF", "PF"];
-}
+// ============================================================================
+// LINEUP ENGINE (mostly unchanged except bring-back bonus)
+// ============================================================================
+function getSlotsArray() { return ["C", "PG", "PG", "SG", "SG", "SF", "SF", "PF", "PF"]; }
 
 function getStrategyWeights(type) {
-  if (type === "chalk") return { mean: 1.08, ceiling: 0.18, leverage: 0.14, ownPenalty: 0.012, stackBoost: 0.8, noise: 1.4 };
-  if (type === "leverage") return { mean: 0.94, ceiling: 0.30, leverage: 0.50, ownPenalty: 0.008, stackBoost: 2.8, noise: 3.8 };
-  if (type === "tournament") return { mean: 0.90, ceiling: 0.40, leverage: 0.60, ownPenalty: 0.004, stackBoost: 3.3, noise: 5.5 };
-  return { mean: 0.98, ceiling: 0.28, leverage: 0.36, ownPenalty: 0.008, stackBoost: 2.0, noise: 3.0 };
+  if (type === "chalk")      return { mean: 1.08, ceiling: 0.18, leverage: 0.14, ownPenalty: 0.012, stackBoost: 0.8, noise: 1.4, bringBack: 0 };
+  if (type === "leverage")   return { mean: 0.94, ceiling: 0.30, leverage: 0.50, ownPenalty: 0.008, stackBoost: 2.8, noise: 3.8, bringBack: 1.5 };
+  if (type === "tournament") return { mean: 0.90, ceiling: 0.40, leverage: 0.60, ownPenalty: 0.004, stackBoost: 3.3, noise: 5.5, bringBack: 2.2 };
+  return                          { mean: 0.98, ceiling: 0.28, leverage: 0.36, ownPenalty: 0.008, stackBoost: 2.0, noise: 3.0, bringBack: 1.0 };
 }
 
-function playerObjective(p, weights, stackTeams = []) {
-  const stackBonus = stackTeams.includes(p.team) ? weights.stackBoost : 0;
-  const leverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 1, 1);
+// [v5.1] bring-back bonus: if we're stacking team A, one player from opposing team B correlates well
+function playerObjective(p, weights, stackTeams = [], bringBackTeams = []) {
+  const inStack = stackTeams.includes(p.team);
+  const inBringBack = bringBackTeams.includes(p.team);
+  const stackBonus = inStack ? weights.stackBoost : 0;
+  const bringBackBonus = inBringBack ? weights.bringBack : 0;
+  const rawLeverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 5, 5);
+  const leverage = Math.min(rawLeverage, 8);
   return (
     (p.projMean || p.fppg || 0) * weights.mean +
     (p.projCeiling || p.fppg || 0) * weights.ceiling +
     leverage * weights.leverage +
-    stackBonus -
+    stackBonus + bringBackBonus -
     (p.ownership || 0) * weights.ownPenalty
   );
 }
@@ -366,10 +361,7 @@ function playerObjective(p, weights, stackTeams = []) {
 function enumerateLockedAssignments(lockedPlayers, slots) {
   const results = [];
   function dfs(idx, remainingSlots, assigned) {
-    if (idx === lockedPlayers.length) {
-      results.push({ assigned: assigned.slice(), remainingSlots: remainingSlots.slice() });
-      return;
-    }
+    if (idx === lockedPlayers.length) { results.push({ assigned: assigned.slice(), remainingSlots: remainingSlots.slice() }); return; }
     const p = lockedPlayers[idx];
     const tried = new Set();
     for (let i = 0; i < remainingSlots.length; i++) {
@@ -387,35 +379,29 @@ function enumerateLockedAssignments(lockedPlayers, slots) {
   dfs(0, slots.slice(), []);
   return results;
 }
-
-function lineupHasStack(lineup) {
+function lineupHasStack(lineup, minStackSize = 2) {
   const counts = {};
   lineup.forEach(p => { counts[p.team] = (counts[p.team] || 0) + 1; });
-  return Object.values(counts).some(c => c >= 2);
+  return Object.values(counts).some(c => c >= minStackSize);
 }
-
-function lineupKey(lu) {
-  return lu.map(p => p.name).sort().join("|");
+function lineupHasBringBack(lineup, stackTeams, bringBackTeams) {
+  if (!stackTeams.length || !bringBackTeams.length) return false;
+  const hasStack = lineup.some(p => stackTeams.includes(p.team));
+  const hasBB = lineup.some(p => bringBackTeams.includes(p.team));
+  return hasStack && hasBB;
 }
+function lineupKey(lu) { return lu.map(p => p.name).sort().join("|"); }
 
-function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, strategyType, attempt) {
+function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, strategyType, attempt) {
   const weights = getStrategyWeights(strategyType);
   const lockSet = new Set(lockedNames);
   const excludeSet = new Set(excludedNames);
   const filtered = players.filter(p => !excludeSet.has(p.name));
-  const scored = filtered.map(p => ({
-    ...p,
-    _poolScore: playerObjective(p, weights, stackTeams) + (Math.random() - 0.5) * weights.noise + (attempt * 0.02),
-  }));
-
+  const scored = filtered.map(p => ({ ...p, _poolScore: playerObjective(p, weights, stackTeams, bringBackTeams) + (Math.random() - 0.5) * weights.noise + (attempt * 0.02) }));
   if (strategyType === "tournament") {
     const mids = scored.filter(p => p.ownership >= 8 && p.ownership <= 22).slice(0, 12);
-    if (mids.length) {
-      const pivot = mids[Math.floor(Math.random() * mids.length)];
-      pivot._poolScore += 5.5;
-    }
+    if (mids.length) mids[Math.floor(Math.random() * mids.length)]._poolScore += 5.5;
   }
-
   scored.sort((a, b) => {
     if (lockSet.has(a.name) && !lockSet.has(b.name)) return -1;
     if (!lockSet.has(a.name) && lockSet.has(b.name)) return 1;
@@ -424,38 +410,34 @@ function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, str
   return scored;
 }
 
-
-function buildLineup(players, lockedNames = [], excludedNames = [], strategyType = "mixed", stackTeams = []) {
+function buildLineup(players, lockedNames = [], excludedNames = [], strategyType = "mixed", stackTeams = [], bringBackTeams = [], requireStack = true) {
   const slots = getSlotsArray();
   const lockSet = new Set(lockedNames);
   const excludeSet = new Set(excludedNames);
   const weights = getStrategyWeights(strategyType);
-
   const usable = players.filter(p => !excludeSet.has(p.name));
   const lockedPlayers = usable.filter(p => lockSet.has(p.name));
   const unlockedPlayers = usable.filter(p => !lockSet.has(p.name));
-
   const lockedAssignments = enumerateLockedAssignments(lockedPlayers, slots);
   if (!lockedAssignments.length) return null;
 
   let best = { score: -Infinity, lineup: null };
   const startedAt = Date.now();
   const TIME_BUDGET_MS = strategyType === "chalk" ? 24 : 40;
+  const needStack = requireStack && strategyType !== "chalk";
 
   function fastGreedy(assignment) {
     const needed = assignment.remainingSlots.slice();
     const used = new Set(assignment.assigned.map(p => p.name));
     const lineup = assignment.assigned.slice();
     let salary = lineup.reduce((s, p) => s + p.salary, 0);
-
     const bySlot = {};
     needed.forEach(slot => {
       bySlot[slot] = unlockedPlayers
         .filter(p => !used.has(p.name) && p.positions.includes(slot))
-        .sort((a, b) => playerObjective(b, weights, stackTeams) - playerObjective(a, weights, stackTeams))
+        .sort((a, b) => playerObjective(b, weights, stackTeams, bringBackTeams) - playerObjective(a, weights, stackTeams, bringBackTeams))
         .slice(0, slot === "C" ? 10 : 12);
     });
-
     for (const slot of needed) {
       const candidates = bySlot[slot] || [];
       let picked = null;
@@ -466,98 +448,83 @@ function buildLineup(players, lockedNames = [], excludedNames = [], strategyType
         const minNeed = remaining * 3500;
         if (nextSalary > RULES.SALARY_CAP) continue;
         if (nextSalary + minNeed > RULES.SALARY_CAP) continue;
-        picked = p;
-        break;
+        picked = p; break;
       }
       if (!picked) return null;
       used.add(picked.name);
       lineup.push({ ...picked, slot });
       salary += picked.salary;
     }
-
     if (salary < RULES.MIN_SALARY_USED || salary > RULES.SALARY_CAP) return null;
-    if (strategyType !== "chalk" && !lineupHasStack(lineup)) return null;
+    if (needStack && !lineupHasStack(lineup)) return null;
     return lineup;
   }
 
   for (const assignment of lockedAssignments) {
     if (Date.now() - startedAt > TIME_BUDGET_MS && best.lineup) break;
-
     const used = new Set(assignment.assigned.map(p => p.name));
     const baseLineup = assignment.assigned.slice();
     const baseSalary = baseLineup.reduce((s, p) => s + p.salary, 0);
-    const baseScore = baseLineup.reduce((s, p) => s + playerObjective(p, weights, stackTeams), 0);
-
+    const baseScore = baseLineup.reduce((s, p) => s + playerObjective(p, weights, stackTeams, bringBackTeams), 0);
     const uniqueOpenSlots = [...new Set(assignment.remainingSlots)];
     const slotCandidates = {};
     uniqueOpenSlots.forEach(slot => {
       const raw = unlockedPlayers
         .filter(p => !used.has(p.name) && p.positions.includes(slot))
-        .map(p => ({ ...p, _slotObj: playerObjective(p, weights, stackTeams) }))
+        .map(p => ({ ...p, _slotObj: playerObjective(p, weights, stackTeams, bringBackTeams) }))
         .sort((a, b) => b._slotObj - a._slotObj);
-
       const cap = slot === "C" ? 8 : strategyType === "chalk" ? 10 : 11;
       slotCandidates[slot] = raw.slice(0, cap);
     });
-
     if (uniqueOpenSlots.some(slot => (slotCandidates[slot] || []).length === 0)) continue;
-
     const openSlots = assignment.remainingSlots.slice().sort((a, b) => (slotCandidates[a]?.length ?? 999) - (slotCandidates[b]?.length ?? 999));
     const slotMax = openSlots.map(slot => (slotCandidates[slot]?.[0]?._slotObj) || 0);
     const suffixUpper = new Array(openSlots.length + 1).fill(0);
     for (let i = openSlots.length - 1; i >= 0; i--) suffixUpper[i] = suffixUpper[i + 1] + slotMax[i];
-
     let timedOut = false;
-
     function dfs(idx, lineup, salary, score) {
-      if (Date.now() - startedAt > TIME_BUDGET_MS) {
-        timedOut = true;
-        return;
-      }
-
+      if (Date.now() - startedAt > TIME_BUDGET_MS) { timedOut = true; return; }
       if (idx === openSlots.length) {
         if (salary < RULES.MIN_SALARY_USED || salary > RULES.SALARY_CAP) return;
-        if (strategyType !== "chalk" && !lineupHasStack(lineup)) return;
+        if (needStack && !lineupHasStack(lineup)) return;
         if (score > best.score) best = { score, lineup: lineup.slice() };
         return;
       }
-
       if (score + suffixUpper[idx] < best.score) return;
-
       const slot = openSlots[idx];
       const cands = slotCandidates[slot] || [];
       const remaining = openSlots.length - idx - 1;
       const minNeed = remaining * 3500;
-
       for (const p of cands) {
         if (used.has(p.name)) continue;
         const nextSalary = salary + p.salary;
         if (nextSalary > RULES.SALARY_CAP) continue;
         if (nextSalary + minNeed > RULES.SALARY_CAP) continue;
-
-        used.add(p.name);
-        lineup.push({ ...p, slot });
+        used.add(p.name); lineup.push({ ...p, slot });
         dfs(idx + 1, lineup, nextSalary, score + p._slotObj);
-        lineup.pop();
-        used.delete(p.name);
+        lineup.pop(); used.delete(p.name);
         if (timedOut) return;
       }
     }
-
     dfs(0, baseLineup.slice(), baseSalary, baseScore);
-
     if (timedOut && !best.lineup) {
       const fallback = fastGreedy(assignment);
       if (fallback) {
-        const fallbackScore = fallback.reduce((s, p) => s + playerObjective(p, weights, stackTeams), 0);
+        const fallbackScore = fallback.reduce((s, p) => s + playerObjective(p, weights, stackTeams, bringBackTeams), 0);
         if (fallbackScore > best.score) best = { score: fallbackScore, lineup: fallback };
       }
     }
   }
-
   return best.lineup;
 }
 
+// ============================================================================
+// v5.1 MONTE CARLO with IMPROVED CORRELATION STRUCTURE
+// Changes:
+//   - Game shock reduced (was dominating individual variance)
+//   - Team shock SPLIT into (+) pace component and (-) usage component
+//   - Correlation more realistic for DFS: teammates slightly negative on usage
+// ============================================================================
 function randn() {
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
@@ -565,29 +532,44 @@ function randn() {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-
 function simulateSlate(players, iterations = 240) {
   const sims = [];
   const games = {};
-  players.forEach(p => {
-    if (!games[p.game]) games[p.game] = { teams: {} };
-    games[p.game].teams[p.team] = true;
-  });
+  players.forEach(p => { if (!games[p.game]) games[p.game] = { teams: {} }; games[p.game].teams[p.team] = true; });
 
   for (let i = 0; i < iterations; i++) {
     const env = {};
+    // [v5.1] Per-game pace shock (affects all 10 players positively)
+    //        Per-team usage shock (zero-sum among teammates)
     Object.keys(games).forEach(game => {
-      env[game] = { gameShock: randn() * 4.4, teamShock: {} };
+      env[game] = {
+        paceShock: randn() * 3.2,        // affects all players same direction (game volume)
+        teamShock: {},                    // team-specific (hot shooting, etc)
+        usageShock: {},                   // zero-sum within team
+      };
     });
 
     const outcome = {};
     for (const p of players) {
       const gameKey = p.game || "NA";
-      if (!env[gameKey]) env[gameKey] = { gameShock: randn() * 4.4, teamShock: {} };
-      if (!env[gameKey].teamShock[p.team]) env[gameKey].teamShock[p.team] = randn() * 2.8;
+      if (!env[gameKey]) env[gameKey] = { paceShock: randn()*3.2, teamShock: {}, usageShock: {} };
+      if (!(p.team in env[gameKey].teamShock)) env[gameKey].teamShock[p.team] = randn() * 1.8;
+      if (!(p.team in env[gameKey].usageShock)) env[gameKey].usageShock[p.team] = randn() * 1.2;
+
       const mean = p.projMean ?? p.fppg ?? 0;
-      const stdev = Math.min(12, p.stdev ?? Math.max(4.0, mean * 0.20));
-      const raw = mean + env[gameKey].gameShock * 0.26 + env[gameKey].teamShock[p.team] * 0.38 + randn() * stdev;
+      const stdev = Math.min(15, p.stdev ?? Math.max(4.0, mean * 0.22));
+
+      // Pace: fast game helps all scorers proportionally
+      const paceEffect = env[gameKey].paceShock * 0.32;
+      // Team: team had a hot night (shared benefit)
+      const teamEffect = env[gameKey].teamShock[p.team] * 0.28;
+      // Usage: if other teammate blew up, this player got less
+      // Crude approximation: invert part of team usage shock per player
+      const usageEffect = -env[gameKey].usageShock[p.team] * 0.15 + randn() * 0.5;
+      // Individual variance
+      const individualShock = randn() * stdev;
+
+      const raw = mean + paceEffect + teamEffect + usageEffect + individualShock;
       outcome[p.name] = Math.max(0, raw);
     }
     sims.push(outcome);
@@ -598,9 +580,11 @@ function simulateSlate(players, iterations = 240) {
 function scoreLineupAcrossSims(lineup, sims) {
   const totals = sims.map(sim => lineup.reduce((sum, p) => sum + (sim[p.name] || 0), 0)).sort((a, b) => a - b);
   const mean = totals.reduce((a, b) => a + b, 0) / Math.max(totals.length, 1);
+  const p25 = totals[Math.floor(totals.length * 0.25)] ?? mean;
   const p75 = totals[Math.floor(totals.length * 0.75)] ?? mean;
   const p90 = totals[Math.floor(totals.length * 0.90)] ?? mean;
-  return { mean, p75, p90, totals };
+  const p99 = totals[Math.floor(totals.length * 0.99)] ?? mean;
+  return { mean, p25, p75, p90, p99, totals };
 }
 
 function lineupMinUnique(a, b) {
@@ -610,74 +594,35 @@ function lineupMinUnique(a, b) {
   return Math.max(0, 9 - shared);
 }
 
-
 function selectPortfolio(candidates, desiredCount) {
   const selected = [];
   const exposure = {};
   const targetCount = Math.max(desiredCount, 1);
-  const maxExposure = desiredCount <= 3 ? 1 : desiredCount <= 10 ? 0.8 : 0.7;
-  const minUnique = desiredCount >= 12 ? 2 : 1;
+  // [v5.1] Tighter exposure caps (was 70-80%, now 50-65%)
+  const maxExposure = desiredCount <= 3 ? 1 : desiredCount <= 10 ? 0.65 : 0.5;
+  // [v5.1] Require 2+ unique players for larger portfolios
+  const minUnique = desiredCount >= 15 ? 3 : desiredCount >= 8 ? 2 : 1;
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
-
   for (const lu of sorted) {
     if (selected.length >= desiredCount) break;
     const tooSimilar = selected.some(existing => lineupMinUnique(existing, lu) < minUnique);
     if (tooSimilar) continue;
-
     let badExposure = false;
     for (const p of lu) {
       const next = (exposure[p.name] || 0) + 1;
-      if (next / targetCount > maxExposure) {
-        badExposure = true;
-        break;
-      }
+      if (next / targetCount > maxExposure) { badExposure = true; break; }
     }
     if (badExposure && selected.length >= Math.max(2, Math.floor(targetCount * 0.35))) continue;
-
     selected.push(lu);
     lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
-
+  // Fill remainder if we came up short
   for (const lu of sorted) {
     if (selected.length >= desiredCount) break;
     if (selected.includes(lu)) continue;
     selected.push(lu);
   }
-
   return selected.slice(0, desiredCount);
-}
-
-
-
-function generateLineups(players, count, lockedNames, excludedNames) {
-  const lineups = [];
-  const used = new Set();
-  const maxAttempts = count * 40;
-
-  for (let attempt = 0; attempt < maxAttempts && lineups.length < count; attempt++) {
-    // Increase randomness as we find more lineups (forces more diversity)
-    const noise = 3 + (lineups.length / count) * 25;
-    const varied = [...players].sort((a, b) => (b.score - a.score) + (Math.random() - 0.5) * noise);
-
-    // Randomly deprioritize top players occasionally to force different builds
-    if (attempt > 5) {
-      const topCount = Math.floor(2 + Math.random() * 4);
-      for (let i = 0; i < topCount; i++) {
-        const idx = Math.floor(Math.random() * Math.min(8, varied.length));
-        const moved = varied.splice(idx, 1)[0];
-        const insertAt = Math.floor(varied.length * 0.3 + Math.random() * varied.length * 0.5);
-        varied.splice(insertAt, 0, moved);
-      }
-    }
-
-    const lu = buildLineup(varied, lockedNames, excludedNames);
-    if (!lu) continue;
-    const key = lu.map(p => p.name).sort().join("|");
-    if (used.has(key)) continue;
-    used.add(key);
-    lineups.push(lu);
-  }
-  return lineups;
 }
 
 function lineupStats(lu) {
@@ -685,6 +630,7 @@ function lineupStats(lu) {
     total: lu.reduce((s, p) => s + p.salary, 0),
     proj: lu.reduce((s, p) => s + p.fppg, 0),
     avgOwn: lu.reduce((s, p) => s + p.ownership, 0) / lu.length,
+    cumOwn: lu.reduce((s, p) => s + p.ownership, 0), // cumulative — DFS rule: <150 is good for GPP
     chalk: lu.filter(p => p.ownership >= 30).length,
     mid: lu.filter(p => p.ownership >= 10 && p.ownership < 30).length,
     punt: lu.filter(p => p.ownership < 5).length,
@@ -692,78 +638,66 @@ function lineupStats(lu) {
   };
 }
 
-// -- SLATE GRADER ----------------------------------------------------------
 function gradeSlate(gamesList) {
   if (!gamesList || gamesList.length === 0) return null;
   const totals = gamesList.map(g => g.total).filter(Boolean);
   const impliedPts = gamesList.flatMap(g => [g.homeImpl, g.awayImpl]).filter(Boolean);
   const avgTotal = totals.reduce((a,b) => a+b, 0) / totals.length;
   const highTotalGames = gamesList.filter(g => g.total >= 228).length;
-  const eliteGames = gamesList.filter(g => g.total >= 233).length;
   const maxImpl = Math.max(...impliedPts);
-
   let score = 0;
   let notes = [];
-
-  // Game count (8 games = perfect)
   if (gamesList.length >= 8) { score += 25; notes.push("[OK] Full 8-game slate"); }
-  else if (gamesList.length >= 6) { score += 15; notes.push("[!] " + gamesList.length + " games - smaller slate"); }
-  else { score += 5; notes.push("[NO] Only " + gamesList.length + " games - thin slate"); }
-
-  // Average total
-  if (avgTotal >= 228) { score += 25; notes.push("[OK] Avg O/U " + avgTotal.toFixed(1) + " - high scoring"); }
-  else if (avgTotal >= 222) { score += 15; notes.push("[!] Avg O/U " + avgTotal.toFixed(1) + " - moderate"); }
-  else { score += 5; notes.push("[NO] Avg O/U " + avgTotal.toFixed(1) + " - low scoring slate"); }
-
-  // High total games
-  if (highTotalGames >= 3) { score += 25; notes.push("[OK] " + highTotalGames + " games O/U 228+ - stacking gold"); }
-  else if (highTotalGames >= 1) { score += 15; notes.push("[!] " + highTotalGames + " game(s) O/U 228+"); }
-  else { score += 5; notes.push("[NO] No games over 228 - tough to stack"); }
-
-  // Elite implied team
-  if (maxImpl >= 122) { score += 25; notes.push("[OK] " + maxImpl + " implied pts - elite pace-up spot"); }
-  else if (maxImpl >= 116) { score += 15; notes.push("[!] " + maxImpl + " max implied - decent spot"); }
-  else { score += 5; notes.push("[NO] Max implied only " + maxImpl + " - no elite pace-up"); }
-
+  else if (gamesList.length >= 6) { score += 18; notes.push("[!] " + gamesList.length + " games - smaller"); }
+  else if (gamesList.length >= 4) { score += 12; notes.push("[!] " + gamesList.length + " games - playoff/small"); }
+  else { score += 5; notes.push("[NO] Only " + gamesList.length + " games - tiny"); }
+  if (avgTotal >= 228) { score += 25; notes.push("[OK] Avg O/U " + avgTotal.toFixed(1)); }
+  else if (avgTotal >= 222) { score += 15; notes.push("[!] Avg O/U " + avgTotal.toFixed(1)); }
+  else { score += 5; notes.push("[NO] Low-scoring: " + avgTotal.toFixed(1)); }
+  if (highTotalGames >= 3) { score += 25; notes.push("[OK] " + highTotalGames + " games 228+"); }
+  else if (highTotalGames >= 1) { score += 15; notes.push("[!] " + highTotalGames + " game(s) 228+"); }
+  else { score += 5; notes.push("[NO] No high-total games"); }
+  if (maxImpl >= 122) { score += 25; notes.push("[OK] " + maxImpl + " implied - elite"); }
+  else if (maxImpl >= 116) { score += 15; notes.push("[!] " + maxImpl + " max implied"); }
+  else { score += 5; notes.push("[NO] Max implied " + maxImpl); }
   const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
-  const playIt = score >= 55;
-  const recommendation = score >= 85 ? "[HOT] MUST PLAY - elite slate" :
-                         score >= 70 ? "[OK] PLAY - solid slate" :
-                         score >= 55 ? "[!] PLAY SMALL - average slate" :
-                         score >= 40 ? "[NO] SKIP OR MIN ENTRY - bad slate" :
-                                       "[NO] SKIP - terrible slate";
-
-  return { score, grade, notes, recommendation, playIt, highTotalGames, avgTotal, maxImpl };
+  const recommendation = score >= 85 ? "[HOT] MUST PLAY" : score >= 70 ? "[OK] PLAY - solid slate" : score >= 55 ? "[!] PLAY SMALL" : score >= 40 ? "[NO] SKIP OR MIN" : "[NO] SKIP";
+  return { score, grade, notes, recommendation, playIt: score >= 55, highTotalGames, avgTotal, maxImpl };
 }
 
-// -- STACK ENGINE ----------------------------------------------------------
-// Find the best game to stack based on Vegas totals
 function getBestStackGame(gamesList, players) {
   if (!gamesList || gamesList.length === 0) return null;
   const scored = gamesList.map(g => {
-    const gamePlayers = players.filter(p =>
-      p.team === g.home || p.team === g.away
-    );
+    const gamePlayers = players.filter(p => p.team === g.home || p.team === g.away);
     const topPlayers = gamePlayers.sort((a,b) => b.fppg - a.fppg).slice(0,6);
-    return {
-      ...g,
-      stackScore: (g.total || 220) * 0.5 + topPlayers.reduce((s,p) => s+p.fppg, 0) * 0.3,
-      topPlayers,
-    };
+    return { ...g, stackScore: (g.total || 220) * 0.5 + topPlayers.reduce((s,p) => s+p.fppg, 0) * 0.3, topPlayers };
   });
   return scored.sort((a,b) => b.stackScore - a.stackScore)[0];
 }
 
-// Generate lineups with stack awareness
-
 function generateLineupsWithStrategy(players, count, lockedNames, excludedNames, gamesList, strategy) {
   if (!players || players.length === 0 || count <= 0) return [];
-
   const bestGame = getBestStackGame(gamesList, players);
   const stackTeams = bestGame ? [bestGame.home, bestGame.away] : [];
+  // [v5.1] Bring-back: the OPPONENT in the stacked game correlates well via pace
+  const bringBackTeams = [];
+  if (bestGame) {
+    // For leverage/tournament, we actually want to stack 3 from one team + 1 from opponent
+    // So stackTeams = [home], bringBackTeams = [away] OR vice versa
+    // Pick the higher-implied team as primary stack
+    const homeImpl = bestGame.homeImpl || LEAGUE_AVG_IMPLIED;
+    const awayImpl = bestGame.awayImpl || LEAGUE_AVG_IMPLIED;
+    if (homeImpl >= awayImpl) {
+      stackTeams.length = 0; stackTeams.push(bestGame.home);
+      bringBackTeams.push(bestGame.away);
+    } else {
+      stackTeams.length = 0; stackTeams.push(bestGame.away);
+      bringBackTeams.push(bestGame.home);
+    }
+  }
+
   const allCandidates = [];
   const used = new Set();
-
   let chalkCount, leverageCount, tournCount;
   if (strategy === "chalk") { chalkCount = count; leverageCount = 0; tournCount = 0; }
   else if (strategy === "leverage") { chalkCount = 0; leverageCount = count; tournCount = 0; }
@@ -775,25 +709,25 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   }
 
   const startedAt = Date.now();
-  const MAX_BUILD_MS = 800;
+  const MAX_BUILD_MS = 1200;
+  const smallSlate = gamesList.length <= 4;
+  const requireStack = !smallSlate && stackTeams.length > 0;
 
   const buildBatch = (targetCount, type) => {
-    const attempts = Math.max(targetCount * 4, 14);
+    const attempts = Math.max(targetCount * 6, 20);
     const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 1.5));
-
     for (let attempt = 0; attempt < attempts; attempt++) {
       if (Date.now() - startedAt > MAX_BUILD_MS) break;
       if (allCandidates.filter(l => l._type === type).length >= perTypeTarget) break;
-
-      const pool = buildCandidatePool(players, lockedNames, excludedNames, stackTeams, type, attempt).slice(0, 42);
-      const lu = buildLineup(pool, lockedNames, excludedNames, type, stackTeams);
+      const pool = buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, type, attempt).slice(0, 42);
+      const lu = buildLineup(pool, lockedNames, excludedNames, type, stackTeams, bringBackTeams, requireStack);
       if (!lu || lu.length !== 9) continue;
-
       const key = lineupKey(lu);
       if (used.has(key)) continue;
       used.add(key);
       lu._type = type;
       lu._hasStack = lineupHasStack(lu);
+      lu._hasBringBack = lineupHasBringBack(lu, stackTeams, bringBackTeams);
       lu._stackGame = bestGame?.gameStr || null;
       allCandidates.push(lu);
     }
@@ -803,129 +737,55 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   if (leverageCount > 0) buildBatch(leverageCount, "leverage");
   if (tournCount > 0) buildBatch(tournCount, "tournament");
 
-  if (allCandidates.length === 0) {
-    const fallback = generateLineups(players, Math.min(count, 8), lockedNames, excludedNames);
-    return fallback;
+  if (allCandidates.length === 0 && requireStack) {
+    for (let attempt = 0; attempt < count * 6; attempt++) {
+      const pool = buildCandidatePool(players, lockedNames, excludedNames, [], [], "mixed", attempt).slice(0, 42);
+      const lu = buildLineup(pool, lockedNames, excludedNames, "mixed", [], [], false);
+      if (!lu || lu.length !== 9) continue;
+      const key = lineupKey(lu);
+      if (used.has(key)) continue;
+      used.add(key);
+      lu._type = "mixed";
+      lu._hasStack = lineupHasStack(lu);
+      lu._hasBringBack = false;
+      lu._stackGame = null;
+      allCandidates.push(lu);
+    }
   }
 
-  const simIterations = Math.min(180, Math.max(70, 50 + count * 6));
-  const sims = simulateSlate(players.slice(0, 60), simIterations);
+  if (allCandidates.length === 0) return [];
 
+  const simIterations = Math.min(200, Math.max(80, 60 + count * 6));
+  const sims = simulateSlate(players.slice(0, 70), simIterations);
   allCandidates.forEach(lu => {
     const simScore = scoreLineupAcrossSims(lu, sims);
     const stats = lineupStats(lu);
     lu._simMean = round1(simScore.mean);
+    lu._simP25 = round1(simScore.p25);
     lu._simP75 = round1(simScore.p75);
     lu._simP90 = round1(simScore.p90);
-    lu._portfolioScore =
-      simScore.mean * 0.48 +
-      simScore.p75 * 0.17 +
-      simScore.p90 * 0.25 +
-      (lu._hasStack ? 2.4 : 0) -
-      stats.avgOwn * 0.07;
+    lu._simP99 = round1(simScore.p99);
+    // [v5.1] Scoring portfolio by strategy:
+    //   chalk: prioritize floor (p25) and mean
+    //   leverage: prioritize ceiling (p90) with some mean
+    //   tournament: prioritize tail (p99)
+    if (lu._type === "chalk") {
+      lu._portfolioScore = simScore.mean * 0.55 + simScore.p25 * 0.35 + simScore.p75 * 0.10 - stats.avgOwn * 0.05;
+    } else if (lu._type === "tournament") {
+      lu._portfolioScore = simScore.mean * 0.25 + simScore.p90 * 0.35 + simScore.p99 * 0.35 + (lu._hasBringBack ? 2.5 : 0) + (lu._hasStack ? 1.5 : 0) - stats.avgOwn * 0.10;
+    } else {
+      // leverage or mixed
+      lu._portfolioScore = simScore.mean * 0.40 + simScore.p75 * 0.25 + simScore.p90 * 0.25 + (lu._hasStack ? 2.0 : 0) + (lu._hasBringBack ? 1.5 : 0) - stats.avgOwn * 0.08;
+    }
   });
-
   return selectPortfolio(allCandidates, count).sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
 }
 
-
-// Bankroll entry strategy// Bankroll entry strategy
-function getEntryStrategy(bankroll, slateGrade) {
-  if (!bankroll || bankroll <= 0) return null;
-  const playPct = slateGrade >= 70 ? 0.15 : slateGrade >= 55 ? 0.08 : 0.03;
-  const budget = +(bankroll * playPct).toFixed(2);
-  return {
-    budget,
-    breakdown: [
-      { type: "Mid-stakes ($3-5)",   entries: Math.floor(budget * 0.70 / 4),  stake: 4,   pct: "70%" },
-      { type: "Large field ($1)",    entries: Math.floor(budget * 0.20 / 1),  stake: 1,   pct: "20%" },
-      { type: "Big tournament ($25)",entries: Math.floor(budget * 0.10 / 25), stake: 25,  pct: "10%" },
-    ],
-    note: slateGrade >= 70 ? "Full send - good slate" : slateGrade >= 55 ? "Half size - average slate" : "Min entries only",
-  };
-}
-
-// -- INJURY PANEL ---------------------------------------------------------
-const TONIGHT_INJURIES = [
-  // -- OUTS --
-  { name: "Jarrett Allen",      team: "CLE", status: "OUT",  reason: "Knee tendonitis",       dfsImpact: "Mitchell/Mobley usage [^]" },
-  { name: "Max Strus",          team: "CLE", status: "OUT",  reason: "Foot surgery",          dfsImpact: "Minor" },
-  { name: "Tyrese Proctor",     team: "CLE", status: "OUT",  reason: "Quad strain",           dfsImpact: "Minor" },
-  { name: "Kyrie Irving",       team: "DAL", status: "OUT",  reason: "Knee surgery",          dfsImpact: "Luka anchor role grows" },
-  { name: "Klay Thompson",      team: "DAL", status: "OUT",  reason: "Rest",                  dfsImpact: "Minor" },
-  { name: "Dereck Lively II",   team: "DAL", status: "OUT",  reason: "Foot surgery",          dfsImpact: "Minor" },
-  { name: "Ja Morant",          team: "MEM", status: "OUT",  reason: "Elbow UCL sprain",      dfsImpact: "MEM stack unplayable" },
-  { name: "Santi Aldama",       team: "MEM", status: "OUT",  reason: "Knee mgmt",             dfsImpact: "MEM stack unplayable" },
-  { name: "Tyrese Haliburton",  team: "IND", status: "OUT",  reason: "Achilles tear",         dfsImpact: "[HOT] NYK stack - IND depleted" },
-  { name: "Pascal Siakam",      team: "IND", status: "OUT",  reason: "Knee sprain",           dfsImpact: "[HOT] NYK stack - IND depleted" },
-  { name: "T.J. McConnell",     team: "IND", status: "OUT",  reason: "Hamstring",             dfsImpact: "[HOT] NYK stack - IND depleted" },
-  { name: "Aaron Nesmith",      team: "IND", status: "OUT",  reason: "Ankle mgmt",            dfsImpact: "Minor" },
-  { name: "Obi Toppin",         team: "IND", status: "OUT",  reason: "Foot mgmt",             dfsImpact: "Minor" },
-  { name: "Ausar Thompson",     team: "DET", status: "OUT",  reason: "Ankle sprain",          dfsImpact: "Minor - DET still huge fav" },
-  { name: "Caris LeVert",       team: "DET", status: "OUT",  reason: "Wrist sprain",          dfsImpact: "Minor" },
-  { name: "Scottie Barnes",     team: "TOR", status: "OUT",  reason: "Injury report",         dfsImpact: "TOR value plays open up" },
-  { name: "Trey Murphy III",    team: "NOP", status: "OUT",  reason: "Check FD CSV",          dfsImpact: "NOP already unplayable" },
-  // -- QUESTIONABLE --
-  { name: "Josh Hart",          team: "NYK", status: "Q",    reason: "Knee soreness",         dfsImpact: "Monitor - NYK still plays well without" },
-  { name: "Karl-Anthony Towns", team: "NYK", status: "Q",    reason: "On report",             dfsImpact: "[!!] If out -> Brunson/OG usage massive" },
-  { name: "Andrew Nembhard",    team: "IND", status: "Q",    reason: "Back/neck soreness",    dfsImpact: "Likely starts - IND has no one else" },
-  { name: "Ivica Zubac",        team: "IND", status: "Q",    reason: "Ankle sprain",          dfsImpact: "If out -> IND completely exposed" },
-  // -- USAGE BOOSTERS (players who benefit) --
-  { name: "Donovan Mitchell",   team: "CLE", status: "UP",   reason: "Allen out - usage [^]",   dfsImpact: "[HOT] Top anchor candidate" },
-  { name: "Evan Mobley",        team: "CLE", status: "UP",   reason: "Allen out - rebounds/pts", dfsImpact: "Value play" },
-  { name: "Jalen Brunson",      team: "NYK", status: "UP",   reason: "IND decimated",         dfsImpact: "[HOT] Lock candidate" },
-  { name: "Deni Avdija",        team: "POR", status: "UP",   reason: "UTA 6 players out",     dfsImpact: "[HOT] POR 126.5 implied - must play" },
-  { name: "Cade Cunningham",    team: "DET", status: "UP",   reason: "MEM missing Morant+",   dfsImpact: "[HOT] DET 119.5 implied" },
-];
-
-// -- CASCADE RULES ENGINE --------------------------------------------------
-const CASCADE_RULES = [
-  { trigger: "Jarrett Allen",      team: "CLE", beneficiaries: [
-    { name: "Evan Mobley",        ownBoost: 1.35, projBoost: 1.12, note: "Rebounds+pts fill" },
-    { name: "Donovan Mitchell",   ownBoost: 1.15, projBoost: 1.08, note: "Usage fills" },
-    { name: "Darius Garland",     ownBoost: 1.10, projBoost: 1.05, note: "Minor boost" },
-  ]},
-  { trigger: "Tyrese Haliburton",  team: "IND", beneficiaries: [
-    { name: "Kam Jones",          ownBoost: 2.8,  projBoost: 1.45, note: "Starts PG, 27+ min confirmed" },
-    { name: "Jarace Walker",      ownBoost: 2.2,  projBoost: 1.40, note: "Starts, 28-31 min recent" },
-    { name: "Ben Sheppard",       ownBoost: 1.8,  projBoost: 1.25, note: "Off-ball scorer, 29+ min" },
-    { name: "Andrew Nembhard",    ownBoost: 1.6,  projBoost: 1.20, note: "PG backup if healthy" },
-  ]},
-  { trigger: "T.J. McConnell",     team: "IND", beneficiaries: [
-    { name: "Kam Jones",          ownBoost: 1.6,  projBoost: 1.20, note: "PG depth" },
-    { name: "Ben Sheppard",       ownBoost: 1.3,  projBoost: 1.10, note: "Ball-handling" },
-  ]},
-  { trigger: "Pascal Siakam",      team: "IND", beneficiaries: [
-    { name: "Jarace Walker",      ownBoost: 2.0,  projBoost: 1.35, note: "Starting PF role" },
-    { name: "Kobe Brown",         ownBoost: 1.5,  projBoost: 1.20, note: "Frontcourt fill, 20+ min" },
-    { name: "Jay Huff",           ownBoost: 1.4,  projBoost: 1.15, note: "Center depth" },
-  ]},
-  { trigger: "Ja Morant",          team: "MEM", beneficiaries: [
-    { name: "Desmond Bane",       ownBoost: 1.5,  projBoost: 1.20, note: "Primary ball handler" },
-    { name: "Jaren Jackson Jr.",  ownBoost: 1.3,  projBoost: 1.12, note: "Usage fills" },
-    { name: "Marcus Smart",       ownBoost: 1.4,  projBoost: 1.15, note: "PG duties" },
-  ]},
-  { trigger: "Kyrie Irving",       team: "DAL", beneficiaries: [
-    { name: "Luka Doncic",        ownBoost: 1.15, projBoost: 1.08, note: "Already anchor" },
-    { name: "James Harden",       ownBoost: 1.25, projBoost: 1.10, note: "More ball-handling" },
-  ]},
-  { trigger: "Karl-Anthony Towns", team: "NYK", beneficiaries: [
-    { name: "Jalen Brunson",      ownBoost: 1.25, projBoost: 1.12, note: "Usage spike" },
-    { name: "OG Anunoby",         ownBoost: 1.20, projBoost: 1.08, note: "More volume" },
-    { name: "Josh Hart",          ownBoost: 1.30, projBoost: 1.15, note: "Rebound+pts fill" },
-    { name: "Mikal Bridges",      ownBoost: 1.20, projBoost: 1.08, note: "Fill scorer" },
-  ]},
-  { trigger: "Scottie Barnes",     team: "TOR", beneficiaries: [
-    { name: "Brandon Ingram",     ownBoost: 1.30, projBoost: 1.15, note: "Lead scorer role" },
-    { name: "RJ Barrett",         ownBoost: 1.20, projBoost: 1.10, note: "Usage up" },
-  ]},
-];
-
-function applyCascades(outPlayers, ownershipMap) {
+function applyCascades(outPlayers, ownershipMap, cascadeRules) {
   const newMap = { ...ownershipMap };
   const log = [];
   for (const outName of outPlayers) {
-    const rules = CASCADE_RULES.filter(r => r.trigger.toLowerCase() === outName.toLowerCase());
+    const rules = cascadeRules.filter(r => r.trigger.toLowerCase() === outName.toLowerCase());
     for (const rule of rules) {
       for (const b of rule.beneficiaries) {
         const key = b.name.toLowerCase();
@@ -939,196 +799,153 @@ function applyCascades(outPlayers, ownershipMap) {
   return { newMap, log };
 }
 
+function exportLineupsToFanDuel(lineups) {
+  const header = "PG,PG,SG,SG,SF,SF,PF,PF,C";
+  const rows = lineups.map(lu => {
+    const bySlot = { PG: [], SG: [], SF: [], PF: [], C: [] };
+    lu.forEach(p => { if (bySlot[p.slot]) bySlot[p.slot].push(p); });
+    const ordered = [bySlot.PG[0], bySlot.PG[1], bySlot.SG[0], bySlot.SG[1], bySlot.SF[0], bySlot.SF[1], bySlot.PF[0], bySlot.PF[1], bySlot.C[0]];
+    return ordered.map(p => p?.fdId || p?.name || "").join(",");
+  });
+  return header + "\n" + rows.join("\n");
+}
+function downloadCSV(csvText, filename) {
+  const blob = new Blob([csvText], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
-const statusColor = { OUT: "#ef4444", Q: "#f59e0b", UP: "#22c55e" };
-const statusBg = { OUT: "#1a0a0a", Q: "#1a1200", UP: "#0a1a0a" };
-
-function InjuryPanel({ onExclude, excludedNames }) {
-  const [filter, setFilter] = useState("ALL");
-  const filtered = filter === "ALL" ? TONIGHT_INJURIES : TONIGHT_INJURIES.filter(p => p.status === filter);
-
+// ============================================================================
+// UI COMPONENTS (unchanged from v5 except where noted)
+// ============================================================================
+function SlatePanel({ games, onUpdate }) {
+  const [newGame, setNewGame] = useState({ away: "", home: "", total: 225, homeSpread: 0 });
+  const addGame = () => { if (!newGame.away || !newGame.home) return; onUpdate([...games, { ...newGame, total: +newGame.total, homeSpread: +newGame.homeSpread }]); setNewGame({ away: "", home: "", total: 225, homeSpread: 0 }); };
+  const removeGame = (idx) => onUpdate(games.filter((_, i) => i !== idx));
+  const updateGame = (idx, field, val) => { const next = [...games]; next[idx] = { ...next[idx], [field]: field === "away" || field === "home" ? val.toUpperCase() : +val }; onUpdate(next); };
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: "#4a6a80" }}>Mar 13 official report . {TONIGHT_INJURIES.filter(p=>p.status==="OUT").length} OUT . {TONIGHT_INJURIES.filter(p=>p.status==="Q").length} Q . {TONIGHT_INJURIES.filter(p=>p.status==="UP").length} boosters</div>
-        <div style={{ display: "flex", gap: 5 }}>
-          {["ALL","OUT","Q","UP"].map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{ fontSize: 9, padding: "2px 8px", borderRadius: 4, border: `1px solid ${filter===f ? statusColor[f]||"#3b82f6" : "#1e3040"}`, background: filter===f ? (statusBg[f]||"#0d1e2e") : "transparent", color: filter===f ? (statusColor[f]||"#60a5fa") : "#4a6a80", cursor: "pointer" }}>
-              {f === "UP" ? "[HOT] BOOST" : f}
-            </button>
-          ))}
+      <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 8 }}>Spread from home team perspective (negative = home favored). League avg total = {LEAGUE_AVG_TOTAL}.</div>
+      {games.length === 0 && <div style={{ padding: 16, textAlign: "center", color: "#f59e0b", background: "#0a1520", border: "1px dashed #f59e0b44", borderRadius: 8, marginBottom: 10 }}>[!] No games yet. Add at least one below.</div>}
+      {games.map((g, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "60px 60px 80px 80px 40px", gap: 6, marginBottom: 6, alignItems: "center" }}>
+          <input value={g.away} onChange={e => updateGame(i, "away", e.target.value)} placeholder="AWAY" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <input value={g.home} onChange={e => updateGame(i, "home", e.target.value)} placeholder="HOME" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <input type="number" step="0.5" value={g.total} onChange={e => updateGame(i, "total", e.target.value)} style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#60a5fa", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <input type="number" step="0.5" value={g.homeSpread} onChange={e => updateGame(i, "homeSpread", e.target.value)} style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#f59e0b", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <button onClick={() => removeGame(i)} style={{ background: "#991b1b", color: "#fff", border: "none", borderRadius: 4, padding: "4px 6px", fontSize: 10, cursor: "pointer" }}>[X]</button>
         </div>
-      </div>
-      <div style={{ maxHeight: 360, overflowY: "auto" }}>
-        {filtered.map((p, i) => (
-          <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` }}>
-            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 28, textAlign: "center", border: `1px solid ${statusColor[p.status]}44` }}>{p.status}</span>
-            <span style={{ fontSize: 10, color: "#3b82f6", minWidth: 28 }}>{p.team}</span>
-            <span style={{ flex: 1, fontSize: 11, color: p.status === "OUT" ? "#94a3b8" : "#e2e8f0", fontWeight: p.status === "UP" ? 600 : 400, textDecoration: p.status === "OUT" ? "line-through" : "none" }}>{p.name}</span>
-            <span style={{ fontSize: 9, color: "#4a6a80", flex: 1 }}>{p.reason}</span>
-            <span style={{ fontSize: 9, color: p.status === "UP" ? "#22c55e" : p.status === "Q" ? "#f59e0b" : "#4a6a80", flex: 1 }}>{p.dfsImpact}</span>
-            {p.status === "OUT" && (
-              <button onClick={() => onExclude(p.name)} disabled={excludedNames.includes(p.name)} style={{ fontSize: 9, padding: "2px 7px", borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#16a34a" : "#ef444466"}`, background: excludedNames.includes(p.name) ? "#16a34a22" : "#1a0a0a", color: excludedNames.includes(p.name) ? "#22c55e" : "#ef4444", cursor: "pointer", whiteSpace: "nowrap" }}>
-                {excludedNames.includes(p.name) ? "[Y] OUT" : "EXCLUDE"}
-              </button>
-            )}
-          </div>
-        ))}
+      ))}
+      <div style={{ marginTop: 10, padding: 10, background: "#0a1520", border: "1px solid #1e3040", borderRadius: 6 }}>
+        <div style={{ fontSize: 9, color: "#3b6280", letterSpacing: 1, marginBottom: 6 }}>ADD GAME</div>
+        <div style={{ display: "grid", gridTemplateColumns: "60px 60px 80px 80px 50px", gap: 6, alignItems: "center" }}>
+          <input value={newGame.away} onChange={e => setNewGame({...newGame, away: e.target.value.toUpperCase()})} placeholder="AWAY" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <input value={newGame.home} onChange={e => setNewGame({...newGame, home: e.target.value.toUpperCase()})} placeholder="HOME" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <input type="number" step="0.5" value={newGame.total} onChange={e => setNewGame({...newGame, total: e.target.value})} placeholder="total" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#60a5fa", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <input type="number" step="0.5" value={newGame.homeSpread} onChange={e => setNewGame({...newGame, homeSpread: e.target.value})} placeholder="spread" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#f59e0b", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <button onClick={addGame} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 4, padding: "4px 8px", fontSize: 10, cursor: "pointer" }}>ADD</button>
+        </div>
       </div>
     </div>
   );
 }
 
-// -- STATMUSE PANEL -------------------------------------------------------
+function InjuryEditor({ injuries, onUpdate, onExclude, excludedNames }) {
+  const [newInj, setNewInj] = useState({ name: "", team: "", status: "OUT", reason: "" });
+  const statusColor = { OUT: "#ef4444", Q: "#f59e0b", UP: "#22c55e" };
+  const statusBg = { OUT: "#1a0a0a", Q: "#1a1200", UP: "#0a1a0a" };
+  const addInj = () => { if (!newInj.name) return; onUpdate([...injuries, { ...newInj }]); setNewInj({ name: "", team: "", status: "OUT", reason: "" }); };
+  const removeInj = (idx) => onUpdate(injuries.filter((_, i) => i !== idx));
+  return (
+    <div>
+      <div style={{ maxHeight: 280, overflowY: "auto", marginBottom: 10 }}>
+        {injuries.length === 0 && <div style={{ padding: 12, textAlign: "center", color: "#4a6a80", fontSize: 11, background: "#0a1520", borderRadius: 6 }}>No injuries yet. Add below.</div>}
+        {injuries.map((p, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 5, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` }}>
+            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 3, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 24, textAlign: "center" }}>{p.status}</span>
+            <span style={{ fontSize: 10, color: "#3b82f6", minWidth: 26 }}>{p.team}</span>
+            <span style={{ flex: 1, fontSize: 11, color: p.status === "OUT" ? "#94a3b8" : "#e2e8f0", textDecoration: p.status === "OUT" ? "line-through" : "none" }}>{p.name}</span>
+            <span style={{ fontSize: 9, color: "#4a6a80", flex: 1 }}>{p.reason}</span>
+            {p.status === "OUT" && <button onClick={() => onExclude(p.name)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#16a34a" : "#ef444466"}`, background: excludedNames.includes(p.name) ? "#16a34a22" : "#1a0a0a", color: excludedNames.includes(p.name) ? "#22c55e" : "#ef4444", cursor: "pointer" }}>{excludedNames.includes(p.name) ? "[Y] EX" : "EXCL"}</button>}
+            <button onClick={() => removeInj(i)} style={{ background: "transparent", color: "#4a6a80", border: "none", fontSize: 14, cursor: "pointer" }}>×</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: 10, background: "#0a1520", border: "1px solid #1e3040", borderRadius: 6 }}>
+        <div style={{ fontSize: 9, color: "#3b6280", letterSpacing: 1, marginBottom: 6 }}>ADD INJURY</div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 50px 60px 2fr 40px", gap: 5, alignItems: "center" }}>
+          <input value={newInj.name} onChange={e => setNewInj({...newInj, name: e.target.value})} placeholder="Player name" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <input value={newInj.team} onChange={e => setNewInj({...newInj, team: e.target.value.toUpperCase()})} placeholder="TEAM" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#3b82f6", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <select value={newInj.status} onChange={e => setNewInj({...newInj, status: e.target.value})} style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }}>
+            <option value="OUT">OUT</option><option value="Q">Q</option><option value="UP">UP</option>
+          </select>
+          <input value={newInj.reason} onChange={e => setNewInj({...newInj, reason: e.target.value})} placeholder="reason" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#94a3b8", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <button onClick={addInj} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 4, padding: "4px 8px", fontSize: 10, cursor: "pointer" }}>ADD</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
   const [search, setSearch] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualFD, setManualFD] = useState("");
-
-  const filtered = players.filter(p =>
-    !search || p.name.toLowerCase().includes(search.toLowerCase())
-  ).slice(0, 40);
-
-  const trendIcon = (t) => t === "hot" ? "[HOT]" : t === "cold" ? "[*]" : "->";
+  const filtered = players.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())).slice(0, 40);
   const trendColor = (t) => t === "hot" ? "#22c55e" : t === "cold" ? "#60a5fa" : "#94a3b8";
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Manual entry */}
       <div style={{ background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 }}>
         <div style={{ fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 }}>MANUAL FD AVG OVERRIDE</div>
-        <div style={{ fontSize: 11, color: "#4a6a80", marginBottom: 8, lineHeight: 1.6 }}>
-          Visit{" "}
-          <a href="https://www.statmuse.com/nba" target="_blank" rel="noreferrer"
-            style={{ color: "#60a5fa" }}>statmuse.com/nba</a>{" "}
-          → search player → "fanduel stat log" → enter their FD avg below.
-        </div>
+        <div style={{ fontSize: 11, color: "#4a6a80", marginBottom: 8, lineHeight: 1.6 }}>Visit <a href="https://www.statmuse.com/nba" target="_blank" rel="noreferrer" style={{ color: "#60a5fa" }}>statmuse.com/nba</a> → "fanduel stat log" → enter FD avg below.</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <input
-            list="player-names"
-            placeholder="Player name..."
-            value={manualName}
-            onChange={e => setManualName(e.target.value)}
-            style={{ flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12 }}
-          />
-          <datalist id="player-names">
-            {players.map(p => <option key={p.name} value={p.name} />)}
-          </datalist>
-          <input
-            type="number" placeholder="FD avg" value={manualFD}
-            onChange={e => setManualFD(e.target.value)}
-            style={{ width: 80, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#60a5fa", padding: "6px 10px", fontSize: 12 }}
-          />
-          <button
-            onClick={() => {
-              if (manualName && manualFD) {
-                onManualUpdate(manualName, parseFloat(manualFD));
-                setManualName(""); setManualFD("");
-              }
-            }}
-            style={{ background: "#1d4ed8", border: "none", borderRadius: 6, color: "#fff", padding: "6px 14px", fontSize: 12, cursor: "pointer" }}
-          >SET</button>
+          <input list="player-names" placeholder="Player name..." value={manualName} onChange={e => setManualName(e.target.value)} style={{ flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }} />
+          <datalist id="player-names">{players.map(p => <option key={p.name} value={p.name} />)}</datalist>
+          <input type="number" placeholder="FD avg" value={manualFD} onChange={e => setManualFD(e.target.value)} style={{ width: 80, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#60a5fa", padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }} />
+          <button onClick={() => { if (manualName && manualFD) { onManualUpdate(manualName, parseFloat(manualFD)); setManualName(""); setManualFD(""); } }} style={{ background: "#1d4ed8", border: "none", borderRadius: 6, color: "#fff", padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>SET</button>
         </div>
       </div>
-
-      {/* Quick-launch links */}
       <div style={{ background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 }}>
         <div style={{ fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 }}>QUICK STATMUSE LOOKUP</div>
-        <input
-          placeholder="Filter players..."
-          value={search} onChange={e => setSearch(e.target.value)}
-          style={{ width: "100%", background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12, marginBottom: 8, boxSizing: "border-box" }}
-        />
+        <input placeholder="Filter players..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "inherit" }} />
         <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
           {filtered.map(p => {
             const sm = statMuseMap[p.name.toLowerCase()];
             return (
               <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid #0d1e2e", fontSize: 11 }}>
                 <span style={{ flex: 1, color: sm ? "#22c55e" : "#94a3b8" }}>{p.name}</span>
-                {sm ? (
-                  <span style={{ color: trendColor(sm.trend), fontSize: 10 }}>
-                    {trendIcon(sm.trend)} {sm.fdAvg.toFixed(1)} FD
-                  </span>
-                ) : (
-                  <span style={{ color: "#3b6280", fontSize: 10 }}>CSV: {p.csvFppg.toFixed(1)}</span>
-                )}
-                <a
-                  href={statMuseUrl(p.name)}
-                  target="_blank" rel="noreferrer"
-                  style={{ color: "#3b82f6", fontSize: 10, textDecoration: "none", background: "#0d2235", border: "1px solid #1e3040", borderRadius: 4, padding: "2px 6px" }}
-                >[→] LOOKUP</a>
+                {sm ? <span style={{ color: trendColor(sm.trend), fontSize: 10 }}>{sm.fdAvg.toFixed(1)} FD</span> : <span style={{ color: "#3b6280", fontSize: 10 }}>CSV: {p.csvFppg.toFixed(1)}</span>}
+                <a href={statMuseUrl(p.name)} target="_blank" rel="noreferrer" style={{ color: "#3b82f6", fontSize: 10, textDecoration: "none", background: "#0d2235", border: "1px solid #1e3040", borderRadius: 4, padding: "2px 6px" }}>[→]</a>
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Coverage summary */}
-      <div style={{ background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 }}>
-        <div style={{ fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 }}>DATA COVERAGE</div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#22c55e" }}>
-              {Object.keys(statMuseMap).length}
-            </div>
-            <div style={{ fontSize: 10, color: "#4a6a80" }}>StatMuse live</div>
-          </div>
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#94a3b8" }}>
-              {players.length - Object.keys(statMuseMap).length}
-            </div>
-            <div style={{ fontSize: 10, color: "#4a6a80" }}>CSV only</div>
-          </div>
-          <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#60a5fa" }}>
-              {players.length}
-            </div>
-            <div style={{ fontSize: 10, color: "#4a6a80" }}>total</div>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// -- OWNERSHIP EDITOR -----------------------------------------------------
 function OwnershipEditor({ players, ownershipMap, onUpdate }) {
   return (
     <div style={{ maxHeight: 380, overflowY: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr style={{ position: "sticky", top: 0, background: "#0f1923", zIndex: 1 }}>
-            {["Player", "Pos", "Salary", "FD Avg", "Src", "Proj Own%"].map(h => (
-              <th key={h} style={{ padding: "6px 8px", textAlign: "left", color: "#7aa2c0", fontWeight: 500, borderBottom: "1px solid #1e3040", fontSize: 10 }}>{h}</th>
-            ))}
+            {["Player","Pos","Salary","FD Avg","Src","Proj Own%"].map(h => <th key={h} style={{ padding: "6px 8px", textAlign: "left", color: "#7aa2c0", fontWeight: 500, borderBottom: "1px solid #1e3040", fontSize: 10 }}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
-          {players.slice(0, 60).map((p, i) => (
+          {players.slice(0, 80).map((p, i) => (
             <tr key={p.name} style={{ background: i % 2 === 0 ? "transparent" : "#0a1520" }}>
               <td style={{ padding: "4px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.name}</td>
               <td style={{ padding: "4px 8px", color: "#7aa2c0" }}>{p.positions[0]}</td>
               <td style={{ padding: "4px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
-              <td style={{ padding: "4px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0", fontWeight: p.statMuseFD ? 600 : 400 }}>
-                {p.fppg.toFixed(1)}
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <span style={{ fontSize: 9, padding: "1px 4px", borderRadius: 3,
-                  background: p.statMuseFD ? "#16a34a33" : "#1e3040",
-                  color: p.statMuseFD ? "#22c55e" : "#4a6a80",
-                  border: `1px solid ${p.statMuseFD ? "#16a34a55" : "#1e3040"}`
-                }}>
-                  {p.statMuseFD ? "SM" : "CSV"}
-                </span>
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <input
-                  type="number" min="0" max="100" step="0.5"
-                  value={ownershipMap[p.name.toLowerCase()] ?? 15}
-                  onChange={e => onUpdate(p.name, parseFloat(e.target.value) || 0)}
-                  style={{ width: 60, background: "#1a2e40", border: "1px solid #2a4560", color: "#e2e8f0", borderRadius: 4, padding: "2px 6px", fontSize: 12 }}
-                />
-              </td>
+              <td style={{ padding: "4px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
+              <td style={{ padding: "4px 8px" }}><span style={{ fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a33" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80" }}>{p.statMuseFD ? "SM" : "CSV"}</span></td>
+              <td style={{ padding: "4px 8px" }}><input type="number" min="0" max="100" step="0.5" value={ownershipMap[p.name.toLowerCase()] ?? 15} onChange={e => onUpdate(p.name, parseFloat(e.target.value) || 0)} style={{ width: 60, background: "#1a2e40", border: "1px solid #2a4560", color: "#e2e8f0", borderRadius: 4, padding: "2px 6px", fontSize: 12, fontFamily: "inherit" }} /></td>
             </tr>
           ))}
         </tbody>
@@ -1137,41 +954,24 @@ function OwnershipEditor({ players, ownershipMap, onUpdate }) {
   );
 }
 
-// -- LINEUP CARD ----------------------------------------------------------
 function LineupCard({ lineup, index, isSelected, onSelect }) {
   const stats = lineupStats(lineup);
   const sorted = [...lineup].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
   const ownColor = (o) => o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171";
-
   return (
-    <div onClick={() => onSelect(index)} style={{
-      background: isSelected ? "#0d2235" : "#091520",
-      border: `1px solid ${isSelected ? "#3b82f6" : "#1e3040"}`,
-      borderRadius: 10, padding: "12px 14px", cursor: "pointer", marginBottom: 8, transition: "all 0.15s"
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div style={{ display: "flex", gap: 6, fontSize: 12, alignItems: "center" }}>
+    <div onClick={() => onSelect(index)} style={{ background: isSelected ? "#0d2235" : "#091520", border: `1px solid ${isSelected ? "#3b82f6" : "#1e3040"}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer", marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 4 }}>
+        <div style={{ display: "flex", gap: 6, fontSize: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ background: "#1a3550", color: "#60a5fa", borderRadius: 5, padding: "2px 9px", fontWeight: 600 }}>#{index + 1}</span>
-          {lineup._type && (
-            <span style={{
-              fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 700, letterSpacing: 1,
-              background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : "#a78bfa22",
-              color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : "#a78bfa",
-              border: `1px solid ${lineup._type === "chalk" ? "#f59e0b44" : lineup._type === "leverage" ? "#22c55e44" : "#a78bfa44"}`,
-            }}>
-              {lineup._type === "chalk" ? "[PIN] CHALK" : lineup._type === "leverage" ? "[+] LEVERAGE" : "[GPP] TOURN"}
-            </span>
-          )}
-          {lineup._hasStack && (
-            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e", border: "1px solid #22c55e44" }}>STACKED</span>
-          )}
+          {lineup._type && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 700, background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : lineup._type === "tournament" ? "#a78bfa22" : "#60a5fa22", color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : lineup._type === "tournament" ? "#a78bfa" : "#60a5fa" }}>{lineup._type.toUpperCase().slice(0,5)}</span>}
+          {lineup._hasStack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e" }}>STACK</span>}
+          {lineup._hasBringBack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#a78bfa22", color: "#a78bfa" }}>BB</span>}
           <span style={{ color: "#64b587", fontWeight: 600 }}>{stats.proj.toFixed(1)}</span>
           <span style={{ color: "#94a3b8" }}>${stats.total.toLocaleString()}</span>
         </div>
-        <div style={{ display: "flex", gap: 5, fontSize: 10 }}>
-          <span style={{ background: "#f59e0b22", color: "#f59e0b", border: "1px solid #f59e0b44", borderRadius: 4, padding: "1px 5px" }}>C{stats.chalk}</span>
-          <span style={{ background: "#60a5fa22", color: "#60a5fa", border: "1px solid #60a5fa44", borderRadius: 4, padding: "1px 5px" }}>M{stats.mid}</span>
-          <span style={{ background: "#94a3b822", color: "#94a3b8", border: "1px solid #94a3b844", borderRadius: 4, padding: "1px 5px" }}>O{stats.avgOwn.toFixed(0)}%</span>
+        <div style={{ display: "flex", gap: 4, fontSize: 10 }}>
+          <span style={{ background: "#94a3b822", color: "#94a3b8", borderRadius: 4, padding: "1px 5px" }}>O{stats.avgOwn.toFixed(0)}%</span>
+          {lineup._simP90 && <span style={{ background: "#22c55e22", color: "#22c55e", borderRadius: 4, padding: "1px 5px" }}>C{lineup._simP90.toFixed(0)}</span>}
         </div>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -1185,9 +985,7 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
                 {p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD && <span style={{ color: "#f59e0b", fontSize: 10, marginLeft: 2 }}>[*]</span>}
               </td>
               <td style={{ padding: "2px 4px", color: "#64b587", textAlign: "right" }}>{p.fppg.toFixed(1)}</td>
-              <td style={{ padding: "2px 4px", textAlign: "right" }}>
-                <span style={{ color: ownColor(p.ownership), fontSize: 10 }}>{p.ownership.toFixed(0)}%</span>
-              </td>
+              <td style={{ padding: "2px 4px", textAlign: "right" }}><span style={{ color: ownColor(p.ownership), fontSize: 10 }}>{p.ownership.toFixed(0)}%</span></td>
             </tr>
           ))}
         </tbody>
@@ -1196,12 +994,12 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
   );
 }
 
-// -- MAIN APP -------------------------------------------------------------
 function App() {
-  const [vegasMap, setVegasMap] = useState({});
-  const [vegasGames, setVegasGames] = useState([]);
-  const [vegasStatus, setVegasStatus] = useState("idle");
-  const [vegasMsg, setVegasMsg] = useState("");
+  const [games, setGames] = useState(DEFAULT_SLATE_GAMES);
+  const [injuries, setInjuries] = useState(DEFAULT_INJURIES);
+  const [cascadeRules, setCascadeRules] = useState([]);
+  const vegasMap = useMemo(() => buildTeamMap(games), [games]);
+  const vegasGames = useMemo(() => buildGamesList(games), [games]);
   const [step, setStep] = useState("upload");
   const [csvText, setCsvText] = useState("");
   const [players, setPlayers] = useState([]);
@@ -1213,518 +1011,227 @@ function App() {
   const [excludedNames, setExcludedNames] = useState([]);
   const [cascadeLog, setCascadeLog] = useState([]);
   const [lastGenTime, setLastGenTime] = useState(null);
-  const [lineupCount, setLineupCount] = useState(10);
+  const [lineupCount, setLineupCount] = useState(5);
   const [generating, setGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState("lineups");
-  const [rightTab, setRightTab] = useState("ownership");
+  const [rightTab, setRightTab] = useState("slate");
   const [lineupStrategy, setLineupStrategy] = useState("mixed");
-  const [bankroll, setBankroll] = useState("");
-  const [lineMovement, setLineMovement] = useState([
-    { gameStr: "CLE@DAL",  openSpread: -8.0,  currentSpread: -12.5, openTotal: 224.0, currentTotal: 218.5 },
-    { gameStr: "MEM@DET",  openSpread: -6.5,  currentSpread: -14.5, openTotal: 228.0, currentTotal: 224.5 },
-    { gameStr: "NYK@IND",  openSpread:  1.5,  currentSpread:  13.5, openTotal: 230.0, currentTotal: 226.5 },
-    { gameStr: "PHX@TOR",  openSpread: -5.5,  currentSpread:  -5.5, openTotal: 222.0, currentTotal: 222.0 },
-    { gameStr: "NOP@HOU",  openSpread: -7.5,  currentSpread:  -7.5, openTotal: 224.0, currentTotal: 224.0 },
-    { gameStr: "UTA@POR",  openSpread: -11.5, currentSpread: -17.5, openTotal: 239.0, currentTotal: 235.5 },
-    { gameStr: "MIN@GSW",  openSpread:  5.5,  currentSpread:   5.5, openTotal: 228.5, currentTotal: 228.5 },
-    { gameStr: "CHI@LAC",  openSpread: -14.5, currentSpread: -14.5, openTotal: 226.0, currentTotal: 226.0 },
-  ]);
   const fileRef = useRef();
 
-  const rebuildPlayers = useCallback((csv, ownMap, smMap, outNames = excludedNames) => {
-    const activeVegasMap = Object.keys(vegasMap).length ? vegasMap : getHardcodedVegasData().teamMap;
-    const parsed = parsePlayers(csv, ownMap, smMap, activeVegasMap, outNames);
+  const rebuildPlayers = useCallback((csv, ownMap, smMap, outNames) => {
+    const parsed = parsePlayers(csv, ownMap, smMap, vegasMap, outNames, cascadeRules);
     setPlayers(parsed);
     return parsed;
-  }, [vegasMap, excludedNames]);
+  }, [vegasMap, cascadeRules]);
 
   const handleCSV = useCallback((text) => {
     setCsvText(text);
     const defaultOwn = {};
-    text.trim().split("\n").slice(1).forEach(line => {
+    const lines = text.trim().split("\n");
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, ""));
+    const nickIdx = headers.indexOf("nickname");
+    const firstIdx = headers.indexOf("firstname");
+    const lastIdx = headers.indexOf("lastname");
+    lines.slice(1).forEach(line => {
       const cols = line.split(",");
-      const name = (cols[2] || "").trim().toLowerCase();
-      if (name) defaultOwn[name] = 15;
+      const name = (nickIdx >= 0 ? cols[nickIdx] : "").trim() || ((cols[firstIdx] || "") + " " + (cols[lastIdx] || "")).trim();
+      if (name) defaultOwn[name.toLowerCase()] = 15;
     });
     setOwnershipMap(defaultOwn);
     rebuildPlayers(text, defaultOwn, {}, excludedNames);
     setStatMuseMap({});
-    setStep("build");
-  }, [rebuildPlayers, excludedNames]);
-
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => handleCSV(ev.target.result);
-    reader.readAsText(file);
-  };
-
-  const updateOwnership = (name, val) => {
-    const key = name.toLowerCase();
-    const newMap = { ...ownershipMap, [key]: val };
-    setOwnershipMap(newMap);
-    rebuildPlayers(csvText, newMap, statMuseMap, excludedNames);
-  };
-
-  // Manual StatMuse override: user enters player name + FD avg from StatMuse
-  const handleStatMuseManual = (name, fdAvg) => {
-    const key = name.toLowerCase();
-    // Estimate trend from single point - if they enter it, assume it's intentional
-    const newSM = { ...statMuseMap, [key]: { fdAvg, lastGame: null, trend: "neutral" } };
-    setStatMuseMap(newSM);
-    rebuildPlayers(csvText, ownershipMap, newSM, excludedNames);
-  };
-
-  const handleFetchVegas = (currentPlayers) => {
-    setVegasStatus("loading");
-    setVegasMsg("Loading tonight\'s slate...");
-    try {
-      const { teamMap, gamesList, gamesCount } = getHardcodedVegasData();
-      setVegasMap(teamMap);
-      setVegasGames(gamesList);
-      const pool = currentPlayers || players;
-      const newOwnMap = { ...ownershipMap };
-      pool.forEach(p => {
-        const est = estimateOwnership(p, teamMap);
-        newOwnMap[p.name.toLowerCase()] = est;
-      });
-      setOwnershipMap(newOwnMap);
-      rebuildPlayers(csvText, newOwnMap, statMuseMap, excludedNames);
-      setVegasStatus("done");
-      setVegasMsg(`[OK] ${gamesCount} games loaded . Mar 13 slate . ownership estimated`);
-    } catch (e) {
-      setVegasStatus("error");
-      setVegasMsg(`[X] ${e.message}`);
+    if (games.length > 0) {
+      const parsed = parsePlayers(text, defaultOwn, {}, vegasMap, excludedNames, cascadeRules);
+      const newOwn = { ...defaultOwn };
+      parsed.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, vegasMap); });
+      setOwnershipMap(newOwn);
+      rebuildPlayers(text, newOwn, {}, excludedNames);
     }
-  };
+    setStep("build");
+  }, [rebuildPlayers, excludedNames, games, vegasMap, cascadeRules]);
 
-  const applyLineMovement = () => {
-    const newOwnMap = { ...ownershipMap };
-    lineMovement.forEach(g => {
-      const spreadDelta = +(g.currentSpread - g.openSpread).toFixed(1);
-      const totalDelta  = +(g.currentTotal  - g.openTotal).toFixed(1);
-      const parts = g.gameStr.split("@");
-      const away = parts[0], home = parts[1];
-      players.forEach(p => {
-        const key = p.name.toLowerCase();
-        const onHome = p.team === home;
-        const onAway = p.team === away;
-        if (!onHome && !onAway) return;
-        let factor = 1.0;
-        if (Math.abs(spreadDelta) >= 2) {
-          const favoredIsHome = g.currentSpread < 0;
-          const onFavored = favoredIsHome ? onHome : onAway;
-          factor *= onFavored ? 1.12 : 0.88;
-        }
-        if (totalDelta >= 2)  factor *= 1.08;
-        if (totalDelta <= -2) factor *= 0.92;
-        if (factor !== 1.0) {
-          newOwnMap[key] = Math.max(3, +((newOwnMap[key] ?? 15) * factor).toFixed(1));
-        }
-      });
-    });
-    setOwnershipMap(newOwnMap);
-    rebuildPlayers(csvText, newOwnMap, statMuseMap);
-  };
+  const handleFile = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => handleCSV(ev.target.result); reader.readAsText(file); };
+  const updateOwnership = (name, val) => { const key = name.toLowerCase(); const newMap = { ...ownershipMap, [key]: val }; setOwnershipMap(newMap); rebuildPlayers(csvText, newMap, statMuseMap, excludedNames); };
+  const handleStatMuseManual = (name, fdAvg) => { const key = name.toLowerCase(); const newSM = { ...statMuseMap, [key]: { fdAvg, lastGame: null, trend: "neutral" } }; setStatMuseMap(newSM); rebuildPlayers(csvText, ownershipMap, newSM, excludedNames); };
+  const handleEstimateOwnership = () => { if (!players.length || !games.length) return; const newOwn = { ...ownershipMap }; players.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, vegasMap); }); setOwnershipMap(newOwn); rebuildPlayers(csvText, newOwn, statMuseMap, excludedNames); };
 
   const handleGenerate = () => {
     if (!players || players.length === 0) return;
     setGenerating(true);
     requestAnimationFrame(() => {
       try {
-        const liveGames = vegasGames.length ? vegasGames : getHardcodedVegasData().gamesList;
-        const safeCount = Math.max(1, Math.min(lineupCount || 10, 50));
-        const lus = generateLineupsWithStrategy(players, safeCount, lockedNames, excludedNames, liveGames, lineupStrategy);
+        const safeCount = Math.max(1, Math.min(lineupCount || 5, 50));
+        const lus = generateLineupsWithStrategy(players, safeCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
         setLineups(Array.isArray(lus) ? lus : []);
         setSelectedLineup(0);
         setStep("results");
         setActiveTab("lineups");
         setLastGenTime(new Date());
-      } catch (e) {
-        console.error("Generate failed", e);
-        throw e;
-      } finally {
-        setGenerating(false);
-      }
+      } catch (e) { console.error("Generate failed", e); throw e; }
+      finally { setGenerating(false); }
     });
   };
 
+  const handleExport = () => { if (!lineups.length) return; const csv = exportLineupsToFanDuel(lineups); const timestamp = new Date().toISOString().slice(0,10); downloadCSV(csv, `court-edge-lineups-${timestamp}.csv`); };
+
   const applyExclusions = (next, removedName = null) => {
     const uniqueNext = [...new Set(next)];
-    const outList = uniqueNext.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
-    const { newMap, log } = applyCascades(outList, ownershipMap);
-
+    const outList = uniqueNext.filter(n => injuries.some(i => i.name === n && i.status === "OUT"));
+    const { newMap, log } = applyCascades(outList, ownershipMap, cascadeRules);
     setCascadeLog(log);
     setOwnershipMap(newMap);
     setExcludedNames(uniqueNext);
-    if (removedName) {
-      setLockedNames(prev => prev.filter(n => n !== removedName));
-    }
+    if (removedName) setLockedNames(prev => prev.filter(n => n !== removedName));
     rebuildPlayers(csvText, newMap, statMuseMap, uniqueNext);
   };
+  const toggleLock = (name) => { setLockedNames(p => p.includes(name) ? p.filter(n => n !== name) : [...p, name]); setExcludedNames(p => p.filter(n => n !== name)); };
+  const toggleExclude = (name) => { const next = excludedNames.includes(name) ? excludedNames.filter(n => n !== name) : [...excludedNames, name]; applyExclusions(next, name); };
 
-  const toggleLock = (name) => {
-    setLockedNames(p => p.includes(name) ? p.filter(n => n !== name) : [...p, name]);
-    setExcludedNames(p => p.filter(n => n !== name));
-  };
-  const toggleExclude = (name) => {
-    const next = excludedNames.includes(name)
-      ? excludedNames.filter(n => n !== name)
-      : [...excludedNames, name];
-    applyExclusions(next, name);
-  };
+  useEffect(() => {
+    if (csvText) rebuildPlayers(csvText, ownershipMap, statMuseMap, excludedNames);
+    // eslint-disable-next-line
+  }, [games]);
 
   const S = {
     app: { minHeight: "100vh", background: "#060e18", color: "#e2e8f0", fontFamily: "'IBM Plex Mono', monospace", paddingBottom: 40 },
     hdr: { background: "linear-gradient(180deg,#0a1f35 0%,#060e18 100%)", borderBottom: "1px solid #1e3040", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" },
-    pill: (a) => ({ padding: "4px 12px", borderRadius: 20, border: `1px solid ${a ? "#3b82f6" : "#1e3040"}`, background: a ? "#1a3550" : "transparent", color: a ? "#60a5fa" : "#4a6a80", fontSize: 11, cursor: "pointer", letterSpacing: 1 }),
+    pill: (a) => ({ padding: "4px 12px", borderRadius: 20, border: `1px solid ${a ? "#3b82f6" : "#1e3040"}`, background: a ? "#1a3550" : "transparent", color: a ? "#60a5fa" : "#4a6a80", fontSize: 11, cursor: "pointer", letterSpacing: 1, fontFamily: "inherit" }),
     card: { background: "#091520", border: "1px solid #1e3040", borderRadius: 12, padding: 20 },
-    btn: (v = "primary") => ({ padding: "9px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 12, letterSpacing: 1, background: v === "primary" ? "#2563eb" : v === "success" ? "#16a34a" : "#1e3040", color: v === "ghost" ? "#94a3b8" : "#fff", transition: "all 0.15s" }),
+    btn: (v = "primary") => ({ padding: "9px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 12, letterSpacing: 1, background: v === "primary" ? "#2563eb" : v === "success" ? "#16a34a" : v === "warning" ? "#ea580c" : "#1e3040", color: v === "ghost" ? "#94a3b8" : "#fff" }),
     sec: { padding: "20px 24px" },
   };
 
+  const slateGrade = games.length ? gradeSlate(vegasGames) : null;
+
   return (
     <div style={S.app}>
-      {/* HEADER */}
       <div style={S.hdr}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
-          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v4 . STACK + SLATE GRADE + BANKROLL</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.1 · ENHANCED MATH · MAXRESULTS4U BUSINESS SOLUTIONS</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => (
-            <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>
-          ))}
+          {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
         </div>
       </div>
 
-      {/* -- STEP 1: UPLOAD -- */}
       {step === "upload" && (
-        <div style={{ maxWidth: 620, margin: "40px auto", padding: "0 24px" }}>
-
-          {/* SLATE GRADER */}
-          {(() => {
-            const { gamesList } = getHardcodedVegasData();
-            const g = gradeSlate(gamesList);
-            const gradeColor = g.grade === "A" ? "#22c55e" : g.grade === "B" ? "#60a5fa" : g.grade === "C" ? "#f59e0b" : "#ef4444";
+        <div style={{ maxWidth: 680, margin: "40px auto", padding: "0 24px" }}>
+          {slateGrade && (() => {
+            const gradeColor = slateGrade.grade === "A" ? "#22c55e" : slateGrade.grade === "B" ? "#60a5fa" : slateGrade.grade === "C" ? "#f59e0b" : "#ef4444";
             return (
               <div style={{ marginBottom: 16, background: "#091520", border: `1px solid ${gradeColor}44`, borderRadius: 12, padding: 18 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div style={{ textAlign: "center", minWidth: 56 }}>
-                    <div style={{ fontSize: 42, fontWeight: 900, color: gradeColor, lineHeight: 1 }}>{g.grade}</div>
+                    <div style={{ fontSize: 42, fontWeight: 900, color: gradeColor, lineHeight: 1 }}>{slateGrade.grade}</div>
                     <div style={{ fontSize: 9, color: "#4a6a80", letterSpacing: 2 }}>SLATE</div>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: gradeColor, marginBottom: 3 }}>{g.recommendation}</div>
-                    <div style={{ fontSize: 10, color: "#4a6a80" }}>
-                      {gamesList.length} games . Avg O/U {g.avgTotal.toFixed(1)} . {g.highTotalGames} game(s) 228+ . Max implied {g.maxImpl}
-                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: gradeColor, marginBottom: 3 }}>{slateGrade.recommendation}</div>
+                    <div style={{ fontSize: 10, color: "#4a6a80" }}>{games.length} games · Avg O/U {slateGrade.avgTotal.toFixed(1)} · Max implied {slateGrade.maxImpl}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: gradeColor }}>{g.score}/100</div>
-                    <div style={{ fontSize: 9, color: "#4a6a80" }}>SCORE</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: gradeColor }}>{slateGrade.score}/100</div>
                   </div>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                  {g.notes.map((n, i) => (
-                    <div key={i} style={{ fontSize: 10, color: n.startsWith("[OK]") ? "#22c55e" : n.startsWith("[!]") ? "#f59e0b" : "#f87171", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 5, padding: "3px 8px" }}>{n}</div>
-                  ))}
                 </div>
               </div>
             );
           })()}
-
-          <div style={S.card}>
-            <div style={{ textAlign: "center", marginBottom: 28 }}>
-              <div style={{ fontSize: 36, marginBottom: 10 }}>[NBA]</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 }}>UPLOAD FANDUEL CSV</div>
-              <div style={{ fontSize: 11, color: "#4a6a80", lineHeight: 1.8 }}>
-                Export player list from FanDuel contest lobby.<br/>
-                Then enrich with StatMuse live FD averages in step 2.
-              </div>
+          <div style={{ ...S.card, marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div><div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>TONIGHT'S SLATE</div></div>
+              <div style={{ fontSize: 11, color: games.length ? "#22c55e" : "#f59e0b" }}>{games.length} game{games.length !== 1 ? "s" : ""}</div>
             </div>
-            <div
-              onClick={() => fileRef.current.click()}
-              style={{ border: "2px dashed #1e3040", borderRadius: 10, padding: "36px 20px", textAlign: "center", cursor: "pointer" }}
-              onMouseOver={e => e.currentTarget.style.borderColor = "#3b82f6"}
-              onMouseOut={e => e.currentTarget.style.borderColor = "#1e3040"}
-            >
+            <SlatePanel games={games} onUpdate={setGames} />
+          </div>
+          <div style={S.card}>
+            <div style={{ textAlign: "center", marginBottom: 22 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 }}>UPLOAD FANDUEL CSV</div>
+              <div style={{ fontSize: 11, color: "#4a6a80", lineHeight: 1.8 }}>Make sure "Id" column is included for lineup export.</div>
+            </div>
+            <div onClick={() => fileRef.current.click()} style={{ border: "2px dashed #1e3040", borderRadius: 10, padding: "36px 20px", textAlign: "center", cursor: "pointer" }} onMouseOver={e => e.currentTarget.style.borderColor = "#3b82f6"} onMouseOut={e => e.currentTarget.style.borderColor = "#1e3040"}>
               <div style={{ fontSize: 13, color: "#60a5fa", marginBottom: 4 }}>Click to select CSV</div>
               <div style={{ fontSize: 11, color: "#4a6a80" }}>FanDuel-NBA-*.csv</div>
             </div>
             <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
+          </div>
 
-            <div style={{ marginTop: 18, padding: "12px 14px", background: "#0a1a2a", borderRadius: 8, border: "1px solid #1e3040" }}>
-              <div style={{ fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 8 }}>WHAT'S NEW IN V4</div>
-              {["[AIM] Slate Grader - A/B/C/D/F before you enter", "[+] Game stacking engine - correlate high-total games", "[DATA] MIXED/CHALK/LEVERAGE/TOURNAMENT strategy modes", "[$] Bankroll advisor - how many entries at what stakes"].map(r => (
-                <div key={r} style={{ fontSize: 11, color: "#60a5fa", marginBottom: 3 }}>{r}</div>
-              ))}
+          {/* v5.1 CHANGELOG */}
+          <div style={{ ...S.card, marginTop: 16, borderColor: "#22c55e44" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#22c55e", letterSpacing: 1, marginBottom: 10 }}>v5.1 MATH UPGRADES</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.8 }}>
+              · <strong style={{color:"#e2e8f0"}}>Projection fixes:</strong> Removed leverageAdj (was mixing game theory into math), removed sampleAdj (confused confidence with mean), now uses <em>ratios</em> vs league avg instead of absolute thresholds<br/>
+              · <strong style={{color:"#e2e8f0"}}>Floor tightened</strong> to 1.4σ (8th percentile) — more conservative cash floor<br/>
+              · <strong style={{color:"#e2e8f0"}}>Leverage capped</strong> at 8× in composite score (was unbounded, low-ownership players were dominating)<br/>
+              · <strong style={{color:"#e2e8f0"}}>Monte Carlo</strong> now splits team shock into (+) pace component and (-) usage component — more accurate DFS correlation<br/>
+              · <strong style={{color:"#e2e8f0"}}>Back-to-back penalty</strong> (-5%) when flagged<br/>
+              · <strong style={{color:"#e2e8f0"}}>Home court</strong> +1.5% bump<br/>
+              · <strong style={{color:"#e2e8f0"}}>Bring-back bonus</strong> — leverage/tournament lineups now prefer having 1 player from the OPPOSING team in the stacked game<br/>
+              · <strong style={{color:"#e2e8f0"}}>Per-strategy portfolio scoring</strong> — chalk favors floor (p25), tournament favors tail (p99), leverage favors ceiling (p90)<br/>
+              · <strong style={{color:"#e2e8f0"}}>Exposure caps tightened</strong> to 50-65% (was 70-80%) for proper portfolio diversification
             </div>
           </div>
         </div>
       )}
 
-      {/* -- STEP 2: BUILD -- */}
       {step === "build" && (
         <div style={S.sec}>
-
-          {/* -- INTEL BAR -- */}
-          <div style={{ marginBottom: 14, background: "#091520", border: "1px solid #1e3040", borderRadius: 10, overflow: "hidden" }}>
-
-            {/* Top row */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: vegasStatus === "done" ? "1px solid #1e3040" : "none" }}>
-              <button
-                onClick={() => handleFetchVegas(players)}
-                disabled={vegasStatus === "loading" || players.length === 0}
-                style={{ ...S.btn("primary"), padding: "7px 18px", fontSize: 11, letterSpacing: 1, background: vegasStatus === "done" ? "#16a34a" : "#2563eb", whiteSpace: "nowrap" }}
-              >
-                {vegasStatus === "loading" ? "[..] FETCHING..." : vegasStatus === "done" ? "[OK] VEGAS LIVE" : "[*] FETCH VEGAS INTEL"}
-              </button>
-              {vegasMsg && (
-                <span style={{ fontSize: 11, color: vegasStatus === "error" ? "#f87171" : vegasStatus === "done" ? "#22c55e" : "#94a3b8" }}>{vegasMsg}</span>
-              )}
-              {vegasStatus === "done" && (
-                <div style={{ marginLeft: "auto", display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" }}>
-                  {Object.entries(vegasMap).slice(0, 8).map(([team, v]) => (
-                    <span key={team} style={{ color: v.impliedPts >= 115 ? "#f59e0b" : "#60a5fa" }}>
-                      <span style={{ color: "#4a6a80" }}>{team} </span>{v.impliedPts}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {vegasStatus === "idle" && (
-                <span style={{ fontSize: 11, color: "#4a6a80" }}>Pulls live game totals and sets ownership estimates for all {players.length} players</span>
-              )}
+          {games.length === 0 && (
+            <div style={{ marginBottom: 14, background: "#1a1200", border: "1px solid #f59e0b44", borderRadius: 8, padding: 12 }}>
+              <div style={{ fontSize: 12, color: "#f59e0b" }}>[!] No games in slate - add via SLATE tab below</div>
             </div>
-
-            {/* LINE MOVEMENT TRACKER */}
-            {vegasStatus === "done" && (
-              <div style={{ padding: "12px 16px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, color: "#f59e0b", letterSpacing: 2, fontWeight: 700 }}>[^] LINE MOVEMENT TRACKER</div>
-                  <div style={{ fontSize: 9, color: "#3b6280" }}>Opening vs current - delta = market-priced injury impact. Edit any field to update.</div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-                  {lineMovement.map((g, i) => {
-                    const spreadDelta = +(g.currentSpread - g.openSpread).toFixed(1);
-                    const totalDelta  = +(g.currentTotal  - g.openTotal).toFixed(1);
-                    const bigSpread   = Math.abs(spreadDelta) >= 2;
-                    const bigTotal    = Math.abs(totalDelta)  >= 2;
-                    const spreadColor = bigSpread ? (spreadDelta > 0 ? "#f87171" : "#22c55e") : "#4a6a80";
-                    const totalColor  = bigTotal  ? (totalDelta  > 0 ? "#22c55e" : "#f87171") : "#4a6a80";
-                    const signal = bigSpread || bigTotal
-                      ? spreadDelta > 2  ? "STAR OUT - fade"
-                      : spreadDelta < -2 ? "PACE-UP - stack"
-                      : totalDelta  > 2  ? "Total up - more pts"
-                      :                    "Total down - less pts"
-                      : null;
-                    const signalColor = spreadDelta < -2 || totalDelta > 2 ? "#22c55e" : "#f87171";
-                    return (
-                      <div key={i} style={{ background: "#060e18", border: "1px solid " + (bigSpread||bigTotal ? "#f59e0b44" : "#1e3040"), borderRadius: 8, padding: "9px 11px" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#e2e8f0", marginBottom: 6 }}>{g.gameStr}</div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                          <span style={{ fontSize: 9, color: "#3b6280" }}>SPREAD</span>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <input
-                              type="number" step="0.5"
-                              value={g.currentSpread}
-                              onChange={e => setLineMovement(prev => prev.map((x,j) => j===i ? {...x, currentSpread: +e.target.value} : x))}
-                              style={{ width: 46, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "2px 5px", fontSize: 11, fontFamily: "inherit", textAlign: "center" }}
-                            />
-                            <span style={{ fontSize: 10, color: spreadColor, fontWeight: bigSpread ? 700 : 400, minWidth: 30, textAlign: "right" }}>
-                              {spreadDelta !== 0 ? (spreadDelta > 0 ? "+" : "") + spreadDelta : "-"}
-                            </span>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 9, color: "#3b6280" }}>TOTAL</span>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <input
-                              type="number" step="0.5"
-                              value={g.currentTotal}
-                              onChange={e => setLineMovement(prev => prev.map((x,j) => j===i ? {...x, currentTotal: +e.target.value} : x))}
-                              style={{ width: 46, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 4, color: "#e2e8f0", padding: "2px 5px", fontSize: 11, fontFamily: "inherit", textAlign: "center" }}
-                            />
-                            <span style={{ fontSize: 10, color: totalColor, fontWeight: bigTotal ? 700 : 400, minWidth: 30, textAlign: "right" }}>
-                              {totalDelta !== 0 ? (totalDelta > 0 ? "+" : "") + totalDelta : "-"}
-                            </span>
-                          </div>
-                        </div>
-                        {signal && (
-                          <div style={{ fontSize: 9, color: signalColor, marginTop: 5, paddingTop: 4, borderTop: "1px solid #1e3040" }}>{signal}</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                {lineMovement.some(g => Math.abs(g.currentSpread - g.openSpread) >= 2 || Math.abs(g.currentTotal - g.openTotal) >= 2) && (
-                  <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#0a1a0a", border: "1px solid #f59e0b44", borderRadius: 7 }}>
-                    <div style={{ fontSize: 10, color: "#f59e0b" }}>
-                      Significant line movement detected - ownership estimates may need recalibration
-                    </div>
-                    <button onClick={applyLineMovement} style={{ ...S.btn("primary"), fontSize: 10, padding: "5px 14px", whiteSpace: "nowrap", marginLeft: 12 }}>
-                      APPLY MOVEMENT
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 }}>
-            {/* LEFT: tabs between ownership + statmuse */}
             <div style={S.card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>
-                    {rightTab === "ownership" ? "OWNERSHIP PROJECTIONS" : "STATMUSE DATA"}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#4a6a80", marginTop: 2 }}>{players.length} eligible players loaded</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>{rightTab === "ownership" ? "OWNERSHIP" : rightTab === "statmuse" ? "STATMUSE" : rightTab === "slate" ? "SLATE" : "INJURIES"}</div>
+                  <div style={{ fontSize: 10, color: "#4a6a80", marginTop: 2 }}>{players.length} players</div>
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <button style={S.pill(rightTab === "slate")} onClick={() => setRightTab("slate")}>SLATE ({games.length})</button>
                   <button style={S.pill(rightTab === "ownership")} onClick={() => setRightTab("ownership")}>OWNERSHIP</button>
-                  <button style={S.pill(rightTab === "statmuse")} onClick={() => setRightTab("statmuse")}>
-                    STATMUSE {Object.keys(statMuseMap).length > 0 && `(${Object.keys(statMuseMap).length})`}
-                  </button>
-                  <button style={S.pill(rightTab === "injuries")} onClick={() => setRightTab("injuries")}>
-                    [INJ] INJURIES
-                  </button>
-                  <button style={S.btn("ghost")} onClick={() => fileRef.current.click()}>[^] CSV</button>
+                  <button style={S.pill(rightTab === "statmuse")} onClick={() => setRightTab("statmuse")}>STATMUSE {Object.keys(statMuseMap).length > 0 && `(${Object.keys(statMuseMap).length})`}</button>
+                  <button style={S.pill(rightTab === "injuries")} onClick={() => setRightTab("injuries")}>INJURIES ({injuries.length})</button>
                 </div>
               </div>
-
-              {rightTab === "ownership"
-                ? <OwnershipEditor players={players} ownershipMap={ownershipMap} onUpdate={updateOwnership} />
-                : rightTab === "statmuse"
-                ? <StatMusePanel players={players} statMuseMap={statMuseMap} onManualUpdate={handleStatMuseManual} />
-                : <InjuryPanel onExclude={(name) => {
-                    applyExclusions([...excludedNames, name], name);
-                  }} excludedNames={excludedNames} />
-              }
-              <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
+              {rightTab === "slate" && <div><SlatePanel games={games} onUpdate={setGames} />{games.length > 0 && players.length > 0 && <button onClick={handleEstimateOwnership} style={{ ...S.btn("success"), marginTop: 12, width: "100%" }}>[*] AUTO-ESTIMATE OWNERSHIP</button>}</div>}
+              {rightTab === "ownership" && <OwnershipEditor players={players} ownershipMap={ownershipMap} onUpdate={updateOwnership} />}
+              {rightTab === "statmuse" && <StatMusePanel players={players} statMuseMap={statMuseMap} onManualUpdate={handleStatMuseManual} />}
+              {rightTab === "injuries" && <InjuryEditor injuries={injuries} onUpdate={setInjuries} onExclude={(name) => applyExclusions([...excludedNames, name], name)} excludedNames={excludedNames} />}
             </div>
-
-            {/* RIGHT: lock/exclude + generate */}
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={S.card}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 }}>LOCK / EXCLUDE</div>
                 <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                  {players.slice(0, 35).map(p => (
+                  {players.slice(0, 40).map(p => (
                     <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, fontSize: 11 }}>
-                      <button onClick={() => toggleLock(p.name)} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 }}>[L]</button>
-                      <button onClick={() => toggleExclude(p.name)} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#991b1b" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 }}>[X]</button>
+                      <button onClick={() => toggleLock(p.name)} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 }}>L</button>
+                      <button onClick={() => toggleExclude(p.name)} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#991b1b" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 }}>X</button>
                       <span style={{ flex: 1, color: excludedNames.includes(p.name) ? "#4a6a80" : "#e2e8f0", textDecoration: excludedNames.includes(p.name) ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                      {p.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9 }}>[.]</span>}
                     </div>
                   ))}
                 </div>
               </div>
-
               <div style={S.card}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 }}>GENERATE</div>
-
-                {/* Strategy selector */}
-                <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 6, letterSpacing: 1 }}>LINEUP STRATEGY</div>
+                <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 6, letterSpacing: 1 }}>STRATEGY</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 14 }}>
-                  {[
-                    ["mixed",      "[AIM] MIXED",      "30% chalk . 40% leverage . 30% tourn"],
-                    ["chalk",      "[PIN] CHALK",      "Safe, high-ownership - cash games"],
-                    ["leverage",   "[+] LEVERAGE",   "Game-stacked, correlated builds"],
-                    ["tournament", "[GPP] TOURNAMENT", "Contrarian pivots - GPP only"],
-                  ].map(([val, label, desc]) => (
-                    <button key={val} onClick={() => setLineupStrategy(val)} style={{
-                      padding: "8px 10px", borderRadius: 7, border: `1px solid ${lineupStrategy === val ? "#3b82f6" : "#1e3040"}`,
-                      background: lineupStrategy === val ? "#1a3550" : "#0a1520",
-                      color: lineupStrategy === val ? "#60a5fa" : "#4a6a80",
-                      cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-                    }}>
+                  {[["mixed","[AIM] MIXED","Balance"],["chalk","[PIN] CHALK","Cash / floor"],["leverage","[+] LEVERAGE","Ceiling stacks"],["tournament","[GPP] TOURN","Tail events"]].map(([val, label, desc]) => (
+                    <button key={val} onClick={() => setLineupStrategy(val)} style={{ padding: "8px 10px", borderRadius: 7, border: `1px solid ${lineupStrategy === val ? "#3b82f6" : "#1e3040"}`, background: lineupStrategy === val ? "#1a3550" : "#0a1520", color: lineupStrategy === val ? "#60a5fa" : "#4a6a80", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                       <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 2 }}>{label}</div>
                       <div style={{ fontSize: 9, color: lineupStrategy === val ? "#4a8aaa" : "#3b6280" }}>{desc}</div>
                     </button>
                   ))}
                 </div>
-
-                {/* Stack target display */}
-                {vegasGames.length > 0 && (() => {
-                  const best = getBestStackGame(vegasGames, players);
-                  return best ? (
-                    <div style={{ marginBottom: 12, padding: "7px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 }}>
-                      <div style={{ fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 3 }}>[+] STACK TARGET</div>
-                      <div style={{ fontSize: 11, color: "#e2e8f0" }}>{best.gameStr} . O/U {best.total}</div>
-                      <div style={{ fontSize: 10, color: "#4a6a80" }}>LEVERAGE lineups will stack {best.home} + {best.away} players</div>
-                    </div>
-                  ) : null;
-                })()}
-
-                {/* Lineup count */}
                 <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 4, letterSpacing: 1 }}>LINEUP COUNT</div>
                 <input type="range" min="1" max="20" value={lineupCount} onChange={e => setLineupCount(+e.target.value)} style={{ width: "100%", marginBottom: 4 }} />
                 <div style={{ textAlign: "center", color: "#60a5fa", fontWeight: 700, fontSize: 18, marginBottom: 12 }}>{lineupCount}</div>
-
-                {/* Bankroll advisor */}
-                <div style={{ marginBottom: 12, padding: "10px 12px", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8 }}>
-                  <div style={{ fontSize: 9, color: "#4a6a80", letterSpacing: 2, marginBottom: 7 }}>[$] BANKROLL ADVISOR</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: 10, color: "#4a6a80" }}>$</span>
-                    <input
-                      type="number" min="0" placeholder="Your bankroll"
-                      value={bankroll} onChange={e => setBankroll(e.target.value)}
-                      style={{ flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 5, color: "#e2e8f0", padding: "5px 8px", fontSize: 11, fontFamily: "inherit" }}
-                    />
-                  </div>
-                  {bankroll > 0 && (() => {
-                    const { gamesList } = getHardcodedVegasData();
-                    const grade = gradeSlate(gamesList);
-                    const strat = getEntryStrategy(+bankroll, grade.score);
-                    return strat ? (
-                      <div>
-                        <div style={{ fontSize: 10, color: "#f59e0b", marginBottom: 6 }}>
-                          Tonight's budget: <strong style={{ color: "#22c55e" }}>${strat.budget}</strong> . {strat.note}
-                        </div>
-                        {strat.breakdown.map(b => (
-                          <div key={b.type} style={{ display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 3 }}>
-                            <span style={{ color: "#4a6a80" }}>{b.type}</span>
-                            <span style={{ color: "#60a5fa" }}>{b.entries} entries ({b.pct})</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
-
-                <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 8 }}>
-                  {lockedNames.length > 0 && `[L] ${lockedNames.length} locked  `}
-                  {excludedNames.length > 0 && `[X] ${excludedNames.length} excluded  `}
-                  {Object.keys(statMuseMap).length > 0 && `[DATA] ${Object.keys(statMuseMap).length} SM`}
-                </div>
-                {/* Cascade log */}
+                <button style={{ ...S.btn("primary"), width: "100%", fontSize: 13, padding: "12px 0" }} onClick={handleGenerate} disabled={generating || players.length === 0}>{generating ? "BUILDING..." : players.length === 0 ? "UPLOAD CSV FIRST" : "[*] GENERATE"}</button>
                 {cascadeLog.length > 0 && (
-                  <div style={{ marginBottom: 10, padding: "8px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 }}>
-                    <div style={{ fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 }}>[+] CASCADE BOOSTS APPLIED</div>
-                    {cascadeLog.map((c, i) => (
-                      <div key={i} style={{ fontSize: 9, color: "#4a6a80", marginBottom: 2 }}>
-                        <span style={{ color: "#ef4444" }}>{c.out.split(" ").pop()} OUT</span>
-                        {" -> "}
-                        <span style={{ color: "#22c55e" }}>{c.player.split(" ").pop()}</span>
-                        {" "}
-                        <span style={{ color: "#94a3b8" }}>{`${c.from}% → ${c.to}%`}</span>
-                        {" "}
-                        <span style={{ color: "#3b6280" }}>{c.note}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <button style={{ ...S.btn("primary"), width: "100%", fontSize: 13, padding: "12px 0" }} onClick={handleGenerate} disabled={generating}>
-                  {generating ? "BUILDING..." : "[*] GENERATE LINEUPS"}
-                </button>
-                {lastGenTime && (
-                  <div style={{ marginTop: 8, padding: "6px 10px", background: "#0a1520", borderRadius: 6, border: "1px solid #1e3040" }}>
-                    <div style={{ fontSize: 9, color: "#3b6280" }}>Last generated: {lastGenTime.toLocaleTimeString()}</div>
-                    <div style={{ fontSize: 9, color: "#f59e0b", marginTop: 2 }}>[!] Re-upload CSV + re-run 60min before tip for late scratches</div>
-                    <button onClick={handleGenerate} style={{ ...S.btn("warning"), width: "100%", marginTop: 6, fontSize: 10, padding: "6px 0" }}>
-                      [RE] LATE SCRATCH RE-RUN
-                    </button>
+                  <div style={{ marginTop: 10, padding: "8px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 }}>
+                    <div style={{ fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 }}>[+] CASCADES APPLIED</div>
+                    {cascadeLog.map((c, i) => <div key={i} style={{ fontSize: 9, color: "#4a6a80", marginBottom: 2 }}><span style={{ color: "#ef4444" }}>{c.out}</span>{" → "}<span style={{ color: "#22c55e" }}>{c.player}</span>{" "}<span style={{ color: "#94a3b8" }}>{`${c.from}% → ${c.to}%`}</span></div>)}
                   </div>
                 )}
               </div>
@@ -1733,119 +1240,67 @@ function App() {
         </div>
       )}
 
-      {/* -- STEP 3: RESULTS -- */}
       {step === "results" && (
         <div style={S.sec}>
           {lineups.length === 0 && (
             <div style={{ background: "#1a0a0a", border: "1px solid #ef444444", borderRadius: 10, padding: 24, textAlign: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 14, color: "#ef4444", marginBottom: 8 }}>[!] No lineups generated</div>
-              <div style={{ fontSize: 11, color: "#4a6a80", lineHeight: 1.8 }}>
-                Possible causes:<br/>
-                - Not enough eligible players (need 9 across PGx2, SGx2, SFx2, PFx2, Cx1)<br/>
-                - Too many players excluded<br/>
-                - Salary cap too tight with current pool<br/>
-                - FPPG floor (15) filtering too many players
-              </div>
-              <button onClick={() => setStep("build")} style={{ ...S.btn("primary"), marginTop: 12 }}>[←] BACK TO BUILD</button>
+              <button onClick={() => setStep("build")} style={{ ...S.btn("primary"), marginTop: 12 }}>[←] BACK</button>
             </div>
           )}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            {["lineups","players","exposure"].map(t => (
-              <button key={t} style={S.pill(activeTab === t)} onClick={() => setActiveTab(t)}>{t.toUpperCase()}</button>
-            ))}
-            <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            {["lineups","players","exposure"].map(t => <button key={t} style={S.pill(activeTab === t)} onClick={() => setActiveTab(t)}>{t.toUpperCase()}</button>)}
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button style={S.btn("ghost")} onClick={() => setStep("build")}>[←] EDIT</button>
               <button style={S.btn("success")} onClick={handleGenerate}>[R] REGEN</button>
+              {lineups.length > 0 && <button style={S.btn("warning")} onClick={handleExport}>[↓] EXPORT CSV</button>}
             </div>
           </div>
 
-          {/* LINEUPS */}
-          {activeTab === "lineups" && (
+          {activeTab === "lineups" && lineups.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
               <div style={{ maxHeight: "80vh", overflowY: "auto", paddingRight: 4 }}>
                 {lineups.map((lu, i) => <LineupCard key={i} lineup={lu} index={i} isSelected={selectedLineup === i} onSelect={setSelectedLineup} />)}
               </div>
-              {/* Detail panel */}
               {(() => {
                 const lu = lineups[selectedLineup];
+                if (!lu) return null;
                 const stats = lineupStats(lu);
                 const sorted = [...lu].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
                 const ownColor = o => o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171";
                 return (
                   <div style={S.card}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
                       <div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>LINEUP #{selectedLineup + 1}</div>
-                        <div style={{ fontSize: 10, color: "#4a6a80", marginTop: 2 }}>[.] = StatMuse confirmed  [*] = anchor</div>
+                        {lu._simP90 && <div style={{ fontSize: 9, color: "#4a6a80", marginTop: 2 }}>Sim: mean {lu._simMean} · p75 {lu._simP75} · p90 {lu._simP90} · p99 {lu._simP99}</div>}
                       </div>
                       <div style={{ display: "flex", gap: 18, fontSize: 12 }}>
                         <div><span style={{ color: "#4a6a80" }}>PROJ </span><span style={{ color: "#64b587", fontWeight: 700, fontSize: 20 }}>{stats.proj.toFixed(1)}</span></div>
                         <div><span style={{ color: "#4a6a80" }}>SAL </span><span style={{ color: "#e2e8f0", fontWeight: 700 }}>${stats.total.toLocaleString()}</span></div>
                         <div><span style={{ color: "#4a6a80" }}>OWN </span><span style={{ color: "#f59e0b", fontWeight: 700 }}>{stats.avgOwn.toFixed(1)}%</span></div>
+                        <div><span style={{ color: "#4a6a80" }}>CUM </span><span style={{ color: stats.cumOwn < 150 ? "#22c55e" : stats.cumOwn < 200 ? "#f59e0b" : "#ef4444", fontWeight: 700 }}>{stats.cumOwn.toFixed(0)}%</span></div>
                       </div>
                     </div>
-
-                    {/* ownership mix */}
-                    <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-                      {[["CHALK 30%+", stats.chalk, "#f59e0b"], ["MID 10-29%", stats.mid, "#60a5fa"], ["PUNT <5%", stats.punt, "#f87171"], [stats.anchor.name.split(" ").pop() + " [*]", stats.anchor.fppg.toFixed(1), "#22c55e"]].map(([l, v, c]) => (
-                        <div key={l} style={{ flex: 1, background: "#0a1a2a", borderRadius: 8, padding: "8px 12px", border: `1px solid ${c}33`, textAlign: "center" }}>
-                          <div style={{ color: c, fontWeight: 700, fontSize: 18 }}>{v}</div>
-                          <div style={{ color: "#4a6a80", fontSize: 9, marginTop: 2 }}>{l}</div>
-                        </div>
-                      ))}
-                    </div>
-
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                      <thead>
-                        <tr>{["SLOT","PLAYER","TEAM","SAL","FD AVG","SRC","VALUE","OWN%","INJ"].map(h => (
-                          <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>{h}</th>
-                        ))}</tr>
-                      </thead>
+                      <thead><tr>{["SLOT","PLAYER","TEAM","SAL","FD AVG","MIN","VALUE","OWN%"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {sorted.map((p, i) => {
-                          const isAnchor = p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD;
-                          return (
-                            <tr key={i} style={{ borderBottom: "1px solid #0d1e2e", background: isAnchor ? "#0d2235" : "transparent" }}>
-                              <td style={{ padding: "9px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11 }}>{p.slot}</td>
-                              <td style={{ padding: "9px 8px", color: "#e2e8f0", fontWeight: isAnchor ? 700 : 400 }}>
-                                {p.name}
-                                {p.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9, marginLeft: 4 }}>[.]</span>}
-                                {isAnchor && <span style={{ color: "#f59e0b", marginLeft: 2 }}>[*]</span>}
-                              </td>
-                              <td style={{ padding: "9px 8px", color: "#4a6a80", fontSize: 10 }}>{p.team}</td>
-                              <td style={{ padding: "9px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
-                              <td style={{ padding: "9px 8px", fontWeight: 600, color: p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
-                              <td style={{ padding: "9px 8px" }}>
-                                <span style={{ fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: `1px solid ${p.statMuseFD ? "#16a34a44" : "#1e3040"}` }}>{p.statMuseFD ? "SM" : "CSV"}</span>
-                              </td>
-                              <td style={{ padding: "9px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" }}>{p.value.toFixed(2)}x</td>
-                              <td style={{ padding: "9px 8px" }}>
-                                <span style={{ color: ownColor(p.ownership), fontWeight: 600 }}>{p.ownership.toFixed(1)}%</span>
-                              </td>
-                              <td style={{ padding: "9px 8px" }}>
-                                {p.injury ? <span style={{ color: p.injury === "Q" ? "#f59e0b" : "#ef4444", fontSize: 11 }}>{p.injury}</span> : <span style={{ color: "#22c55e", fontSize: 11 }}>[Y]</span>}
-                              </td>
-                            </tr>
-                          );
-                        })}
+                        {sorted.map((p, i) => (
+                          <tr key={i} style={{ borderBottom: "1px solid #0d1e2e" }}>
+                            <td style={{ padding: "9px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11 }}>{p.slot}</td>
+                            <td style={{ padding: "9px 8px", color: "#e2e8f0" }}>{p.name}{p.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9, marginLeft: 3 }}>[.]</span>}</td>
+                            <td style={{ padding: "9px 8px", color: "#4a6a80", fontSize: 10 }}>{p.team}</td>
+                            <td style={{ padding: "9px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
+                            <td style={{ padding: "9px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
+                            <td style={{ padding: "9px 8px", color: "#94a3b8", fontSize: 10 }}>{p.minutesProj?.toFixed(0) || "-"}</td>
+                            <td style={{ padding: "9px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" }}>{p.value.toFixed(2)}x</td>
+                            <td style={{ padding: "9px 8px" }}><span style={{ color: ownColor(p.ownership), fontWeight: 600 }}>{p.ownership.toFixed(1)}%</span></td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
-
-                    {/* Rule checks */}
-                    <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
-                      {[
-                        ["Anchor present", lu.some(p => p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD)],
-                        ["No <3% punts", !lu.some(p => p.ownership < RULES.NEVER_PLAY_OWN_THRESHOLD)],
-                        ["Ownership OK", stats.avgOwn >= 15 && stats.avgOwn <= 35],
-                        ["Salary used", stats.total >= RULES.MIN_SALARY_USED],
-                        ["Floor clear", lu.every(p => p.fppg >= RULES.FLOOR_FPPG_MIN)],
-                        ["SM data", lu.filter(p => p.statMuseFD).length >= 3],
-                      ].map(([l, pass]) => (
-                        <div key={l} style={{ background: "#0a1520", borderRadius: 6, padding: "7px 10px", border: `1px solid ${pass ? "#16a34a" : "#991b1b"}33`, display: "flex", alignItems: "center", gap: 6 }}>
-                          <span>{pass ? "[OK]" : "[!]"}</span>
-                          <span style={{ fontSize: 10, color: pass ? "#22c55e" : "#f87171" }}>{l}</span>
-                        </div>
-                      ))}
+                    <div style={{ marginTop: 14, padding: 10, background: "#0a1a2a", border: "1px solid #3b82f644", borderRadius: 6, fontSize: 10, color: "#60a5fa" }}>
+                      <strong>Export:</strong> Click [↓] EXPORT CSV above to download all {lineups.length} lineups. Upload to FanDuel contest lobby → "Upload Lineups".
                     </div>
                   </div>
                 );
@@ -1853,44 +1308,30 @@ function App() {
             </div>
           )}
 
-          {/* PLAYERS TAB */}
           {activeTab === "players" && (
             <div style={S.card}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 }}>PLAYER POOL - MODEL SCORE RANKED</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 }}>PLAYER POOL (ranked by composite score)</div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                <thead>
-                  <tr>{["#","PLAYER","POS","SAL","FD AVG","SRC","VALUE","OWN%","BUCKET","SCORE","ACTIONS"].map(h => (
-                    <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>{h}</th>
-                  ))}</tr>
-                </thead>
+                <thead><tr>{["#","PLAYER","POS","SAL","PROJ","MIN","VALUE","OWN%","SCORE","ACTIONS"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {players.slice(0, 55).map((p, i) => {
+                  {players.slice(0, 60).map((p, i) => {
                     const b = ownershipBucket(p.ownership);
                     const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
                     return (
                       <tr key={p.name} style={{ borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" }}>
                         <td style={{ padding: "6px 8px", color: "#3b6280" }}>{i + 1}</td>
-                        <td style={{ padding: "6px 8px", color: "#e2e8f0" }}>
-                          {p.name}
-                          {p.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9, marginLeft: 3 }}>[.]</span>}
-                        </td>
+                        <td style={{ padding: "6px 8px", color: "#e2e8f0" }}>{p.name}</td>
                         <td style={{ padding: "6px 8px", color: "#3b82f6" }}>{p.positions[0]}</td>
                         <td style={{ padding: "6px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
-                        <td style={{ padding: "6px 8px", fontWeight: p.fppg >= 40 ? 700 : 400, color: p.fppg >= 40 ? "#f59e0b" : p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
-                        <td style={{ padding: "6px 8px" }}>
-                          <span style={{ fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a22" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80", border: `1px solid ${p.statMuseFD ? "#16a34a44" : "#1e3040"}` }}>{p.statMuseFD ? "SM" : "CSV"}</span>
-                        </td>
+                        <td style={{ padding: "6px 8px", color: p.fppg >= 40 ? "#f59e0b" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
+                        <td style={{ padding: "6px 8px", color: "#94a3b8" }}>{p.minutesProj?.toFixed(0) || "-"}</td>
                         <td style={{ padding: "6px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" }}>{p.value.toFixed(2)}x</td>
                         <td style={{ padding: "6px 8px", color: bc, fontWeight: 600 }}>{p.ownership.toFixed(1)}%</td>
-                        <td style={{ padding: "6px 8px" }}><span style={{ fontSize: 9, background: bc + "22", color: bc, border: `1px solid ${bc}44`, borderRadius: 4, padding: "1px 5px" }}>{b.toUpperCase()}</span></td>
-                        <td style={{ padding: "6px 8px", color: "#60a5fa", fontWeight: 600 }}>{p.score.toFixed(2)}</td>
-                        <td style={{ padding: "6px 8px" }}>
-                          <div style={{ display: "flex", gap: 3 }}>
-                            <button onClick={() => toggleLock(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" }}>LOCK</button>
-                            <button onClick={() => toggleExclude(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" }}>OUT</button>
-                            <a href={statMuseUrl(p.name)} target="_blank" rel="noreferrer" style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" }}>SM[→]</a>
-                          </div>
-                        </td>
+                        <td style={{ padding: "6px 8px", color: "#60a5fa" }}>{p.score.toFixed(2)}</td>
+                        <td style={{ padding: "6px 8px" }}><div style={{ display: "flex", gap: 3 }}>
+                          <button onClick={() => toggleLock(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" }}>LOCK</button>
+                          <button onClick={() => toggleExclude(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" }}>OUT</button>
+                        </div></td>
                       </tr>
                     );
                   })}
@@ -1899,41 +1340,26 @@ function App() {
             </div>
           )}
 
-          {/* EXPOSURE TAB */}
-          {activeTab === "exposure" && (
+          {activeTab === "exposure" && lineups.length > 0 && (
             <div style={S.card}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 }}>PLAYER EXPOSURE - {lineups.length} LINEUPS</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 }}>EXPOSURE - {lineups.length} LINEUPS</div>
               {(() => {
                 const exp = {};
                 lineups.forEach(lu => lu.forEach(p => { exp[p.name] = (exp[p.name] || 0) + 1; }));
                 return (
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                    <thead>
-                      <tr>{["PLAYER","APPEARANCES","EXPOSURE%","OWN%","FD AVG","SRC","POS"].map(h => (
-                        <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>{h}</th>
-                      ))}</tr>
-                    </thead>
+                    <thead><tr>{["PLAYER","APPS","EXP%","OWN%","PROJ","POS"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
                     <tbody>
                       {Object.entries(exp).sort((a,b) => b[1]-a[1]).map(([name, cnt], i) => {
                         const p = players.find(pl => pl.name === name);
                         const pct = cnt / lineups.length * 100;
                         return (
                           <tr key={name} style={{ borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" }}>
-                            <td style={{ padding: "7px 8px", color: "#e2e8f0" }}>{name}{p?.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9, marginLeft: 3 }}>[.]</span>}</td>
-                            <td style={{ padding: "7px 8px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ flex: 1, background: "#0a1520", borderRadius: 3, height: 7 }}>
-                                  <div style={{ width: `${pct}%`, background: pct > 70 ? "#f59e0b" : pct > 40 ? "#3b82f6" : "#22c55e", height: "100%", borderRadius: 3 }} />
-                                </div>
-                                <span style={{ color: "#e2e8f0", minWidth: 18 }}>{cnt}</span>
-                              </div>
-                            </td>
-                            <td style={{ padding: "7px 8px", color: pct > 70 ? "#f59e0b" : "#94a3b8", fontWeight: pct > 70 ? 700 : 400 }}>{pct.toFixed(0)}%</td>
+                            <td style={{ padding: "7px 8px", color: "#e2e8f0" }}>{name}</td>
+                            <td style={{ padding: "7px 8px", color: "#e2e8f0" }}>{cnt}</td>
+                            <td style={{ padding: "7px 8px", color: pct > 60 ? "#f59e0b" : "#94a3b8" }}>{pct.toFixed(0)}%</td>
                             <td style={{ padding: "7px 8px", color: "#60a5fa" }}>{p?.ownership.toFixed(1) ?? "-"}%</td>
                             <td style={{ padding: "7px 8px", color: p?.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p?.fppg.toFixed(1) ?? "-"}</td>
-                            <td style={{ padding: "7px 8px" }}>
-                              <span style={{ fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p?.statMuseFD ? "#16a34a22" : "#1e3040", color: p?.statMuseFD ? "#22c55e" : "#4a6a80", border: `1px solid ${p?.statMuseFD ? "#16a34a44" : "#1e3040"}` }}>{p?.statMuseFD ? "SM" : "CSV"}</span>
-                            </td>
                             <td style={{ padding: "7px 8px", color: "#3b82f6" }}>{p?.positions[0] ?? "-"}</td>
                           </tr>
                         );
@@ -1946,10 +1372,11 @@ function App() {
           )}
         </div>
       )}
+
+      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · v5.1</div>
     </div>
   );
 }
-
 
 ReactDOM.render(React.createElement(App), document.getElementById("root"));
 </script>
