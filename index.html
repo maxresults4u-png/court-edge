@@ -20,43 +20,92 @@
 <body>
 <div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge...</div></div>
 <script>
-  window.onerror = function(msg, src, line, col, err) {
+(function () {
+  function showErrorOverlay(message, line, stack) {
     try {
       const id = "ce-error-overlay";
-      let el = document.getElementById(id);
-      if (!el) {
-        el = document.createElement("div");
-        el.id = id;
-        el.style.position = "fixed";
-        el.style.top = "12px";
-        el.style.right = "12px";
-        el.style.maxWidth = "720px";
-        el.style.maxHeight = "70vh";
-        el.style.overflow = "auto";
-        el.style.zIndex = "999999";
-        el.style.background = "#140b0b";
-        el.style.border = "1px solid #7f1d1d";
-        el.style.color = "#fecaca";
-        el.style.padding = "14px";
-        el.style.borderRadius = "10px";
-        el.style.boxShadow = "0 10px 30px rgba(0,0,0,.35)";
-        el.style.fontFamily = "monospace";
-        el.style.fontSize = "12px";
-        document.body.appendChild(el);
+      let root = document.getElementById(id);
+      if (!root) {
+        root = document.createElement("div");
+        root.id = id;
+        root.style.position = "fixed";
+        root.style.top = "12px";
+        root.style.right = "12px";
+        root.style.maxWidth = "720px";
+        root.style.maxHeight = "70vh";
+        root.style.overflow = "auto";
+        root.style.zIndex = "999999";
+        root.style.background = "#140b0b";
+        root.style.border = "1px solid #7f1d1d";
+        root.style.color = "#fecaca";
+        root.style.padding = "14px";
+        root.style.borderRadius = "10px";
+        root.style.boxShadow = "0 10px 30px rgba(0,0,0,.35)";
+        root.style.fontFamily = "monospace";
+        root.style.fontSize = "12px";
+
+        const title = document.createElement("div");
+        title.style.display = "flex";
+        title.style.justifyContent = "space-between";
+        title.style.alignItems = "center";
+        title.style.gap = "12px";
+
+        const strong = document.createElement("b");
+        strong.id = "ce-error-title";
+        strong.style.fontSize = "14px";
+        strong.style.color = "#fca5a5";
+
+        const close = document.createElement("button");
+        close.textContent = "close";
+        close.style.background = "#7f1d1d";
+        close.style.color = "#fff";
+        close.style.border = "none";
+        close.style.borderRadius = "6px";
+        close.style.padding = "4px 8px";
+        close.style.cursor = "pointer";
+        close.onclick = function () { root.remove(); };
+
+        title.appendChild(strong);
+        title.appendChild(close);
+
+        const meta = document.createElement("div");
+        meta.id = "ce-error-line";
+        meta.style.marginTop = "8px";
+        meta.style.color = "#fda4af";
+
+        const pre = document.createElement("pre");
+        pre.id = "ce-error-stack";
+        pre.style.marginTop = "12px";
+        pre.style.color = "#fecdd3";
+        pre.style.whiteSpace = "pre-wrap";
+
+        root.appendChild(title);
+        root.appendChild(meta);
+        root.appendChild(pre);
+        document.body.appendChild(root);
       }
-      el.innerHTML =
-        "<div style='display:flex;justify-content:space-between;gap:12px;align-items:center;'>" +
-        "<b style='font-size:14px;color:#fca5a5;'>ERROR: " + String(msg) + "</b>" +
-        "<button onclick="this.parentNode.parentNode.remove()" style='background:#7f1d1d;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;'>close</button>" +
-        "</div>" +
-        "<div style='margin-top:8px;color:#fda4af;'>Line: " + String(line) + "</div>" +
-        "<pre style='margin-top:12px;color:#fecdd3;white-space:pre-wrap;'>" + (err && err.stack ? String(err.stack) : "") + "</pre>";
+
+      const titleEl = document.getElementById("ce-error-title");
+      const lineEl = document.getElementById("ce-error-line");
+      const stackEl = document.getElementById("ce-error-stack");
+      if (titleEl) titleEl.textContent = "ERROR: " + String(message || "Unknown error");
+      if (lineEl) lineEl.textContent = "Line: " + String(line || 0);
+      if (stackEl) stackEl.textContent = stack ? String(stack) : "";
     } catch (overlayErr) {
       console.error("Overlay error", overlayErr);
-      console.error(msg, src, line, col, err);
+      console.error(message, line, stack);
     }
-    return false;
-  };
+  }
+
+  window.addEventListener("error", function (ev) {
+    showErrorOverlay(ev.message || "Script error", ev.lineno || 0, ev.error && ev.error.stack ? ev.error.stack : "");
+  });
+
+  window.addEventListener("unhandledrejection", function (ev) {
+    const err = ev.reason;
+    showErrorOverlay(err && err.message ? err.message : String(err), 0, err && err.stack ? err.stack : "");
+  });
+})();
 </script>
 <script type="text/babel">
 const { useState, useCallback, useRef, useEffect } = React;
@@ -391,7 +440,7 @@ function buildLineup(players, lockedNames = [], excludedNames = [], strategyType
 
   let best = { score: -Infinity, lineup: null };
   const startedAt = Date.now();
-  const TIME_BUDGET_MS = strategyType === "chalk" ? 45 : 65;
+  const TIME_BUDGET_MS = strategyType === "chalk" ? 24 : 40;
 
   function fastGreedy(assignment) {
     const needed = assignment.remainingSlots.slice();
@@ -726,7 +775,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   }
 
   const startedAt = Date.now();
-  const MAX_BUILD_MS = 1400;
+  const MAX_BUILD_MS = 800;
 
   const buildBatch = (targetCount, type) => {
     const attempts = Math.max(targetCount * 4, 14);
@@ -759,7 +808,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     return fallback;
   }
 
-  const simIterations = Math.min(320, Math.max(120, 80 + count * 10));
+  const simIterations = Math.min(180, Math.max(70, 50 + count * 6));
   const sims = simulateSlate(players.slice(0, 60), simIterations);
 
   allCandidates.forEach(lu => {
@@ -1280,11 +1329,13 @@ function App() {
   };
 
   const handleGenerate = () => {
+    if (!players || players.length === 0) return;
     setGenerating(true);
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       try {
         const liveGames = vegasGames.length ? vegasGames : getHardcodedVegasData().gamesList;
-        const lus = generateLineupsWithStrategy(players, lineupCount, lockedNames, excludedNames, liveGames, lineupStrategy);
+        const safeCount = Math.max(1, Math.min(lineupCount || 10, 50));
+        const lus = generateLineupsWithStrategy(players, safeCount, lockedNames, excludedNames, liveGames, lineupStrategy);
         setLineups(Array.isArray(lus) ? lus : []);
         setSelectedLineup(0);
         setStep("results");
@@ -1296,7 +1347,21 @@ function App() {
       } finally {
         setGenerating(false);
       }
-    }, 40);
+    });
+  };
+
+  const applyExclusions = (next, removedName = null) => {
+    const uniqueNext = [...new Set(next)];
+    const outList = uniqueNext.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
+    const { newMap, log } = applyCascades(outList, ownershipMap);
+
+    setCascadeLog(log);
+    setOwnershipMap(newMap);
+    setExcludedNames(uniqueNext);
+    if (removedName) {
+      setLockedNames(prev => prev.filter(n => n !== removedName));
+    }
+    rebuildPlayers(csvText, newMap, statMuseMap, uniqueNext);
   };
 
   const toggleLock = (name) => {
@@ -1307,15 +1372,7 @@ function App() {
     const next = excludedNames.includes(name)
       ? excludedNames.filter(n => n !== name)
       : [...excludedNames, name];
-
-    const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
-    const { newMap, log } = applyCascades(outList, ownershipMap);
-
-    setCascadeLog(log);
-    setOwnershipMap(newMap);
-    setExcludedNames(next);
-    setLockedNames(prev => prev.filter(n => n !== name));
-    rebuildPlayers(csvText, newMap, statMuseMap, next);
+    applyExclusions(next, name);
   };
 
   const S = {
@@ -1542,15 +1599,7 @@ function App() {
                 : rightTab === "statmuse"
                 ? <StatMusePanel players={players} statMuseMap={statMuseMap} onManualUpdate={handleStatMuseManual} />
                 : <InjuryPanel onExclude={(name) => {
-                    setExcludedNames(prev => {
-                      const next = [...new Set([...prev, name])];
-                      const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
-                      const { newMap, log } = applyCascades(outList, ownershipMap);
-                      setCascadeLog(log);
-                      setOwnershipMap(newMap);
-                      rebuildPlayers(csvText, newMap, statMuseMap);
-                      return next;
-                    });
+                    applyExclusions([...excludedNames, name], name);
                   }} excludedNames={excludedNames} />
               }
               <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
