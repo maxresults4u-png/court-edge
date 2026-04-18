@@ -102,14 +102,13 @@ function ownershipBucket(own) {
   return "punt";
 }
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
+
 function round1(n) {
-  return +(Number.isFinite(n) ? n : 0).toFixed(1);
+  return +((Number.isFinite(n) ? n : 0).toFixed(1));
 }
-function safeNum(n, fallback = 0) {
-  return Number.isFinite(n) ? n : fallback;
+
+function safeNum(v, fallback = 0) {
+  return Number.isFinite(v) ? v : fallback;
 }
 
 function buildProjectionBoostMap(outPlayers = []) {
@@ -120,7 +119,7 @@ function buildProjectionBoostMap(outPlayers = []) {
       for (const b of rule.beneficiaries) {
         const key = b.name.toLowerCase();
         if (!boosts[key]) boosts[key] = { projBoost: 1, notes: [] };
-        boosts[key].projBoost *= b.projBoost || 1;
+        boosts[key].projBoost *= (b.projBoost || 1);
         if (b.note) boosts[key].notes.push(`${outName}: ${b.note}`);
       }
     }
@@ -151,7 +150,7 @@ function teamContextForPlayer(player, teamMap = {}) {
 function buildProjection(player, teamMap = {}, projectionBoost = 1) {
   const ctx = teamContextForPlayer(player, teamMap);
   const injuryMult = { "": 1.0, P: 0.97, Q: 0.88, D: 0.55, O: 0 }[player.injury] ?? 0.9;
-  const baseFppg = safeNum(player.statMuseFD ? player.fppg : player.csvFppg || player.fppg, 0);
+  const baseFppg = safeNum(player.statMuseFD ? player.fppg : (player.csvFppg || player.fppg), 0);
   const sampleAdj = 0.96 + Math.min(0.08, safeNum(player.played, 0) / 400);
   const leverageAdj = (player.ownership || 15) <= 10 ? 1.02 : (player.ownership || 15) >= 35 ? 0.99 : 1.0;
 
@@ -179,13 +178,13 @@ function buildProjection(player, teamMap = {}, projectionBoost = 1) {
 }
 
 function compositeScore(p) {
-  const leverage = p.projCeiling / Math.max(p.ownership || 1, 1);
+  const leverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 1, 1);
   const stackBonus = p.gameTotal >= 228 ? 2.4 : p.gameTotal >= 222 ? 1.1 : 0;
   const statMuseBonus = p.statMuseFD ? 0.75 : 0;
   const ownershipPenalty = Math.max(0, (p.ownership || 0) - 38) * 0.06;
   return (
-    p.projMean * 0.78 +
-    p.projCeiling * 0.16 +
+    (p.projMean || p.fppg || 0) * 0.78 +
+    (p.projCeiling || p.fppg || 0) * 0.16 +
     leverage * 0.55 +
     (p.value || 0) * 0.45 +
     stackBonus +
@@ -203,15 +202,12 @@ function estimateOwnership(player, teamMap) {
   else if (v.impliedPts >= 114) base = 17;
   else if (v.impliedPts >= 110) base = 14;
   else if (v.impliedPts >= 106) base = 11;
-
-  const mean = player.projMean ?? player.fppg ?? 0;
-  const value = player.value ?? (mean / Math.max(player.salary / 1000, 1));
   const salaryTier = player.salary >= 11000 ? 1.7 : player.salary >= 9000 ? 1.4
     : player.salary >= 7500 ? 1.2 : player.salary >= 6000 ? 1.05
     : player.salary >= 4500 ? 0.9 : 0.75;
-  const fppgTier = mean >= 50 ? 1.5 : mean >= 42 ? 1.3
-    : mean >= 34 ? 1.15 : mean >= 26 ? 1.0 : 0.85;
-  const valueTier = value >= 7 ? 1.25 : value >= 5.5 ? 1.1 : 1.0;
+  const fppgTier = player.fppg >= 50 ? 1.5 : player.fppg >= 42 ? 1.3
+    : player.fppg >= 34 ? 1.15 : player.fppg >= 26 ? 1.0 : 0.85;
+  const valueTier = player.value >= 7 ? 1.25 : player.value >= 5.5 ? 1.1 : 1.0;
   return Math.min(65, Math.max(2, +(base * salaryTier * fppgTier * valueTier).toFixed(1)));
 }
 
@@ -240,7 +236,6 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     const smData = statMuseMap[key];
     const baseFppg = smData?.fdAvg || csvFppg;
     const statMuseFD = !!smData;
-
     if (baseFppg < RULES.FLOOR_FPPG_MIN) continue;
 
     const ownership = ownershipMap[key] ?? 15;
@@ -271,91 +266,83 @@ function getSlotsArray() {
 }
 
 function getStrategyWeights(type) {
-  if (type === "chalk") {
-    return { mean: 1.08, ceiling: 0.18, leverage: 0.14, ownPenalty: 0.012, stackBoost: 0.8, noise: 1.4 };
-  }
-  if (type === "leverage") {
-    return { mean: 0.94, ceiling: 0.30, leverage: 0.50, ownPenalty: 0.008, stackBoost: 2.8, noise: 3.8 };
-  }
-  if (type === "tournament") {
-    return { mean: 0.90, ceiling: 0.40, leverage: 0.60, ownPenalty: 0.006, stackBoost: 2.3, noise: 5.5 };
-  }
-  return { mean: 1.0, ceiling: 0.28, leverage: 0.42, ownPenalty: 0.009, stackBoost: 2.0, noise: 3.2 };
+  if (type === "chalk") return { mean: 1.08, ceiling: 0.18, leverage: 0.14, ownPenalty: 0.012, stackBoost: 0.8, noise: 1.4 };
+  if (type === "leverage") return { mean: 0.94, ceiling: 0.30, leverage: 0.50, ownPenalty: 0.008, stackBoost: 2.8, noise: 3.8 };
+  if (type === "tournament") return { mean: 0.90, ceiling: 0.40, leverage: 0.60, ownPenalty: 0.004, stackBoost: 3.3, noise: 5.5 };
+  return { mean: 0.98, ceiling: 0.28, leverage: 0.36, ownPenalty: 0.008, stackBoost: 2.0, noise: 3.0 };
 }
 
 function playerObjective(p, weights, stackTeams = []) {
-  const leverage = p.projCeiling / Math.max(p.ownership || 1, 1);
-  const stackBoost = stackTeams.includes(p.team) ? weights.stackBoost : 0;
-  const anchorBoost = p.projMean >= RULES.ANCHOR_FPPG_THRESHOLD ? 1.4 : 0;
+  const stackBonus = stackTeams.includes(p.team) ? weights.stackBoost : 0;
+  const leverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 1, 1);
   return (
-    p.projMean * weights.mean +
-    p.projCeiling * weights.ceiling +
+    (p.projMean || p.fppg || 0) * weights.mean +
+    (p.projCeiling || p.fppg || 0) * weights.ceiling +
     leverage * weights.leverage +
-    stackBoost +
-    anchorBoost -
+    stackBonus -
     (p.ownership || 0) * weights.ownPenalty
   );
 }
 
-function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, strategyType, iteration = 0) {
-  const weights = getStrategyWeights(strategyType);
-  const lockSet = new Set(lockedNames);
-  const excludeSet = new Set(excludedNames);
-
-  const pool = players
-    .filter(p => !excludeSet.has(p.name))
-    .map(p => {
-      const noise = (Math.random() - 0.5) * weights.noise + (iteration % 5 === 0 ? (Math.random() - 0.5) * 1.8 : 0);
-      return {
-        ...p,
-        _obj: playerObjective(p, weights, stackTeams) + noise + (lockSet.has(p.name) ? 999 : 0)
-      };
-    })
-    .sort((a, b) => b._obj - a._obj);
-
-  const maxPool = Math.min(pool.length, 74);
-  return pool.slice(0, maxPool);
-}
-
 function enumerateLockedAssignments(lockedPlayers, slots) {
-  if (lockedPlayers.length === 0) return [{ assigned: [], remainingSlots: slots.slice() }];
   const results = [];
-
-  function rec(i, remainingSlots, assigned) {
-    if (i === lockedPlayers.length) {
+  function dfs(idx, remainingSlots, assigned) {
+    if (idx === lockedPlayers.length) {
       results.push({ assigned: assigned.slice(), remainingSlots: remainingSlots.slice() });
       return;
     }
-    const p = lockedPlayers[i];
-    const seenSlots = new Set();
-    for (const slot of remainingSlots) {
-      if (!p.positions.includes(slot) || seenSlots.has(slot)) continue;
-      seenSlots.add(slot);
+    const p = lockedPlayers[idx];
+    const tried = new Set();
+    for (let i = 0; i < remainingSlots.length; i++) {
+      const slot = remainingSlots[i];
+      if (tried.has(slot)) continue;
+      if (!p.positions.includes(slot)) continue;
+      tried.add(slot);
       const nextSlots = remainingSlots.slice();
-      nextSlots.splice(nextSlots.indexOf(slot), 1);
+      nextSlots.splice(i, 1);
       assigned.push({ ...p, slot });
-      rec(i + 1, nextSlots, assigned);
+      dfs(idx + 1, nextSlots, assigned);
       assigned.pop();
-      if (results.length > 18) return;
     }
   }
-
-  rec(0, slots.slice(), []);
+  dfs(0, slots.slice(), []);
   return results;
 }
 
 function lineupHasStack(lineup) {
-  const teamCounts = {};
-  const gameCounts = {};
-  lineup.forEach(p => {
-    teamCounts[p.team] = (teamCounts[p.team] || 0) + 1;
-    gameCounts[p.game] = (gameCounts[p.game] || 0) + 1;
-  });
-  return Object.values(teamCounts).some(c => c >= 2) || Object.values(gameCounts).some(c => c >= 3);
+  const counts = {};
+  lineup.forEach(p => { counts[p.team] = (counts[p.team] || 0) + 1; });
+  return Object.values(counts).some(c => c >= 2);
 }
 
-function lineupKey(lineup) {
-  return lineup.map(p => p.name).sort().join("|");
+function lineupKey(lu) {
+  return lu.map(p => p.name).sort().join("|");
+}
+
+function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, strategyType, attempt) {
+  const weights = getStrategyWeights(strategyType);
+  const lockSet = new Set(lockedNames);
+  const excludeSet = new Set(excludedNames);
+  const filtered = players.filter(p => !excludeSet.has(p.name));
+  const scored = filtered.map(p => ({
+    ...p,
+    _poolScore: playerObjective(p, weights, stackTeams) + (Math.random() - 0.5) * weights.noise + (attempt * 0.02),
+  }));
+
+  if (strategyType === "tournament") {
+    const mids = scored.filter(p => p.ownership >= 8 && p.ownership <= 22).slice(0, 12);
+    if (mids.length) {
+      const pivot = mids[Math.floor(Math.random() * mids.length)];
+      pivot._poolScore += 5.5;
+    }
+  }
+
+  scored.sort((a, b) => {
+    if (lockSet.has(a.name) && !lockSet.has(b.name)) return -1;
+    if (!lockSet.has(a.name) && lockSet.has(b.name)) return 1;
+    return b._poolScore - a._poolScore;
+  });
+  return scored;
 }
 
 function buildLineup(players, lockedNames = [], excludedNames = [], strategyType = "mixed", stackTeams = []) {
@@ -386,21 +373,12 @@ function buildLineup(players, lockedNames = [], excludedNames = [], strategyType
         .filter(p => !used.has(p.name) && p.positions.includes(slot))
         .map(p => ({ ...p, _slotObj: playerObjective(p, weights, stackTeams) }))
         .sort((a, b) => b._slotObj - a._slotObj);
-
       const cap = slot === "C" ? 16 : strategyType === "chalk" ? 18 : 20;
       slotCandidates[slot] = raw.slice(0, cap);
     });
 
-    const openSlots = assignment.remainingSlots.slice().sort((a, b) => {
-      const aLen = slotCandidates[a]?.length ?? 999;
-      const bLen = slotCandidates[b]?.length ?? 999;
-      return aLen - bLen;
-    });
-
-    const slotMax = openSlots.map(slot => {
-      const bestCandidate = slotCandidates[slot]?.[0];
-      return bestCandidate ? bestCandidate._slotObj : 0;
-    });
+    const openSlots = assignment.remainingSlots.slice().sort((a, b) => (slotCandidates[a]?.length ?? 999) - (slotCandidates[b]?.length ?? 999));
+    const slotMax = openSlots.map(slot => (slotCandidates[slot]?.[0]?._slotObj) || 0);
     const suffixUpper = new Array(openSlots.length + 1).fill(0);
     for (let i = openSlots.length - 1; i >= 0; i--) suffixUpper[i] = suffixUpper[i + 1] + slotMax[i];
 
@@ -408,33 +386,26 @@ function buildLineup(players, lockedNames = [], excludedNames = [], strategyType
       if (idx === openSlots.length) {
         if (salary < RULES.MIN_SALARY_USED || salary > RULES.SALARY_CAP) return;
         if (strategyType !== "chalk" && !lineupHasStack(lineup)) return;
-        if (score > best.score) {
-          best = { score, lineup: lineup.slice() };
-        }
+        if (score > best.score) best = { score, lineup: lineup.slice() };
         return;
       }
 
       if (score + suffixUpper[idx] < best.score) return;
 
       const slot = openSlots[idx];
-      const candidates = slotCandidates[slot] || [];
-      const slotsLeft = openSlots.length - idx - 1;
+      const cands = slotCandidates[slot] || [];
+      const remaining = openSlots.length - idx - 1;
+      const minNeed = remaining * 3500;
 
-      for (const p of candidates) {
+      for (const p of cands) {
         if (used.has(p.name)) continue;
-
-        const newSalary = salary + p.salary;
-        if (newSalary > RULES.SALARY_CAP) continue;
-
-        const minPossible = newSalary + slotsLeft * 3500;
-        if (minPossible > RULES.SALARY_CAP) continue;
-
-        const maxPossible = newSalary + slotsLeft * 13000;
-        if (maxPossible < RULES.MIN_SALARY_USED) continue;
+        const nextSalary = salary + p.salary;
+        if (nextSalary > RULES.SALARY_CAP) continue;
+        if (nextSalary + minNeed > RULES.SALARY_CAP) continue;
 
         used.add(p.name);
         lineup.push({ ...p, slot });
-        dfs(idx + 1, lineup, newSalary, score + p._slotObj);
+        dfs(idx + 1, lineup, nextSalary, score + p._slotObj);
         lineup.pop();
         used.delete(p.name);
       }
@@ -443,7 +414,7 @@ function buildLineup(players, lockedNames = [], excludedNames = [], strategyType
     dfs(0, baseLineup.slice(), baseSalary, baseScore);
   }
 
-  return best.lineup ? best.lineup.sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot)) : null;
+  return best.lineup;
 }
 
 function randn() {
@@ -485,7 +456,7 @@ function lineupMinUnique(a, b) {
   const setA = new Set(a.map(p => p.name));
   let shared = 0;
   b.forEach(p => { if (setA.has(p.name)) shared++; });
-  return Math.max(a.length, b.length) - shared;
+  return Math.max(0, 9 - shared);
 }
 
 function selectPortfolio(candidates, desiredCount) {
@@ -494,7 +465,6 @@ function selectPortfolio(candidates, desiredCount) {
   const targetCount = Math.max(desiredCount, 1);
   const maxExposure = desiredCount <= 3 ? 1 : desiredCount <= 20 ? 0.75 : 0.65;
   const minUnique = desiredCount >= 20 ? 2 : 1;
-
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
 
   function canTake(lineup, relax = false) {
@@ -525,15 +495,47 @@ function selectPortfolio(candidates, desiredCount) {
   return selected.slice(0, desiredCount);
 }
 
+
+function generateLineups(players, count, lockedNames, excludedNames) {
+  const lineups = [];
+  const used = new Set();
+  const maxAttempts = count * 40;
+
+  for (let attempt = 0; attempt < maxAttempts && lineups.length < count; attempt++) {
+    // Increase randomness as we find more lineups (forces more diversity)
+    const noise = 3 + (lineups.length / count) * 25;
+    const varied = [...players].sort((a, b) => (b.score - a.score) + (Math.random() - 0.5) * noise);
+
+    // Randomly deprioritize top players occasionally to force different builds
+    if (attempt > 5) {
+      const topCount = Math.floor(2 + Math.random() * 4);
+      for (let i = 0; i < topCount; i++) {
+        const idx = Math.floor(Math.random() * Math.min(8, varied.length));
+        const moved = varied.splice(idx, 1)[0];
+        const insertAt = Math.floor(varied.length * 0.3 + Math.random() * varied.length * 0.5);
+        varied.splice(insertAt, 0, moved);
+      }
+    }
+
+    const lu = buildLineup(varied, lockedNames, excludedNames);
+    if (!lu) continue;
+    const key = lu.map(p => p.name).sort().join("|");
+    if (used.has(key)) continue;
+    used.add(key);
+    lineups.push(lu);
+  }
+  return lineups;
+}
+
 function lineupStats(lu) {
   return {
     total: lu.reduce((s, p) => s + p.salary, 0),
-    proj: lu.reduce((s, p) => s + (p.projMean ?? p.fppg ?? 0), 0),
-    avgOwn: lu.reduce((s, p) => s + (p.ownership || 0), 0) / Math.max(lu.length, 1),
-    chalk: lu.filter(p => (p.ownership || 0) >= 30).length,
-    mid: lu.filter(p => (p.ownership || 0) >= 10 && (p.ownership || 0) < 30).length,
-    punt: lu.filter(p => (p.ownership || 0) < 5).length,
-    anchor: lu.reduce((best, p) => (p.projMean ?? p.fppg) > (best.projMean ?? best.fppg) ? p : best, lu[0]),
+    proj: lu.reduce((s, p) => s + p.fppg, 0),
+    avgOwn: lu.reduce((s, p) => s + p.ownership, 0) / lu.length,
+    chalk: lu.filter(p => p.ownership >= 30).length,
+    mid: lu.filter(p => p.ownership >= 10 && p.ownership < 30).length,
+    punt: lu.filter(p => p.ownership < 5).length,
+    anchor: lu.reduce((best, p) => p.fppg > best.fppg ? p : best, lu[0]),
   };
 }
 
@@ -586,18 +588,20 @@ function gradeSlate(gamesList) {
 function getBestStackGame(gamesList, players) {
   if (!gamesList || gamesList.length === 0) return null;
   const scored = gamesList.map(g => {
-    const gamePlayers = players.filter(p => p.team === g.home || p.team === g.away);
-    const topPlayers = gamePlayers.slice().sort((a, b) => (b.projMean ?? b.fppg) - (a.projMean ?? a.fppg)).slice(0, 6);
+    const gamePlayers = players.filter(p =>
+      p.team === g.home || p.team === g.away
+    );
+    const topPlayers = gamePlayers.sort((a,b) => b.fppg - a.fppg).slice(0,6);
     return {
       ...g,
-      stackScore: (g.total || 220) * 0.55 + topPlayers.reduce((s, p) => s + (p.projMean ?? p.fppg), 0) * 0.35,
+      stackScore: (g.total || 220) * 0.5 + topPlayers.reduce((s,p) => s+p.fppg, 0) * 0.3,
       topPlayers,
     };
   });
-  return scored.sort((a, b) => b.stackScore - a.stackScore)[0];
+  return scored.sort((a,b) => b.stackScore - a.stackScore)[0];
 }
 
-// Generate lineups with stack awareness + simulation portfolio
+// Generate lineups with stack awareness
 function generateLineupsWithStrategy(players, count, lockedNames, excludedNames, gamesList, strategy) {
   if (!players || players.length === 0 || count <= 0) return [];
 
@@ -607,7 +611,7 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   const used = new Set();
 
   let chalkCount, leverageCount, tournCount;
-  if (strategy === "chalk")      { chalkCount = count; leverageCount = 0; tournCount = 0; }
+  if (strategy === "chalk") { chalkCount = count; leverageCount = 0; tournCount = 0; }
   else if (strategy === "leverage") { chalkCount = 0; leverageCount = count; tournCount = 0; }
   else if (strategy === "tournament") { chalkCount = 0; leverageCount = 0; tournCount = count; }
   else {
@@ -621,12 +625,10 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     for (let attempt = 0; attempt < attempts && allCandidates.filter(l => l._type === type).length < targetCount * 3; attempt++) {
       const pool = buildCandidatePool(players, lockedNames, excludedNames, stackTeams, type, attempt);
       const lu = buildLineup(pool, lockedNames, excludedNames, type, stackTeams);
-      if (!lu) continue;
-
+      if (!lu || lu.length !== 9) continue;
       const key = lineupKey(lu);
       if (used.has(key)) continue;
       used.add(key);
-
       lu._type = type;
       lu._hasStack = lineupHasStack(lu);
       lu._stackGame = bestGame?.gameStr || null;
@@ -637,7 +639,6 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   if (chalkCount > 0) buildBatch(chalkCount, "chalk");
   if (leverageCount > 0) buildBatch(leverageCount, "leverage");
   if (tournCount > 0) buildBatch(tournCount, "tournament");
-
   if (allCandidates.length === 0) return [];
 
   const simIterations = Math.min(1800, Math.max(700, Math.round(450 + count * 10)));
@@ -649,17 +650,10 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     lu._simMean = round1(simScore.mean);
     lu._simP75 = round1(simScore.p75);
     lu._simP90 = round1(simScore.p90);
-    lu._portfolioScore =
-      simScore.mean * 0.45 +
-      simScore.p75 * 0.15 +
-      simScore.p90 * 0.30 +
-      (lu._hasStack ? 3.5 : 0) -
-      stats.avgOwn * 0.08;
+    lu._portfolioScore = simScore.mean * 0.45 + simScore.p75 * 0.15 + simScore.p90 * 0.30 + (lu._hasStack ? 3.5 : 0) - stats.avgOwn * 0.08;
   });
 
-  const portfolio = selectPortfolio(allCandidates, count);
-
-  return portfolio.sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
+  return selectPortfolio(allCandidates, count).sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
 }
 
 // Bankroll entry strategy
@@ -763,16 +757,9 @@ function applyCascades(outPlayers, ownershipMap) {
       for (const b of rule.beneficiaries) {
         const key = b.name.toLowerCase();
         const current = newMap[key] ?? 15;
-        const boosted = Math.min(65, +(current * (b.ownBoost || 1)).toFixed(1));
+        const boosted = Math.min(65, +((current * (b.ownBoost || 1)).toFixed(1)));
         newMap[key] = boosted;
-        log.push({
-          out: outName,
-          player: b.name,
-          from: current,
-          to: boosted,
-          projBoost: b.projBoost || 1,
-          note: b.note
-        });
+        log.push({ out: outName, player: b.name, from: current, to: boosted, projBoost: b.projBoost || 1, note: b.note });
       }
     }
   }
@@ -841,7 +828,7 @@ function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
           Visit{" "}
           <a href="https://www.statmuse.com/nba" target="_blank" rel="noreferrer"
             style={{ color: "#60a5fa" }}>statmuse.com/nba</a>{" "}
-          -> search player -> "fanduel stat log" -> enter their FD avg below.
+          → search player → "fanduel stat log" → enter their FD avg below.
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <input
@@ -896,7 +883,7 @@ function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
                   href={statMuseUrl(p.name)}
                   target="_blank" rel="noreferrer"
                   style={{ color: "#3b82f6", fontSize: 10, textDecoration: "none", background: "#0d2235", border: "1px solid #1e3040", borderRadius: 4, padding: "2px 6px" }}
-                >[->] LOOKUP</a>
+                >[→] LOOKUP</a>
               </div>
             );
           })}
@@ -938,7 +925,7 @@ function OwnershipEditor({ players, ownershipMap, onUpdate }) {
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr style={{ position: "sticky", top: 0, background: "#0f1923", zIndex: 1 }}>
-            {["Player", "Pos", "Salary", "Proj", "Src", "Proj Own%"].map(h => (
+            {["Player", "Pos", "Salary", "FD Avg", "Src", "Proj Own%"].map(h => (
               <th key={h} style={{ padding: "6px 8px", textAlign: "left", color: "#7aa2c0", fontWeight: 500, borderBottom: "1px solid #1e3040", fontSize: 10 }}>{h}</th>
             ))}
           </tr>
@@ -1165,7 +1152,7 @@ function App() {
       });
     });
     setOwnershipMap(newOwnMap);
-    rebuildPlayers(csvText, newOwnMap, statMuseMap, excludedNames);
+    rebuildPlayers(csvText, newOwnMap, statMuseMap);
   };
 
   const handleGenerate = () => {
@@ -1422,7 +1409,17 @@ function App() {
                 ? <OwnershipEditor players={players} ownershipMap={ownershipMap} onUpdate={updateOwnership} />
                 : rightTab === "statmuse"
                 ? <StatMusePanel players={players} statMuseMap={statMuseMap} onManualUpdate={handleStatMuseManual} />
-                : <InjuryPanel onExclude={toggleExclude} excludedNames={excludedNames} />
+                : <InjuryPanel onExclude={(name) => {
+                    setExcludedNames(prev => {
+                      const next = [...new Set([...prev, name])];
+                      const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
+                      const { newMap, log } = applyCascades(outList, ownershipMap);
+                      setCascadeLog(log);
+                      setOwnershipMap(newMap);
+                      rebuildPlayers(csvText, newMap, statMuseMap);
+                      return next;
+                    });
+                  }} excludedNames={excludedNames} />
               }
               <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
             </div>
@@ -1530,7 +1527,7 @@ function App() {
                         {" -> "}
                         <span style={{ color: "#22c55e" }}>{c.player.split(" ").pop()}</span>
                         {" "}
-                        <span style={{ color: "#94a3b8" }}>{c.from}%->{c.to}%</span>
+                        <span style={{ color: "#94a3b8" }}>{`${c.from}% → ${c.to}%`}</span>
                         {" "}
                         <span style={{ color: "#3b6280" }}>{c.note}</span>
                       </div>
@@ -1568,7 +1565,7 @@ function App() {
                 - Salary cap too tight with current pool<br/>
                 - FPPG floor (15) filtering too many players
               </div>
-              <button onClick={() => setStep("build")} style={{ ...S.btn("primary"), marginTop: 12 }}>[<] BACK TO BUILD</button>
+              <button onClick={() => setStep("build")} style={{ ...S.btn("primary"), marginTop: 12 }}>[←] BACK TO BUILD</button>
             </div>
           )}
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -1576,7 +1573,7 @@ function App() {
               <button key={t} style={S.pill(activeTab === t)} onClick={() => setActiveTab(t)}>{t.toUpperCase()}</button>
             ))}
             <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <button style={S.btn("ghost")} onClick={() => setStep("build")}>[<] EDIT</button>
+              <button style={S.btn("ghost")} onClick={() => setStep("build")}>[←] EDIT</button>
               <button style={S.btn("success")} onClick={handleGenerate}>[R] REGEN</button>
             </div>
           </div>
@@ -1710,7 +1707,7 @@ function App() {
                           <div style={{ display: "flex", gap: 3 }}>
                             <button onClick={() => toggleLock(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" }}>LOCK</button>
                             <button onClick={() => toggleExclude(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" }}>OUT</button>
-                            <a href={statMuseUrl(p.name)} target="_blank" rel="noreferrer" style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" }}>SM[->]</a>
+                            <a href={statMuseUrl(p.name)} target="_blank" rel="noreferrer" style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: "1px solid #1e3040", color: "#3b82f6", textDecoration: "none", background: "transparent" }}>SM[→]</a>
                           </div>
                         </td>
                       </tr>
