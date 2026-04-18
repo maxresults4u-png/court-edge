@@ -21,11 +21,41 @@
 <div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge...</div></div>
 <script>
   window.onerror = function(msg, src, line, col, err) {
-    document.getElementById("root").innerHTML =
-      "<div style='color:#f87171;font-family:monospace;padding:40px;font-size:12px;'>" +
-      "<b style='font-size:15px;'>ERROR: " + msg + "</b><br><br>" +
-      "Line: " + line + "<br>" +
-      "<pre style='margin-top:12px;color:#94a3b8;white-space:pre-wrap;'>" + (err ? err.stack : "") + "</pre></div>";
+    try {
+      const id = "ce-error-overlay";
+      let el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement("div");
+        el.id = id;
+        el.style.position = "fixed";
+        el.style.top = "12px";
+        el.style.right = "12px";
+        el.style.maxWidth = "720px";
+        el.style.maxHeight = "70vh";
+        el.style.overflow = "auto";
+        el.style.zIndex = "999999";
+        el.style.background = "#140b0b";
+        el.style.border = "1px solid #7f1d1d";
+        el.style.color = "#fecaca";
+        el.style.padding = "14px";
+        el.style.borderRadius = "10px";
+        el.style.boxShadow = "0 10px 30px rgba(0,0,0,.35)";
+        el.style.fontFamily = "monospace";
+        el.style.fontSize = "12px";
+        document.body.appendChild(el);
+      }
+      el.innerHTML =
+        "<div style='display:flex;justify-content:space-between;gap:12px;align-items:center;'>" +
+        "<b style='font-size:14px;color:#fca5a5;'>ERROR: " + String(msg) + "</b>" +
+        "<button onclick="this.parentNode.parentNode.remove()" style='background:#7f1d1d;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;'>close</button>" +
+        "</div>" +
+        "<div style='margin-top:8px;color:#fda4af;'>Line: " + String(line) + "</div>" +
+        "<pre style='margin-top:12px;color:#fecdd3;white-space:pre-wrap;'>" + (err && err.stack ? String(err.stack) : "") + "</pre>";
+    } catch (overlayErr) {
+      console.error("Overlay error", overlayErr);
+      console.error(msg, src, line, col, err);
+    }
+    return false;
   };
 </script>
 <script type="text/babel">
@@ -1252,14 +1282,20 @@ function App() {
   const handleGenerate = () => {
     setGenerating(true);
     setTimeout(() => {
-      const liveGames = vegasGames.length ? vegasGames : getHardcodedVegasData().gamesList;
-      const lus = generateLineupsWithStrategy(players, lineupCount, lockedNames, excludedNames, liveGames, lineupStrategy);
-      setLineups(lus);
-      setSelectedLineup(0);
-      setStep("results");
-      setActiveTab("lineups");
-      setLastGenTime(new Date());
-      setGenerating(false);
+      try {
+        const liveGames = vegasGames.length ? vegasGames : getHardcodedVegasData().gamesList;
+        const lus = generateLineupsWithStrategy(players, lineupCount, lockedNames, excludedNames, liveGames, lineupStrategy);
+        setLineups(Array.isArray(lus) ? lus : []);
+        setSelectedLineup(0);
+        setStep("results");
+        setActiveTab("lineups");
+        setLastGenTime(new Date());
+      } catch (e) {
+        console.error("Generate failed", e);
+        throw e;
+      } finally {
+        setGenerating(false);
+      }
     }, 40);
   };
 
@@ -1268,16 +1304,18 @@ function App() {
     setExcludedNames(p => p.filter(n => n !== name));
   };
   const toggleExclude = (name) => {
-    setExcludedNames(prev => {
-      const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
-      const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
-      const { newMap, log } = applyCascades(outList, ownershipMap);
-      setCascadeLog(log);
-      setOwnershipMap(newMap);
-      rebuildPlayers(csvText, newMap, statMuseMap, next);
-      return next;
-    });
-    setLockedNames(p => p.filter(n => n !== name));
+    const next = excludedNames.includes(name)
+      ? excludedNames.filter(n => n !== name)
+      : [...excludedNames, name];
+
+    const outList = next.filter(n => TONIGHT_INJURIES.some(i => i.name === n && i.status === "OUT"));
+    const { newMap, log } = applyCascades(outList, ownershipMap);
+
+    setCascadeLog(log);
+    setOwnershipMap(newMap);
+    setExcludedNames(next);
+    setLockedNames(prev => prev.filter(n => n !== name));
+    rebuildPlayers(csvText, newMap, statMuseMap, next);
   };
 
   const S = {
