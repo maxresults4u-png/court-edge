@@ -1155,7 +1155,42 @@ function App() {
   const [games, setGames] = useState(DEFAULT_SLATE_GAMES);
   const [injuries, setInjuries] = useState(DEFAULT_INJURIES);
   const [cascadeRules, setCascadeRules] = useState([]);
-  const [dvpMap, setDvpMap] = useState({});
+  const [dvpMap, setDvpMap] = useState({
+    // Pre-loaded: hashtagbasketball.com DvP — week of Apr 19 2026
+    // FD pts allowed per position (calc: pts + reb*1.2 + ast*1.5 + stl*3 + blk*3 - to)
+    "BOS":{"PG":45.0,"SG":39.8,"SF":39.2,"PF":43.6,"C":46.4},
+    "PHI":{"PG":44.7,"SG":44.5,"SF":44.3,"PF":48.8,"C":51.7},
+    "OKC":{"PG":43.1,"SG":42.3,"SF":42.3,"PF":43.6,"C":47.8},
+    "PHO":{"PG":44.9,"SG":41.2,"SF":41.7,"PF":44.7,"C":52.6},
+    "DET":{"PG":44.3,"SG":41.3,"SF":41.4,"PF":47.1,"C":48.2},
+    "ORL":{"PG":48.6,"SG":44.0,"SF":41.7,"PF":47.6,"C":50.3},
+    "POR":{"PG":49.1,"SG":44.0,"SF":45.9,"PF":46.5,"C":59.0},
+    "SA": {"PG":45.8,"SG":41.9,"SF":42.2,"PF":44.2,"C":54.5},
+    "CLE":{"PG":48.3,"SG":42.2,"SF":43.1,"PF":47.7,"C":54.0},
+    "TOR":{"PG":48.2,"SG":41.2,"SF":40.6,"PF":45.6,"C":49.1},
+    "NYK":{"PG":44.0,"SG":42.3,"SF":40.3,"PF":44.4,"C":46.1},
+    "ATL":{"PG":47.0,"SG":44.2,"SF":45.0,"PF":47.9,"C":52.7},
+    "DEN":{"PG":47.2,"SG":43.3,"SF":44.6,"PF":49.0,"C":50.3},
+    "MIN":{"PG":50.5,"SG":42.3,"SF":41.4,"PF":45.2,"C":52.1},
+    "HOU":{"PG":44.8,"SG":42.4,"SF":41.3,"PF":43.1,"C":50.3},
+    "LAL":{"PG":47.9,"SG":43.0,"SF":44.4,"PF":45.3,"C":48.9},
+    "MIL":{"PG":50.7,"SG":44.4,"SF":45.9,"PF":48.4,"C":49.6},
+    "MIA":{"PG":50.9,"SG":44.6,"SF":45.4,"PF":49.4,"C":50.9},
+    "IND":{"PG":52.3,"SG":43.6,"SF":46.4,"PF":48.0,"C":54.1},
+    "MEM":{"PG":51.0,"SG":46.3,"SF":46.0,"PF":49.6,"C":54.9},
+    "DAL":{"PG":49.7,"SG":48.7,"SF":43.6,"PF":49.6,"C":57.0},
+    "SAC":{"PG":50.3,"SG":46.2,"SF":42.8,"PF":47.7,"C":58.0},
+    "NOP":{"PG":48.8,"SG":44.5,"SF":46.0,"PF":48.6,"C":58.5},
+    "CHI":{"PG":50.3,"SG":45.3,"SF":47.2,"PF":52.1,"C":58.5},
+    "BKN":{"PG":47.5,"SG":45.5,"SF":45.5,"PF":47.9,"C":54.8},
+    "GSW":{"PG":48.7,"SG":43.5,"SF":42.3,"PF":46.5,"C":53.0},
+    "LAC":{"PG":48.8,"SG":43.5,"SF":41.9,"PF":44.1,"C":51.5},
+    "UTA":{"PG":52.4,"SG":49.5,"SF":46.7,"PF":53.4,"C":55.8},
+    "WAS":{"PG":51.7,"SG":45.3,"SF":49.7,"PF":52.0,"C":63.4},
+    "CHA":{"PG":45.5,"SG":43.6,"SF":40.5,"PF":46.5,"C":48.0},
+  });
+  const [dvpStatus, setDvpStatus] = useState("");
+  const [dvpLoading, setDvpLoading] = useState(false);
   const [oddsApiKey, setOddsApiKey] = useState(() => {
     try { return localStorage.getItem("ce_odds_api_key") || ""; } catch { return ""; }
   });
@@ -1244,6 +1279,23 @@ function App() {
   const updateOwnership = (name, val) => { const key = name.toLowerCase(); const newMap = { ...ownershipMap, [key]: val }; setOwnershipMap(newMap); rebuildPlayers(csvText, newMap, statMuseMap, excludedNames); };
   const handleStatMuseManual = (name, fdAvg) => { const key = name.toLowerCase(); const newSM = { ...statMuseMap, [key]: { fdAvg, lastGame: null, trend: "neutral" } }; setStatMuseMap(newSM); rebuildPlayers(csvText, ownershipMap, newSM, excludedNames); };
   const handleEstimateOwnership = () => { if (!players.length || !games.length) return; const newOwn = { ...ownershipMap }; players.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, vegasMap); }); setOwnershipMap(newOwn); rebuildPlayers(csvText, newOwn, statMuseMap, excludedNames); };
+
+  // [v5.4] Fetch DvP data from Campione server (cached 24h, scraped from hashtagbasketball)
+  const fetchDvP = async () => {
+    setDvpLoading(true); setDvpStatus("");
+    try {
+      const res = await fetch("https://campioneinfrastructure.com/api/v1/dvp");
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json();
+      if (!data.success || !data.teams) throw new Error(data.error || "No data returned");
+      setDvpMap(data.teams);
+      const src = data.source === "cache" ? `cached ${data.ageMinutes}m ago` : data.source === "stale_cache" ? "stale cache" : "live";
+      setDvpStatus(`✅ Loaded ${Object.keys(data.teams).length} teams (${src}) · Updated ${new Date(data.updated).toLocaleTimeString()}`);
+    } catch(e) {
+      setDvpStatus(`❌ ${e.message}`);
+    }
+    setDvpLoading(false);
+  };
 
   // [v5.3] Fetch live Vegas lines from the-odds-api.com
   const fetchVegasLines = async () => {
@@ -1336,7 +1388,7 @@ function App() {
       <div style={S.hdr}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
-          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.4 · FULL AUTO · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.4 · DvP WIRED · MAXRESULTS4U BUSINESS SOLUTIONS</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
@@ -1452,9 +1504,29 @@ function App() {
               </div>
               {rightTab === "matchups" && (
                 <div>
-                  <div style={{ marginBottom: 12, padding: "10px 12px", background: "#0a1520", border: "1px solid #a78bfa33", borderRadius: 8, fontSize: 10, color: "#a78bfa", lineHeight: 1.7 }}>
-                    <strong style={{color:"#c4b5fd"}}>How this works:</strong> Enter how many FD pts each team's defense allows to each position. The optimizer multiplies each player's projection by their matchup strength. A grade = +10% boost, F grade = -12% reduction.
-                    <br/>Auto minutes cascade: when you mark a player OUT in Injuries, the optimizer automatically redistributes their minutes to positional teammates and boosts their projections.
+                  <div style={{ marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <button
+                      onClick={fetchDvP}
+                      disabled={dvpLoading}
+                      style={{ background: dvpLoading ? "#1e3040" : "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: dvpLoading ? "default" : "pointer", fontFamily: "inherit", letterSpacing: 1 }}
+                    >
+                      {dvpLoading ? "LOADING..." : "⚡ LOAD DvP DATA"}
+                    </button>
+                    <div style={{ fontSize: 10, color: "#4a6a80" }}>
+                      ✅ Pre-loaded: Apr 19 2026 · Update numbers below anytime · Auto-pull coming soon
+                    </div>
+                  </div>
+                  {dvpStatus && (
+                    <div style={{ marginBottom: 10, fontSize: 10, padding: "6px 10px", borderRadius: 5,
+                      background: dvpStatus.startsWith("✅") ? "#0a1a0a" : "#1a0a0a",
+                      color: dvpStatus.startsWith("✅") ? "#22c55e" : "#ef4444",
+                      border: `1px solid ${dvpStatus.startsWith("✅") ? "#16a34a44" : "#ef444444"}` }}>
+                      {dvpStatus}
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 10, padding: "10px 12px", background: "#0a1520", border: "1px solid #a78bfa33", borderRadius: 8, fontSize: 10, color: "#a78bfa", lineHeight: 1.7 }}>
+                    <strong style={{color:"#c4b5fd"}}>How it works:</strong> DvP = pts allowed per position vs league avg. A grade (+10%) = soft matchup, F grade (-12%) = lockdown. Auto-updates projections and lineup scores.
+                    <br/>Or enter manually below. Auto minutes cascade fires when players are marked OUT in Injuries.
                   </div>
                   <DvPPanel games={games} dvpMap={dvpMap} onUpdate={setDvpMap} />
                 </div>
