@@ -66,6 +66,10 @@ const { useState, useCallback, useRef, useEffect, useMemo } = React;
 const LEAGUE_AVG_TOTAL = 226;
 const LEAGUE_AVG_IMPLIED = 113;
 const LEAGUE_AVG_PACE = 100;
+// DvP baselines (FD pts allowed per position per game, league avg 2025-26)
+const LEAGUE_AVG_DVP = { PG: 44.2, SG: 40.8, SF: 41.5, PF: 40.1, C: 43.6 };
+// Matchup grade thresholds
+const DVP_GRADES = { A: 1.10, B: 1.05, C: 1.00, D: 0.95, F: 0.88 };
 
 const DEFAULT_SLATE_GAMES = [];
 const DEFAULT_INJURIES = [];
