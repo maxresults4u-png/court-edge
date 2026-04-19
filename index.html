@@ -976,17 +976,11 @@ function applyCascades(outPlayers, ownershipMap, cascadeRules) {
   return { newMap, log };
 }
 
-function exportLineupsToFanDuel(lineups) {
-  // FanDuel bulk upload format:
-  // Header: position slots
-  // Rows: player IDs (fdId = "129170-XXXXX") in slot order
-  // Line endings: \r\n (Windows) for max compatibility
-  const header = "PG,PG,SG,SG,SF,SF,PF,PF,C";
+function buildLineupRows(lineups) {
   const rows = [];
   for (const lu of lineups) {
     const bySlot = { PG: [], SG: [], SF: [], PF: [], C: [] };
     lu.forEach(p => { if (bySlot[p.slot]) bySlot[p.slot].push(p); });
-    // Ensure exactly 2 PG, 2 SG, 2 SF, 2 PF, 1 C
     const ordered = [
       bySlot.PG[0], bySlot.PG[1],
       bySlot.SG[0], bySlot.SG[1],
@@ -994,20 +988,29 @@ function exportLineupsToFanDuel(lineups) {
       bySlot.PF[0], bySlot.PF[1],
       bySlot.C[0]
     ];
-    // Skip lineup if any slot is empty
     if (ordered.some(p => !p)) {
-      console.warn("Skipping lineup with missing slot:", lu.map(p => p.slot + ":" + p.name).join(", "));
+      console.warn("Skipping lineup — missing slot:", lu.map(p=>p.slot+":"+p.name).join(", "));
       continue;
     }
-    // Use fdId (129170-XXXXX) — fall back to name only if no ID
-    const ids = ordered.map(p => p.fdId || "");
-    if (ids.some(id => !id)) {
-      console.warn("Missing fdId for player — lineup may not upload correctly");
-    }
-    rows.push(ids.join(","));
+    rows.push(ordered.map(p => p.fdId || "").join(","));
   }
-  // \r\n for Windows compatibility with FanDuel upload
+  return rows;
+}
+
+// Format 1: Simple position header (for FanDuel "Import Lineups" flow)
+function exportLineupsToFanDuel(lineups) {
+  const header = "PG,PG,SG,SG,SF,SF,PF,PF,C";
+  const rows = buildLineupRows(lineups);
   return header + "\r\n" + rows.join("\r\n");
+}
+
+// Format 2: FanDuel template format (for "Upload" with contest columns)
+// Use when FanDuel says "download our template first"
+function exportLineupsToFanDuelTemplate(lineups, contestName = "", contestId = "", entryFee = "") {
+  const header = "Entry ID,Contest Name,Contest ID,Entry Fee,PG,PG,SG,SG,SF,SF,PF,PF,C";
+  const rows = buildLineupRows(lineups);
+  const dataRows = rows.map(r => `,${contestName},${contestId},${entryFee},${r}`);
+  return header + "\r\n" + dataRows.join("\r\n");
 }
 function downloadCSV(csvText, filename) {
   // UTF-8 BOM ensures proper encoding when opened in Excel or uploaded to FanDuel
@@ -1761,12 +1764,36 @@ function App() {
               <button onClick={() => setStep("build")} style={{ ...S.btn("primary"), marginTop: 12 }}>[←] BACK</button>
             </div>
           )}
+          <div style={{ marginBottom: 12, padding: "10px 14px", background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, fontSize: 10, color: "#4a6a80", lineHeight: 1.8 }}>
+            <span style={{ color: "#60a5fa", fontWeight: 700 }}>HOW TO UPLOAD TO FANDUEL: </span>
+            <span style={{ color: "#e2e8f0" }}>Go to your contest → click </span>
+            <span style={{ color: "#f59e0b" }}>Enter Lineups → Import Lineups</span>
+            <span style={{ color: "#e2e8f0" }}> → download their template → </span>
+            <span style={{ color: "#22c55e" }}>replace the player columns with your export</span>
+            <span style={{ color: "#e2e8f0" }}>, OR try </span>
+            <span style={{ color: "#f59e0b" }}>[↓] FD TEMPLATE</span>
+            <span style={{ color: "#e2e8f0" }}> button which pre-fills the contest column format.</span>
+          </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
             {["lineups","players","props","exposure"].map(t => <button key={t} style={S.pill(activeTab === t)} onClick={() => setActiveTab(t)}>{t.toUpperCase()}</button>)}
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button style={S.btn("ghost")} onClick={() => setStep("build")}>[←] EDIT</button>
               <button style={S.btn("success")} onClick={handleGenerate}>[R] REGEN</button>
-              {lineups.length > 0 && <button style={S.btn("warning")} onClick={handleExport}>[↓] EXPORT CSV</button>}
+              {lineups.length > 0 && (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button style={S.btn("warning")} onClick={handleExport}>[↓] EXPORT CSV</button>
+                <button
+                  style={{ ...S.btn("ghost"), fontSize: 10, padding: "9px 12px" }}
+                  onClick={() => {
+                    const csv = exportLineupsToFanDuelTemplate(lineups);
+                    const ts = new Date().toISOString().slice(0,10);
+                    downloadCSV(csv, `fanduel-template-${ts}.csv`);
+                  }}
+                >
+                  [↓] FD TEMPLATE
+                </button>
+              </div>
+            )}
             </div>
           </div>
 
@@ -1926,7 +1953,7 @@ function App() {
                         <td style={{ padding: "7px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
                         <td style={{ padding: "7px 8px", color: "#64b587", fontWeight: 700 }}>{p.fppg.toFixed(1)}</td>
                         <td style={{ padding: "7px 8px" }}>
-                          <Tip text={`Projected ${sl.pts?.toFixed(1)} pts tonight. Factors: Vegas implied (team scoring environment), DvP pts allowed to ${p.positions[0]}s by ${teamMap[p.team]?.opponent || "opponent"}, pace, and ${p.minuteBoost > 0 ? "injury cascade minutes" : "standard role"}.`} wide>
+                          <Tip text={`Projected ${sl.pts?.toFixed(1)} pts. Vegas env + DvP vs ${vegasMap[p.team]?.opponent || "opponent"} + pace${p.minuteBoost > 0 ? " + injury cascade" : ""}.`} wide>
                             <span style={{ color: "#f0a500", fontWeight: 700 }}>{sl.pts?.toFixed(1)}</span>
                           </Tip>
                         </td>
@@ -1951,12 +1978,12 @@ function App() {
                           </Tip>
                         </td>
                         <td style={{ padding: "7px 8px", textAlign: "center" }}>
-                          <Tip text={`${p.dvpGrade?.grade || "?"} grade matchup vs ${teamMap[p.team]?.opponent || "opponent"}. DvP multiplier: ${p.dvpAdj ? ((p.dvpAdj-1)*100).toFixed(1)+"%" : "N/A"} vs league avg for ${p.positions[0]}s. ${p.dvpAdj >= 1.08 ? "🔥 Soft defense — target this player." : p.dvpAdj >= 1.03 ? "✅ Favorable matchup." : p.dvpAdj >= 0.97 ? "Neutral matchup." : p.dvpAdj >= 0.92 ? "⚠️ Tough matchup — discount projection." : "❌ Lockdown defense — fade this player."}`} wide>
+                          <Tip text={`${p.dvpGrade?.grade || "?"} matchup vs ${vegasMap[p.team]?.opponent || "opp"}. ${p.dvpAdj ? ((p.dvpAdj-1)*100).toFixed(1)+"% vs league avg" : ""}. ${p.dvpAdj >= 1.08 ? "Soft D — target." : p.dvpAdj >= 1.03 ? "Favorable." : p.dvpAdj >= 0.97 ? "Neutral." : p.dvpAdj >= 0.92 ? "Tough — discount." : "Lockdown — fade."}`} wide>
                             {p.dvpGrade ? <span style={{ fontSize: 10, fontWeight: 700, color: matchColor, padding: "1px 5px", background: matchColor + "22", borderRadius: 3 }}>{p.dvpGrade.grade}</span> : <span style={{ color: "#3b6280" }}>-</span>}
                           </Tip>
                         </td>
                         <td style={{ padding: "7px 8px", fontSize: 10 }}>
-                          <Tip text={`Estimated ${p.minutesProj?.toFixed(0) || "?"} minutes based on salary tier and FPPG. ${hasBoost ? `Extra minutes absorbed from injured teammate: +${(p.minuteBoost / (p.fppg / (p.minutesProj || 30)))?.toFixed(0)} min. More minutes = proportionally more pts, reb, ast.` : "Standard rotation minutes."}`} wide>
+                          <Tip text={`Estimated ${p.minutesProj?.toFixed(0) || "?"} min from salary tier. ${hasBoost ? "Extra minutes from injured teammate cascade. More mins = more pts/reb/ast." : "Standard rotation minutes."}`} wide>
                             <span style={{ color: "#94a3b8" }}>{p.minutesProj?.toFixed(0) || "-"} min</span>
                             {hasBoost && <span style={{ color: "#22c55e" }}> +{(p.minuteBoost / (p.fppg / (p.minutesProj || 30)))?.toFixed(0)}m</span>}
                           </Tip>
