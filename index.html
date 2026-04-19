@@ -309,12 +309,26 @@ function lineupHasBringBack(lineup, stackTeams, bringBackTeams) {
 }
 function lineupKey(lu) { return lu.map(p => p.name).sort().join("|"); }
 
-function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, strategyType, attempt) {
+function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, strategyType, attempt, candidateExposure = {}, generatedSoFar = 0) {
   const weights = getStrategyWeights(strategyType);
   const lockSet = new Set(lockedNames);
   const excludeSet = new Set(excludedNames);
   const filtered = players.filter(p => !excludeSet.has(p.name));
-  const scored = filtered.map(p => ({ ...p, _poolScore: playerObjective(p, weights, stackTeams, bringBackTeams) + (Math.random() - 0.5) * weights.noise + (attempt * 0.02) }));
+  const scored = filtered.map(p => {
+    // [v5.2 FIX] Penalize players already overexposed in candidate pool
+    // Scale penalty based on how many lineups they've appeared in vs total generated
+    const expCount = candidateExposure[p.name] || 0;
+    const expRate = generatedSoFar > 0 ? expCount / generatedSoFar : 0;
+    // Strong penalty when exposure > 60% — pushes optimizer to try alternatives
+    const exposurePenalty = lockSet.has(p.name) ? 0 : Math.max(0, expRate - 0.60) * weights.noise * 3.5;
+    return {
+      ...p,
+      _poolScore: playerObjective(p, weights, stackTeams, bringBackTeams)
+        + (Math.random() - 0.5) * weights.noise
+        + (attempt * 0.02)
+        - exposurePenalty
+    };
+  });
   if (strategyType === "tournament") {
     const mids = scored.filter(p => p.ownership >= 8 && p.ownership <= 22).slice(0, 12);
     if (mids.length) mids[Math.floor(Math.random() * mids.length)]._poolScore += 5.5;
@@ -492,8 +506,10 @@ function selectPortfolio(candidates, desiredCount) {
   const selected = [];
   const exposure = {};
   const targetCount = Math.max(desiredCount, 1);
-  const maxExposure = desiredCount <= 3 ? 1 : desiredCount <= 10 ? 0.65 : 0.5;
-  const minUnique = desiredCount >= 15 ? 3 : desiredCount >= 8 ? 2 : 1;
+  // [v5.2 FIX] Never allow 100% exposure; always require real diversity
+  const maxExposure = desiredCount <= 3 ? 0.67 : desiredCount <= 10 ? 0.60 : 0.50;
+  // [v5.2 FIX] Always require at least 3 different players between any two lineups
+  const minUnique = Math.max(3, desiredCount >= 15 ? 4 : 3);
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
   for (const lu of sorted) {
     if (selected.length >= desiredCount) break;
@@ -504,13 +520,15 @@ function selectPortfolio(candidates, desiredCount) {
       const next = (exposure[p.name] || 0) + 1;
       if (next / targetCount > maxExposure) { badExposure = true; break; }
     }
-    if (badExposure && selected.length >= Math.max(2, Math.floor(targetCount * 0.35))) continue;
+    // [v5.2 FIX] Only bypass exposure cap when portfolio is nearly full AND we've run out of options
+    if (badExposure && selected.length < Math.floor(targetCount * 0.80)) continue;
     selected.push(lu);
     lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
-  for (const lu of sorted) {
+  // Fill remainder with least-similar remaining options
+  const remaining = sorted.filter(lu => !selected.includes(lu));
+  for (const lu of remaining) {
     if (selected.length >= desiredCount) break;
-    if (selected.includes(lu)) continue;
     selected.push(lu);
   }
   return selected.slice(0, desiredCount);
@@ -590,10 +608,12 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   const requireStack = !smallSlate && bestGames.length > 0;
 
   const buildBatch = (targetCount, type) => {
-    const attempts = Math.max(targetCount * 8, 28);
-    const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 1.8));
+    const attempts = Math.max(targetCount * 12, 40);
+    const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 2.5));
     // [v5.2] Tournament requires 3-player stack minimum; others stay at 2
     const minStack = (type === "tournament") ? 3 : 2;
+    // [v5.2 FIX] Track exposure within candidate generation to penalize overused players
+    const candidateExposure = {};
     for (let attempt = 0; attempt < attempts; attempt++) {
       if (Date.now() - startedAt > MAX_BUILD_MS) break;
       if (allCandidates.filter(l => l._type === type).length >= perTypeTarget) break;
@@ -607,7 +627,8 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         if (homeImpl >= awayImpl) { stackTeams = [stackGame.home]; bringBackTeams = [stackGame.away]; }
         else { stackTeams = [stackGame.away]; bringBackTeams = [stackGame.home]; }
       }
-      const pool = buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, type, attempt).slice(0, 45);
+      const generatedSoFar = allCandidates.filter(l => l._type === type).length;
+      const pool = buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, type, attempt, candidateExposure, generatedSoFar).slice(0, 50);
       const lu = buildLineup(pool, lockedNames, excludedNames, type, stackTeams, bringBackTeams, requireStack, minStack);
       if (!lu || lu.length !== 9) continue;
       const key = lineupKey(lu);
@@ -618,6 +639,8 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
       lu._hasBringBack = lineupHasBringBack(lu, stackTeams, bringBackTeams);
       lu._stackGame = stackGame?.gameStr || null;
       allCandidates.push(lu);
+      // Track which players appeared in this candidate
+      lu.forEach(p => { candidateExposure[p.name] = (candidateExposure[p.name] || 0) + 1; });
     }
   };
 
