@@ -283,10 +283,13 @@ function compositeScore(p) {
   const statMuseBonus = p.statMuseFD ? 0.75 : 0;
   const ownershipPenalty = Math.max(0, (p.ownership || 0) - 38) * 0.08;
   const valueBonus = (p.value || 0) * 0.4;
+  // [v5.4] Mild penalty for min-salary punt plays to prevent full-portfolio locks
+  // A $3700 player projecting 19pts shouldn't anchor every lineup
+  const puntPenalty = (p.salary <= 3800 && (p.projMean || p.fppg || 0) < 22) ? 1.5 : 0;
   return (
     (p.projMean || p.fppg || 0) * 0.82 +
     (p.projCeiling || p.fppg || 0) * 0.14 +
-    leverage * 0.40 + valueBonus + stackBonus + statMuseBonus - ownershipPenalty
+    leverage * 0.40 + valueBonus + stackBonus + statMuseBonus - ownershipPenalty - puntPenalty
   );
 }
 
@@ -642,8 +645,10 @@ function selectPortfolio(candidates, desiredCount) {
   const exposure = {};
   const targetCount = Math.max(desiredCount, 1);
   // [v5.2 FIX] Never allow 100% exposure; always require real diversity
-  const maxExposure = desiredCount <= 3 ? 0.67 : desiredCount <= 10 ? 0.60 : 0.50;
-  // [v5.2 FIX] Always require at least 3 different players between any two lineups
+  // [v5.4] Scale exposure cap by count — smaller portfolios can have higher natural overlap
+  const maxExposure = desiredCount <= 3 ? 0.67 : desiredCount <= 5 ? 0.65 : desiredCount <= 10 ? 0.60 : 0.50;
+  // Hard cap: no player in more than this many lineups regardless of count
+  const hardCapCount = Math.max(2, Math.floor(desiredCount * maxExposure));
   const minUnique = Math.max(3, desiredCount >= 15 ? 4 : 3);
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
   for (const lu of sorted) {
@@ -653,9 +658,9 @@ function selectPortfolio(candidates, desiredCount) {
     let badExposure = false;
     for (const p of lu) {
       const next = (exposure[p.name] || 0) + 1;
-      if (next / targetCount > maxExposure) { badExposure = true; break; }
+      if (next > hardCapCount || next / targetCount > maxExposure) { badExposure = true; break; }
     }
-    // [v5.2 FIX] Only bypass exposure cap when portfolio is nearly full AND we've run out of options
+    // Only bypass exposure cap when portfolio is nearly full AND we've run out of options
     if (badExposure && selected.length < Math.floor(targetCount * 0.80)) continue;
     selected.push(lu);
     lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
