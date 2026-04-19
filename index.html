@@ -19,703 +19,1243 @@
 </head>
 <body>
 <div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.2...</div></div>
+<script>
+(function () {
+  function showErrorOverlay(message, line, stack) {
+    try {
+      const id = "ce-error-overlay";
+      let root = document.getElementById(id);
+      if (!root) {
+        root = document.createElement("div");
+        root.id = id;
+        root.style.cssText = "position:fixed;top:12px;right:12px;max-width:720px;max-height:70vh;overflow:auto;z-index:999999;background:#140b0b;border:1px solid #7f1d1d;color:#fecaca;padding:14px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:monospace;font-size:12px";
+        const title = document.createElement("div");
+        title.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px";
+        const strong = document.createElement("b");
+        strong.id = "ce-error-title";
+        strong.style.cssText = "font-size:14px;color:#fca5a5";
+        const close = document.createElement("button");
+        close.textContent = "close";
+        close.style.cssText = "background:#7f1d1d;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer";
+        close.onclick = function () { root.remove(); };
+        title.appendChild(strong); title.appendChild(close);
+        const meta = document.createElement("div"); meta.id = "ce-error-line"; meta.style.cssText = "margin-top:8px;color:#fda4af";
+        const pre = document.createElement("pre"); pre.id = "ce-error-stack"; pre.style.cssText = "margin-top:12px;color:#fecdd3;white-space:pre-wrap";
+        root.appendChild(title); root.appendChild(meta); root.appendChild(pre);
+        document.body.appendChild(root);
+      }
+      const titleEl = document.getElementById("ce-error-title");
+      const lineEl = document.getElementById("ce-error-line");
+      const stackEl = document.getElementById("ce-error-stack");
+      if (titleEl) titleEl.textContent = "ERROR: " + String(message || "Unknown error");
+      if (lineEl) lineEl.textContent = "Line: " + String(line || 0);
+      if (stackEl) stackEl.textContent = stack ? String(stack) : "";
+    } catch (overlayErr) { console.error("Overlay error", overlayErr); }
+  }
+  window.addEventListener("error", ev => showErrorOverlay(ev.message || "Script error", ev.lineno || 0, ev.error && ev.error.stack ? ev.error.stack : ""));
+  window.addEventListener("unhandledrejection", ev => { const err = ev.reason; showErrorOverlay(err && err.message ? err.message : String(err), 0, err && err.stack ? err.stack : ""); });
+})();
+</script>
 <script type="text/babel">
 const { useState, useCallback, useRef, useEffect, useMemo } = React;
 
-// v5.2 CHANGES vs v5.1:
-// [FIX] Tournament stackBoost 3.3->6.5, leverage 2.8->4.5
-// [FIX] Tournament requires minStack=3 (was 2)
-// [FIX] Lineup projection floor: drop lineups < MIN_PROJ_FILTER
-// [ADD] getBestStackGames() returns top 3 games, rotates stacks per batch
-// [FIX] Ceiling weight in tournament compositeScore 0.40->0.58
-// [FIX] Portfolio p99 weight in tournament 0.35->0.40
+// ============================================================================
+// v5.1 MATH IMPROVEMENTS
+// ============================================================================
 
 const LEAGUE_AVG_TOTAL = 226;
 const LEAGUE_AVG_IMPLIED = 113;
-const MIN_PROJ_FILTER = 282;
+const LEAGUE_AVG_PACE = 100;
+
 const DEFAULT_SLATE_GAMES = [];
 const DEFAULT_INJURIES = [];
+
 const RULES = {
-  SALARY_CAP: 60000, MIN_SALARY_USED: 58000,
-  NEVER_PLAY_OWN_THRESHOLD: 3.0, ANCHOR_FPPG_THRESHOLD: 40, FLOOR_FPPG_MIN: 15,
+  SALARY_CAP: 60000,
+  MIN_SALARY_USED: 58000,
+  NEVER_PLAY_OWN_THRESHOLD: 3.0,
+  ANCHOR_FPPG_THRESHOLD: 40,
+  FLOOR_FPPG_MIN: 15,
   POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
 };
 const POSITION_ORDER = ["PG", "SG", "SF", "PF", "C"];
-function toStatMuseSlug(name) { return name.toLowerCase().replace(/['']/g,"").replace(/[^a-z0-9\s-]/g,"").trim().replace(/\s+/g,"-"); }
-function statMuseUrl(name) { return `https://www.statmuse.com/nba/ask/${toStatMuseSlug(name)}-fanduel-stat-log`; }
-function ownershipBucket(own) { if(own>=30)return"chalk";if(own>=10)return"mid";if(own>=5)return"low";return"punt"; }
-function round1(n){return+((Number.isFinite(n)?n:0).toFixed(1));}
-function round2(n){return+((Number.isFinite(n)?n:0).toFixed(2));}
-function safeNum(v,f=0){return Number.isFinite(v)?v:f;}
-function clamp(x,a,b){return Math.max(a,Math.min(b,x));}
-function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
 
-function buildTeamMap(games){
-  const m={};
-  for(const g of games){
-    const sp=g.homeSpread;
-    const hi=+((g.total/2)-(sp/2)).toFixed(1);
-    const ai=+(g.total-hi).toFixed(1);
-    m[g.home]={total:g.total,impliedPts:hi,spread:sp,opponent:g.away,gameStr:`${g.away}@${g.home}`,isHome:true};
-    m[g.away]={total:g.total,impliedPts:ai,spread:-sp,opponent:g.home,gameStr:`${g.away}@${g.home}`,isHome:false};
+function toStatMuseSlug(name) { return name.toLowerCase().replace(/['']/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-"); }
+function statMuseUrl(name) { return `https://www.statmuse.com/nba/ask/${toStatMuseSlug(name)}-fanduel-stat-log`; }
+function ownershipBucket(own) { if (own >= 30) return "chalk"; if (own >= 10) return "mid"; if (own >= 5) return "low"; return "punt"; }
+function round1(n) { return +((Number.isFinite(n) ? n : 0).toFixed(1)); }
+function round2(n) { return +((Number.isFinite(n) ? n : 0).toFixed(2)); }
+function safeNum(v, fallback = 0) { return Number.isFinite(v) ? v : fallback; }
+function clamp(x, min, max) { return Math.max(min, Math.min(max, x)); }
+
+function buildTeamMap(games) {
+  const teamMap = {};
+  for (const g of games) {
+    const spread = g.homeSpread;
+    const homeImpl = +((g.total / 2) - (spread / 2)).toFixed(1);
+    const awayImpl = +(g.total - homeImpl).toFixed(1);
+    teamMap[g.home] = { total: g.total, impliedPts: homeImpl, spread, moneyline: g.homeML, opponent: g.away, gameStr: `${g.away}@${g.home}`, isHome: true };
+    teamMap[g.away] = { total: g.total, impliedPts: awayImpl, spread: -spread, moneyline: g.awayML, opponent: g.home, gameStr: `${g.away}@${g.home}`, isHome: false };
   }
-  return m;
+  return teamMap;
 }
-function buildGamesList(games){
-  return games.map(g=>{
-    const hi=+((g.total/2)-(g.homeSpread/2)).toFixed(1);
-    const ai=+(g.total-hi).toFixed(1);
-    return{home:g.home,away:g.away,total:g.total,homeImpl:hi,awayImpl:ai,homeSpread:g.homeSpread,gameStr:`${g.away}@${g.home}`};
+function buildGamesList(games) {
+  return games.map(g => {
+    const homeImpl = +((g.total / 2) - (g.homeSpread / 2)).toFixed(1);
+    const awayImpl = +(g.total - homeImpl).toFixed(1);
+    return { home: g.home, away: g.away, total: g.total, homeImpl, awayImpl, homeSpread: g.homeSpread, gameStr: `${g.away}@${g.home}` };
   });
 }
-function buildProjectionBoostMap(outPlayers,cascadeRules){
-  const b={};
-  for(const out of outPlayers){
-    for(const rule of cascadeRules.filter(r=>r.trigger.toLowerCase()===out.toLowerCase())){
-      for(const x of rule.beneficiaries){
-        const k=x.name.toLowerCase();
-        if(!b[k])b[k]={projBoost:1,minutesBoost:1,notes:[]};
-        b[k].projBoost*=(x.projBoost||1);b[k].minutesBoost*=(x.minutesBoost||1);
-        if(x.note)b[k].notes.push(`${out}: ${x.note}`);
+
+function buildProjectionBoostMap(outPlayers, cascadeRules) {
+  const boosts = {};
+  for (const outName of outPlayers) {
+    const rules = cascadeRules.filter(r => r.trigger.toLowerCase() === outName.toLowerCase());
+    for (const rule of rules) {
+      for (const b of rule.beneficiaries) {
+        const key = b.name.toLowerCase();
+        if (!boosts[key]) boosts[key] = { projBoost: 1, minutesBoost: 1, notes: [] };
+        boosts[key].projBoost *= (b.projBoost || 1);
+        boosts[key].minutesBoost *= (b.minutesBoost || 1);
+        if (b.note) boosts[key].notes.push(`${outName}: ${b.note}`);
       }
     }
   }
-  return b;
-}
-function teamCtx(player,teamMap={}){
-  const v=teamMap[player.team]||{};
-  const impl=safeNum(v.impliedPts,LEAGUE_AVG_IMPLIED);
-  const tot=safeNum(v.total,LEAGUE_AVG_TOTAL);
-  const sp=safeNum(v.spread,0);
-  const abs=Math.abs(sp);
-  const paceR=clamp(tot/LEAGUE_AVG_TOTAL,0.93,1.07);
-  const implR=clamp(impl/LEAGUE_AVG_IMPLIED,0.93,1.10);
-  const spAdj=abs<=4?1.02:abs>=15?0.94:abs>=10?0.97:1.00;
-  const homeAdj=v.isHome?1.015:0.985;
-  return{total:tot,impliedPts:impl,spread:sp,paceR,implR,spAdj,homeAdj,opponent:v.opponent||"",gameStr:v.gameStr||player.game,isHome:!!v.isHome};
-}
-function buildProjection(player,teamMap={},projBoost=1,minBoost=1){
-  const ctx=teamCtx(player,teamMap);
-  const injM={"":1.0,P:0.97,Q:0.88,D:0.55,O:0}[player.injury]??0.9;
-  const recent5=safeNum(player.recent5,0);
-  const season=safeNum(player.csvFppg||player.fppg,0);
-  let base=player.statMuseFD?safeNum(player.fppg,0):recent5>0?recent5*0.6+season*0.4:season;
-  if(base<=0)return null;
-  const b2b=player.isB2B?0.95:1.0;
-  const mean=base*injM*ctx.paceR*ctx.implR*ctx.spAdj*ctx.homeAdj*b2b*projBoost;
-  const cov=0.22;
-  const salAdj=player.salary>=10000?1.8:player.salary>=8000?1.2:player.salary>=6000?0.6:0.2;
-  const sd=player.histStdev>0?player.histStdev:Math.max(4.5,mean*cov+salAdj);
-  const floor=Math.max(0,mean-1.4*sd);
-  const ceil=mean+1.65*sd;
-  const mins=player.minutes||Math.min(40,Math.max(12,(base/1.4)+(player.salary/1000-5)*1.5));
-  const val=mean/Math.max(player.salary/1000,1);
-  return{...player,baseFppg:round1(base),projMean:round1(mean),projFloor:round1(floor),projCeiling:round1(ceil),stdev:round1(sd),value:round2(val),fppg:round1(mean),minutesProj:round1(mins*minBoost),gameTotal:ctx.total,impliedPts:ctx.impliedPts,spread:ctx.spread,opponent:ctx.opponent,game:ctx.gameStr||player.game,isHome:ctx.isHome};
-}
-function compositeScore(p){
-  const lev=Math.min((p.projCeiling||p.fppg||0)/Math.max(p.ownership||5,5),8);
-  const sb=p.gameTotal>=232?2.8:p.gameTotal>=226?1.5:p.gameTotal>=220?0.5:0;
-  const op=Math.max(0,(p.ownership||0)-38)*0.08;
-  return(p.projMean||p.fppg||0)*0.82+(p.projCeiling||p.fppg||0)*0.14+lev*0.40+(p.value||0)*0.4+sb+(p.statMuseFD?0.75:0)-op;
-}
-function estimateOwnership(player,teamMap){
-  const v=teamMap[player.team];if(!v)return 15;
-  let base=8;
-  if(v.impliedPts>=122)base=24;else if(v.impliedPts>=118)base=20;else if(v.impliedPts>=114)base=17;else if(v.impliedPts>=110)base=14;else if(v.impliedPts>=106)base=11;
-  const st=player.salary>=11000?1.7:player.salary>=9000?1.4:player.salary>=7500?1.2:player.salary>=6000?1.05:player.salary>=4500?0.9:0.75;
-  const ft=player.fppg>=50?1.5:player.fppg>=42?1.3:player.fppg>=34?1.15:player.fppg>=26?1.0:0.85;
-  const vt=player.value>=7?1.25:player.value>=5.5?1.1:1.0;
-  return Math.min(65,Math.max(2,+(base*st*ft*vt).toFixed(1)));
-}
-function parsePlayers(csvText,ownMap,smMap={},teamMap={},outPlayers=[],cascadeRules=[],extraData={}){
-  const lines=csvText.trim().split("\n");
-  const hdrs=lines[0].split(",").map(h=>h.trim().toLowerCase().replace(/\s+/g,""));
-  const players=[];const boosts=buildProjectionBoostMap(outPlayers,cascadeRules);
-  const idCol=hdrs.findIndex(h=>h==="id"||h==="playerid"||h==="player_id");
-  for(let i=1;i<lines.length;i++){
-    const cols=lines[i].split(",");if(cols.length<8)continue;
-    const get=k=>cols[hdrs.indexOf(k)]?.trim()??"";
-    const fdId=idCol>=0?(cols[idCol]?.trim()??""):"";
-    const name=get("nickname")||((get("firstname")+" "+get("lastname")).trim());
-    const csvFppg=parseFloat(get("fppg"))||0;const salary=parseInt(get("salary"))||0;
-    const injury=get("injuryindicator")||"";const played=parseInt(get("played"))||0;
-    const team=get("team");const game=get("game");
-    const posRaw=get("rosterposition")||get("position");
-    const positions=posRaw.split("/").map(p=>p.trim()).filter(p=>POSITION_ORDER.includes(p));
-    if(!name||!salary||!csvFppg||injury==="O"||!positions.length)continue;
-    const key=name.toLowerCase();const smData=smMap[key];
-    const baseFppg=smData?.fdAvg||csvFppg;const statMuseFD=!!smData;
-    if(baseFppg<RULES.FLOOR_FPPG_MIN)continue;
-    const ownership=ownMap[key]??15;if(ownership<RULES.NEVER_PLAY_OWN_THRESHOLD)continue;
-    const boost=boosts[key]?.projBoost??1;const minBoost=boosts[key]?.minutesBoost??1;
-    const extra=extraData[key]||{};
-    let p={fdId,name,fppg:baseFppg,csvFppg,salary,injury,played,team,game,positions,ownership,statMuseFD,smLast:smData?.lastGame,smAvg:smData?.fdAvg,smTrend:smData?.trend,cascadeNotes:boosts[key]?.notes||[],recent5:extra.recent5||0,histStdev:extra.histStdev||0,minutes:extra.minutes||0,isB2B:!!extra.isB2B};
-    const proj=buildProjection(p,teamMap,boost,minBoost);if(!proj)continue;
-    proj.score=compositeScore(proj);players.push(proj);
-  }
-  return players.sort((a,b)=>b.score-a.score);
+  return boosts;
 }
 
-// [v5.2] STRATEGY WEIGHTS - KEY CHANGE: tournament stackBoost 3.3->6.5
-function getStrategyWeights(type){
-  if(type==="chalk")     return{mean:1.08,ceiling:0.18,leverage:0.14,ownPenalty:0.012,stackBoost:0.8, noise:1.4,bringBack:0};
-  if(type==="leverage")  return{mean:0.88,ceiling:0.38,leverage:0.55,ownPenalty:0.006,stackBoost:4.5, noise:5.0,bringBack:2.5};
-  if(type==="tournament")return{mean:0.78,ceiling:0.58,leverage:0.65,ownPenalty:0.003,stackBoost:6.5, noise:8.0,bringBack:3.5};
-  return                       {mean:0.98,ceiling:0.28,leverage:0.36,ownPenalty:0.008,stackBoost:2.0, noise:3.0,bringBack:1.0};
+function teamContextForPlayer(player, teamMap = {}) {
+  const v = teamMap[player.team] || {};
+  const impliedPts = safeNum(v.impliedPts, LEAGUE_AVG_IMPLIED);
+  const total = safeNum(v.total, LEAGUE_AVG_TOTAL);
+  const spread = safeNum(v.spread, 0);
+  const absSpread = Math.abs(spread);
+  const isFavored = spread < 0;
+  const isHome = !!v.isHome;
+  const paceRatio = clamp(total / LEAGUE_AVG_TOTAL, 0.93, 1.07);
+  const impliedRatio = clamp(impliedPts / LEAGUE_AVG_IMPLIED, 0.93, 1.10);
+  const spreadAdj = absSpread <= 4 ? 1.02 : absSpread >= 15 ? 0.94 : absSpread >= 10 ? 0.97 : 1.00;
+  const homeAdj = isHome ? 1.015 : 0.985;
+  return { total, impliedPts, spread, absSpread, isFavored, isHome, paceRatio, impliedRatio, spreadAdj, homeAdj, opponent: v.opponent || "", gameStr: v.gameStr || player.game };
 }
-function playerObj(p,w,stackTeams=[],bbTeams=[]){
-  const sb=stackTeams.includes(p.team)?w.stackBoost:0;
-  const bb=bbTeams.includes(p.team)?w.bringBack:0;
-  const lev=Math.min((p.projCeiling||p.fppg||0)/Math.max(p.ownership||5,5),8);
-  return(p.projMean||p.fppg||0)*w.mean+(p.projCeiling||p.fppg||0)*w.ceiling+lev*w.leverage+sb+bb-(p.ownership||0)*w.ownPenalty;
+
+function buildProjection(player, teamMap = {}, projectionBoost = 1, minutesBoost = 1) {
+  const ctx = teamContextForPlayer(player, teamMap);
+  const injuryMult = { "": 1.0, P: 0.97, Q: 0.88, D: 0.55, O: 0 }[player.injury] ?? 0.9;
+  const statMuseVal = player.statMuseFD;
+  const recent5 = safeNum(player.recent5, 0);
+  const seasonAvg = safeNum(player.csvFppg || player.fppg, 0);
+  let baseFppg;
+  if (statMuseVal) { baseFppg = safeNum(player.fppg, 0); }
+  else if (recent5 > 0) { baseFppg = recent5 * 0.6 + seasonAvg * 0.4; }
+  else { baseFppg = seasonAvg; }
+  if (baseFppg <= 0) return null;
+  const b2bMult = player.isB2B ? 0.95 : 1.0;
+  const projMean = baseFppg * injuryMult * ctx.paceRatio * ctx.impliedRatio * ctx.spreadAdj * ctx.homeAdj * b2bMult * projectionBoost;
+  let stdev;
+  if (player.histStdev && player.histStdev > 0) {
+    stdev = player.histStdev;
+  } else {
+    const cov = 0.22;
+    const salaryAdj = player.salary >= 10000 ? 1.8 : player.salary >= 8000 ? 1.2 : player.salary >= 6000 ? 0.6 : 0.2;
+    stdev = Math.max(4.5, projMean * cov + salaryAdj);
+  }
+  const projFloor = Math.max(0, projMean - 1.4 * stdev);
+  const projCeiling = projMean + 1.65 * stdev;
+  const estMinutes = player.minutes || Math.min(40, Math.max(12, (baseFppg / 1.4) + (player.salary / 1000 - 5) * 1.5));
+  const minutesProj = estMinutes * minutesBoost;
+  const value = projMean / Math.max(player.salary / 1000, 1);
+  return {
+    ...player,
+    baseFppg: round1(baseFppg), projMean: round1(projMean), projFloor: round1(projFloor),
+    projCeiling: round1(projCeiling), stdev: round1(stdev), value: round2(value),
+    fppg: round1(projMean), minutesProj: round1(minutesProj),
+    gameTotal: ctx.total, impliedPts: ctx.impliedPts, spread: ctx.spread,
+    opponent: ctx.opponent, game: ctx.gameStr || player.game, isHome: ctx.isHome,
+    _adj: { pace: round2(ctx.paceRatio), implied: round2(ctx.impliedRatio), spread: round2(ctx.spreadAdj), home: round2(ctx.homeAdj), injury: round2(injuryMult), b2b: round2(b2bMult), boost: round2(projectionBoost) },
+  };
 }
-function enumLocked(lp,slots){
-  const res=[];
-  function dfs(i,rem,asgn){
-    if(i===lp.length){res.push({assigned:asgn.slice(),remainingSlots:rem.slice()});return;}
-    const p=lp[i];const tried=new Set();
-    for(let j=0;j<rem.length;j++){
-      const s=rem[j];if(tried.has(s))continue;if(!p.positions.includes(s))continue;tried.add(s);
-      const nxt=rem.slice();nxt.splice(j,1);asgn.push({...p,slot:s});dfs(i+1,nxt,asgn);asgn.pop();
+
+function compositeScore(p) {
+  const rawLeverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 5, 5);
+  const leverage = Math.min(rawLeverage, 8);
+  const stackBonus = p.gameTotal >= 232 ? 2.8 : p.gameTotal >= 226 ? 1.5 : p.gameTotal >= 220 ? 0.5 : 0;
+  const statMuseBonus = p.statMuseFD ? 0.75 : 0;
+  const ownershipPenalty = Math.max(0, (p.ownership || 0) - 38) * 0.08;
+  const valueBonus = (p.value || 0) * 0.4;
+  return (
+    (p.projMean || p.fppg || 0) * 0.82 +
+    (p.projCeiling || p.fppg || 0) * 0.14 +
+    leverage * 0.40 + valueBonus + stackBonus + statMuseBonus - ownershipPenalty
+  );
+}
+
+function estimateOwnership(player, teamMap) {
+  const v = teamMap[player.team];
+  if (!v) return 15;
+  let base = 8;
+  if (v.impliedPts >= 122) base = 24;
+  else if (v.impliedPts >= 118) base = 20;
+  else if (v.impliedPts >= 114) base = 17;
+  else if (v.impliedPts >= 110) base = 14;
+  else if (v.impliedPts >= 106) base = 11;
+  const salaryTier = player.salary >= 11000 ? 1.7 : player.salary >= 9000 ? 1.4 : player.salary >= 7500 ? 1.2 : player.salary >= 6000 ? 1.05 : player.salary >= 4500 ? 0.9 : 0.75;
+  const fppgTier = player.fppg >= 50 ? 1.5 : player.fppg >= 42 ? 1.3 : player.fppg >= 34 ? 1.15 : player.fppg >= 26 ? 1.0 : 0.85;
+  const valueTier = player.value >= 7 ? 1.25 : player.value >= 5.5 ? 1.1 : 1.0;
+  return Math.min(65, Math.max(2, +(base * salaryTier * fppgTier * valueTier).toFixed(1)));
+}
+
+function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, outPlayers = [], cascadeRules = [], extraData = {}) {
+  const lines = csvText.trim().split("\n");
+  const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, ""));
+  const players = [];
+  const projectionBoosts = buildProjectionBoostMap(outPlayers, cascadeRules);
+  const idCol = headers.findIndex(h => h === "id" || h === "playerid" || h === "player_id");
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",");
+    if (cols.length < 8) continue;
+    const get = (key) => cols[headers.indexOf(key)]?.trim() ?? "";
+    const fdId = idCol >= 0 ? (cols[idCol]?.trim() ?? "") : "";
+    const name = get("nickname") || ((get("firstname") + " " + get("lastname")).trim());
+    const csvFppg = parseFloat(get("fppg")) || 0;
+    const salary = parseInt(get("salary")) || 0;
+    const injury = get("injuryindicator") || "";
+    const played = parseInt(get("played")) || 0;
+    const team = get("team");
+    const game = get("game");
+    const posRaw = get("rosterposition") || get("position");
+    const positions = posRaw.split("/").map(p => p.trim()).filter(p => POSITION_ORDER.includes(p));
+    if (!name || !salary || !csvFppg || injury === "O" || positions.length === 0) continue;
+    const key = name.toLowerCase();
+    const smData = statMuseMap[key];
+    const baseFppg = smData?.fdAvg || csvFppg;
+    const statMuseFD = !!smData;
+    if (baseFppg < RULES.FLOOR_FPPG_MIN) continue;
+    const ownership = ownershipMap[key] ?? 15;
+    if (ownership < RULES.NEVER_PLAY_OWN_THRESHOLD) continue;
+    const boost = projectionBoosts[key]?.projBoost ?? 1;
+    const minutesBoost = projectionBoosts[key]?.minutesBoost ?? 1;
+    const extra = extraData[key] || {};
+    let p = {
+      fdId, name, fppg: baseFppg, csvFppg, salary, injury, played, team, game,
+      positions, ownership, statMuseFD,
+      smLast: smData?.lastGame, smAvg: smData?.fdAvg, smTrend: smData?.trend,
+      cascadeNotes: projectionBoosts[key]?.notes || [],
+      recent5: extra.recent5 || 0, histStdev: extra.histStdev || 0,
+      minutes: extra.minutes || 0, isB2B: !!extra.isB2B,
+    };
+    const projected = buildProjection(p, teamMap, boost, minutesBoost);
+    if (!projected) continue;
+    projected.score = compositeScore(projected);
+    players.push(projected);
+  }
+  return players.sort((a, b) => b.score - a.score);
+}
+
+function getStrategyWeights(type) {
+  if (type === "chalk")      return { mean: 1.08, ceiling: 0.18, leverage: 0.14, ownPenalty: 0.012, stackBoost: 0.8, noise: 1.4, bringBack: 0 };
+  if (type === "leverage")   return { mean: 0.88, ceiling: 0.38, leverage: 0.55, ownPenalty: 0.006, stackBoost: 4.5, noise: 5.0, bringBack: 2.5 };
+  if (type === "tournament") return { mean: 0.78, ceiling: 0.58, leverage: 0.65, ownPenalty: 0.003, stackBoost: 6.5, noise: 8.0, bringBack: 3.5 };
+  return                          { mean: 0.98, ceiling: 0.28, leverage: 0.36, ownPenalty: 0.008, stackBoost: 2.0, noise: 3.0, bringBack: 1.0 };
+}
+
+function playerObjective(p, weights, stackTeams = [], bringBackTeams = []) {
+  const inStack = stackTeams.includes(p.team);
+  const inBringBack = bringBackTeams.includes(p.team);
+  const stackBonus = inStack ? weights.stackBoost : 0;
+  const bringBackBonus = inBringBack ? weights.bringBack : 0;
+  const rawLeverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 5, 5);
+  const leverage = Math.min(rawLeverage, 8);
+  return (
+    (p.projMean || p.fppg || 0) * weights.mean +
+    (p.projCeiling || p.fppg || 0) * weights.ceiling +
+    leverage * weights.leverage +
+    stackBonus + bringBackBonus -
+    (p.ownership || 0) * weights.ownPenalty
+  );
+}
+
+function enumerateLockedAssignments(lockedPlayers, slots) {
+  const results = [];
+  function dfs(idx, remainingSlots, assigned) {
+    if (idx === lockedPlayers.length) { results.push({ assigned: assigned.slice(), remainingSlots: remainingSlots.slice() }); return; }
+    const p = lockedPlayers[idx];
+    const tried = new Set();
+    for (let i = 0; i < remainingSlots.length; i++) {
+      const slot = remainingSlots[i];
+      if (tried.has(slot)) continue;
+      if (!p.positions.includes(slot)) continue;
+      tried.add(slot);
+      const nextSlots = remainingSlots.slice();
+      nextSlots.splice(i, 1);
+      assigned.push({ ...p, slot });
+      dfs(idx + 1, nextSlots, assigned);
+      assigned.pop();
     }
   }
-  dfs(0,slots.slice(),[]);return res;
+  dfs(0, slots.slice(), []);
+  return results;
 }
-// [v5.2] minStackSize param - tournament passes 3
-function hasStack(lu,min=2){const c={};lu.forEach(p=>{c[p.team]=(c[p.team]||0)+1;});return Object.values(c).some(x=>x>=min);}
-function hasBB(lu,st,bb){if(!st.length||!bb.length)return false;return lu.some(p=>st.includes(p.team))&&lu.some(p=>bb.includes(p.team));}
-function lineupKey(lu){return lu.map(p=>p.name).sort().join("|");}
-function getSlots(){return["C","PG","PG","SG","SG","SF","SF","PF","PF"];}
-function buildPool(players,locked,excl,st,bb,type,attempt){
-  const w=getStrategyWeights(type);
-  const lk=new Set(locked);const ex=new Set(excl);
-  const sc=players.filter(p=>!ex.has(p.name)).map(p=>({...p,_ps:playerObj(p,w,st,bb)+(Math.random()-0.5)*w.noise+(attempt*0.02)}));
-  if(type==="tournament"){const mids=sc.filter(p=>p.ownership>=8&&p.ownership<=22).slice(0,12);if(mids.length)mids[Math.floor(Math.random()*mids.length)]._ps+=5.5;}
-  sc.sort((a,b)=>{if(lk.has(a.name)&&!lk.has(b.name))return-1;if(!lk.has(a.name)&&lk.has(b.name))return 1;return b._ps-a._ps;});
-  return sc;
+function lineupHasStack(lineup, minStackSize = 2) {
+  const counts = {};
+  lineup.forEach(p => { counts[p.team] = (counts[p.team] || 0) + 1; });
+  return Object.values(counts).some(c => c >= minStackSize);
 }
-function buildLineup(players,locked=[],excl=[],type="mixed",st=[],bb=[],reqStack=true,minStack=2){
-  const slots=getSlots();const w=getStrategyWeights(type);
-  const lk=new Set(locked);const ex=new Set(excl);
-  const usable=players.filter(p=>!ex.has(p.name));
-  const lp=usable.filter(p=>lk.has(p.name));const up=usable.filter(p=>!lk.has(p.name));
-  const la=enumLocked(lp,slots);if(!la.length)return null;
-  let best={score:-Infinity,lineup:null};
-  const t0=Date.now();const TMS=type==="chalk"?24:45;const needStack=reqStack&&type!=="chalk";
-  function greedy(asgn){
-    const needed=asgn.remainingSlots.slice();const used=new Set(asgn.assigned.map(p=>p.name));
-    const lu=asgn.assigned.slice();let sal=lu.reduce((s,p)=>s+p.salary,0);
-    const bySlot={};
-    needed.forEach(s=>{bySlot[s]=up.filter(p=>!used.has(p.name)&&p.positions.includes(s)).sort((a,b)=>playerObj(b,w,st,bb)-playerObj(a,w,st,bb)).slice(0,s==="C"?10:12);});
-    for(const s of needed){const cands=bySlot[s]||[];let picked=null;const rem=needed.length-lu.filter(x=>x.slot&&needed.includes(x.slot)).length-1;for(const p of cands){if(used.has(p.name))continue;const ns=sal+p.salary;if(ns>RULES.SALARY_CAP)continue;if(ns+rem*3500>RULES.SALARY_CAP)continue;picked=p;break;}if(!picked)return null;used.add(picked.name);lu.push({...picked,slot:s});sal+=picked.salary;}
-    if(sal<RULES.MIN_SALARY_USED||sal>RULES.SALARY_CAP)return null;
-    if(needStack&&!hasStack(lu,minStack))return null;
-    return lu;
+function lineupHasBringBack(lineup, stackTeams, bringBackTeams) {
+  if (!stackTeams.length || !bringBackTeams.length) return false;
+  const hasStack = lineup.some(p => stackTeams.includes(p.team));
+  const hasBB = lineup.some(p => bringBackTeams.includes(p.team));
+  return hasStack && hasBB;
+}
+function lineupKey(lu) { return lu.map(p => p.name).sort().join("|"); }
+
+function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, strategyType, attempt) {
+  const weights = getStrategyWeights(strategyType);
+  const lockSet = new Set(lockedNames);
+  const excludeSet = new Set(excludedNames);
+  const filtered = players.filter(p => !excludeSet.has(p.name));
+  const scored = filtered.map(p => ({ ...p, _poolScore: playerObjective(p, weights, stackTeams, bringBackTeams) + (Math.random() - 0.5) * weights.noise + (attempt * 0.02) }));
+  if (strategyType === "tournament") {
+    const mids = scored.filter(p => p.ownership >= 8 && p.ownership <= 22).slice(0, 12);
+    if (mids.length) mids[Math.floor(Math.random() * mids.length)]._poolScore += 5.5;
   }
-  for(const asgn of la){
-    if(Date.now()-t0>TMS&&best.lineup)break;
-    const used=new Set(asgn.assigned.map(p=>p.name));
-    const base=asgn.assigned.slice();const bsal=base.reduce((s,p)=>s+p.salary,0);const bsc=base.reduce((s,p)=>s+playerObj(p,w,st,bb),0);
-    const uos=[...new Set(asgn.remainingSlots)];const sc={};
-    uos.forEach(s=>{sc[s]=up.filter(p=>!used.has(p.name)&&p.positions.includes(s)).map(p=>({...p,_so:playerObj(p,w,st,bb)})).sort((a,b)=>b._so-a._so).slice(0,s==="C"?8:11);});
-    if(uos.some(s=>!(sc[s]||[]).length))continue;
-    const os=asgn.remainingSlots.slice().sort((a,b)=>(sc[a]?.length??999)-(sc[b]?.length??999));
-    const sm=os.map(s=>(sc[s]?.[0]?._so)||0);const su=new Array(os.length+1).fill(0);
-    for(let i=os.length-1;i>=0;i--)su[i]=su[i+1]+sm[i];
-    let to=false;
-    function dfs(i,lu,sal,sc2){
-      if(Date.now()-t0>TMS){to=true;return;}
-      if(i===os.length){if(sal<RULES.MIN_SALARY_USED||sal>RULES.SALARY_CAP)return;if(needStack&&!hasStack(lu,minStack))return;if(sc2>best.score)best={score:sc2,lineup:lu.slice()};return;}
-      if(sc2+su[i]<best.score)return;
-      const s=os[i];const rem=os.length-i-1;
-      for(const p of(sc[s]||[])){if(used.has(p.name))continue;const ns=sal+p.salary;if(ns>RULES.SALARY_CAP)continue;if(ns+rem*3500>RULES.SALARY_CAP)continue;used.add(p.name);lu.push({...p,slot:s});dfs(i+1,lu,ns,sc2+p._so);lu.pop();used.delete(p.name);if(to)return;}
+  scored.sort((a, b) => {
+    if (lockSet.has(a.name) && !lockSet.has(b.name)) return -1;
+    if (!lockSet.has(a.name) && lockSet.has(b.name)) return 1;
+    return b._poolScore - a._poolScore;
+  });
+  return scored;
+}
+
+function getSlotsArray() { return ["C", "PG", "PG", "SG", "SG", "SF", "SF", "PF", "PF"]; }
+
+function buildLineup(players, lockedNames = [], excludedNames = [], strategyType = "mixed", stackTeams = [], bringBackTeams = [], requireStack = true, minStack = 2) {
+  const slots = getSlotsArray();
+  const lockSet = new Set(lockedNames);
+  const excludeSet = new Set(excludedNames);
+  const weights = getStrategyWeights(strategyType);
+  const usable = players.filter(p => !excludeSet.has(p.name));
+  const lockedPlayers = usable.filter(p => lockSet.has(p.name));
+  const unlockedPlayers = usable.filter(p => !lockSet.has(p.name));
+  const lockedAssignments = enumerateLockedAssignments(lockedPlayers, slots);
+  if (!lockedAssignments.length) return null;
+
+  let best = { score: -Infinity, lineup: null };
+  const startedAt = Date.now();
+  const TIME_BUDGET_MS = strategyType === "chalk" ? 24 : 40;
+  const needStack = requireStack && strategyType !== "chalk";
+
+  function fastGreedy(assignment) {
+    const needed = assignment.remainingSlots.slice();
+    const used = new Set(assignment.assigned.map(p => p.name));
+    const lineup = assignment.assigned.slice();
+    let salary = lineup.reduce((s, p) => s + p.salary, 0);
+    const bySlot = {};
+    needed.forEach(slot => {
+      bySlot[slot] = unlockedPlayers
+        .filter(p => !used.has(p.name) && p.positions.includes(slot))
+        .sort((a, b) => playerObjective(b, weights, stackTeams, bringBackTeams) - playerObjective(a, weights, stackTeams, bringBackTeams))
+        .slice(0, slot === "C" ? 10 : 12);
+    });
+    for (const slot of needed) {
+      const candidates = bySlot[slot] || [];
+      let picked = null;
+      const remaining = needed.length - lineup.filter(x => x.slot && needed.includes(x.slot)).length - 1;
+      for (const p of candidates) {
+        if (used.has(p.name)) continue;
+        const nextSalary = salary + p.salary;
+        const minNeed = remaining * 3500;
+        if (nextSalary > RULES.SALARY_CAP) continue;
+        if (nextSalary + minNeed > RULES.SALARY_CAP) continue;
+        picked = p; break;
+      }
+      if (!picked) return null;
+      used.add(picked.name);
+      lineup.push({ ...picked, slot });
+      salary += picked.salary;
     }
-    dfs(0,base.slice(),bsal,bsc);
-    if(to&&!best.lineup){const fb=greedy(asgn);if(fb){const fbs=fb.reduce((s,p)=>s+playerObj(p,w,st,bb),0);if(fbs>best.score)best={score:fbs,lineup:fb};}}
+    if (salary < RULES.MIN_SALARY_USED || salary > RULES.SALARY_CAP) return null;
+    if (needStack && !lineupHasStack(lineup, minStack)) return null;
+    return lineup;
+  }
+
+  for (const assignment of lockedAssignments) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS && best.lineup) break;
+    const used = new Set(assignment.assigned.map(p => p.name));
+    const baseLineup = assignment.assigned.slice();
+    const baseSalary = baseLineup.reduce((s, p) => s + p.salary, 0);
+    const baseScore = baseLineup.reduce((s, p) => s + playerObjective(p, weights, stackTeams, bringBackTeams), 0);
+    const uniqueOpenSlots = [...new Set(assignment.remainingSlots)];
+    const slotCandidates = {};
+    uniqueOpenSlots.forEach(slot => {
+      const raw = unlockedPlayers
+        .filter(p => !used.has(p.name) && p.positions.includes(slot))
+        .map(p => ({ ...p, _slotObj: playerObjective(p, weights, stackTeams, bringBackTeams) }))
+        .sort((a, b) => b._slotObj - a._slotObj);
+      const cap = slot === "C" ? 8 : strategyType === "chalk" ? 10 : 11;
+      slotCandidates[slot] = raw.slice(0, cap);
+    });
+    if (uniqueOpenSlots.some(slot => (slotCandidates[slot] || []).length === 0)) continue;
+    const openSlots = assignment.remainingSlots.slice().sort((a, b) => (slotCandidates[a]?.length ?? 999) - (slotCandidates[b]?.length ?? 999));
+    const slotMax = openSlots.map(slot => (slotCandidates[slot]?.[0]?._slotObj) || 0);
+    const suffixUpper = new Array(openSlots.length + 1).fill(0);
+    for (let i = openSlots.length - 1; i >= 0; i--) suffixUpper[i] = suffixUpper[i + 1] + slotMax[i];
+    let timedOut = false;
+    function dfs(idx, lineup, salary, score) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) { timedOut = true; return; }
+      if (idx === openSlots.length) {
+        if (salary < RULES.MIN_SALARY_USED || salary > RULES.SALARY_CAP) return;
+        if (needStack && !lineupHasStack(lineup, minStack)) return;
+        if (score > best.score) best = { score, lineup: lineup.slice() };
+        return;
+      }
+      if (score + suffixUpper[idx] < best.score) return;
+      const slot = openSlots[idx];
+      const cands = slotCandidates[slot] || [];
+      const remaining = openSlots.length - idx - 1;
+      const minNeed = remaining * 3500;
+      for (const p of cands) {
+        if (used.has(p.name)) continue;
+        const nextSalary = salary + p.salary;
+        if (nextSalary > RULES.SALARY_CAP) continue;
+        if (nextSalary + minNeed > RULES.SALARY_CAP) continue;
+        used.add(p.name); lineup.push({ ...p, slot });
+        dfs(idx + 1, lineup, nextSalary, score + p._slotObj);
+        lineup.pop(); used.delete(p.name);
+        if (timedOut) return;
+      }
+    }
+    dfs(0, baseLineup.slice(), baseSalary, baseScore);
+    if (timedOut && !best.lineup) {
+      const fallback = fastGreedy(assignment);
+      if (fallback) {
+        const fallbackScore = fallback.reduce((s, p) => s + playerObjective(p, weights, stackTeams, bringBackTeams), 0);
+        if (fallbackScore > best.score) best = { score: fallbackScore, lineup: fallback };
+      }
+    }
   }
   return best.lineup;
 }
 
-// [v5.2] Returns TOP 3 games sorted by stack score
-function getBestStackGames(gamesList,players){
-  if(!gamesList||!gamesList.length)return[];
-  return gamesList.map(g=>{
-    const gp=players.filter(p=>p.team===g.home||p.team===g.away);
-    const top=gp.sort((a,b)=>b.fppg-a.fppg).slice(0,6);
-    return{...g,stackScore:(g.total||220)*0.5+top.reduce((s,p)=>s+p.fppg,0)*0.3,topPlayers:top};
-  }).sort((a,b)=>b.stackScore-a.stackScore).slice(0,3);
+function randn() {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-function simulateSlate(players,iterations=240){
-  const sims=[];const games={};
-  players.forEach(p=>{if(!games[p.game])games[p.game]={};});
-  for(let i=0;i<iterations;i++){
-    const env={};Object.keys(games).forEach(g=>{env[g]={ps:randn()*3.2,ts:{},us:{}};});
-    const out={};
-    for(const p of players){
-      const gk=p.game||"NA";if(!env[gk])env[gk]={ps:randn()*3.2,ts:{},us:{}};
-      if(!(p.team in env[gk].ts))env[gk].ts[p.team]=randn()*1.8;
-      if(!(p.team in env[gk].us))env[gk].us[p.team]=randn()*1.2;
-      const mean=p.projMean??p.fppg??0;const sd=Math.min(15,p.stdev??Math.max(4.0,mean*0.22));
-      out[p.name]=Math.max(0,mean+env[gk].ps*0.32+env[gk].ts[p.team]*0.28-env[gk].us[p.team]*0.15+randn()*0.5+randn()*sd);
+function simulateSlate(players, iterations = 240) {
+  const sims = [];
+  const games = {};
+  players.forEach(p => { if (!games[p.game]) games[p.game] = { teams: {} }; games[p.game].teams[p.team] = true; });
+  for (let i = 0; i < iterations; i++) {
+    const env = {};
+    Object.keys(games).forEach(game => { env[game] = { paceShock: randn() * 3.2, teamShock: {}, usageShock: {} }; });
+    const outcome = {};
+    for (const p of players) {
+      const gameKey = p.game || "NA";
+      if (!env[gameKey]) env[gameKey] = { paceShock: randn()*3.2, teamShock: {}, usageShock: {} };
+      if (!(p.team in env[gameKey].teamShock)) env[gameKey].teamShock[p.team] = randn() * 1.8;
+      if (!(p.team in env[gameKey].usageShock)) env[gameKey].usageShock[p.team] = randn() * 1.2;
+      const mean = p.projMean ?? p.fppg ?? 0;
+      const stdev = Math.min(15, p.stdev ?? Math.max(4.0, mean * 0.22));
+      const paceEffect = env[gameKey].paceShock * 0.32;
+      const teamEffect = env[gameKey].teamShock[p.team] * 0.28;
+      const usageEffect = -env[gameKey].usageShock[p.team] * 0.15 + randn() * 0.5;
+      const individualShock = randn() * stdev;
+      const raw = mean + paceEffect + teamEffect + usageEffect + individualShock;
+      outcome[p.name] = Math.max(0, raw);
     }
-    sims.push(out);
+    sims.push(outcome);
   }
   return sims;
 }
-function simScore(lu,sims){
-  const tots=sims.map(s=>lu.reduce((sum,p)=>sum+(s[p.name]||0),0)).sort((a,b)=>a-b);
-  const mean=tots.reduce((a,b)=>a+b,0)/Math.max(tots.length,1);
-  return{mean,p25:tots[Math.floor(tots.length*0.25)]??mean,p75:tots[Math.floor(tots.length*0.75)]??mean,p90:tots[Math.floor(tots.length*0.90)]??mean,p99:tots[Math.floor(tots.length*0.99)]??mean};
+
+function scoreLineupAcrossSims(lineup, sims) {
+  const totals = sims.map(sim => lineup.reduce((sum, p) => sum + (sim[p.name] || 0), 0)).sort((a, b) => a - b);
+  const mean = totals.reduce((a, b) => a + b, 0) / Math.max(totals.length, 1);
+  const p25 = totals[Math.floor(totals.length * 0.25)] ?? mean;
+  const p75 = totals[Math.floor(totals.length * 0.75)] ?? mean;
+  const p90 = totals[Math.floor(totals.length * 0.90)] ?? mean;
+  const p99 = totals[Math.floor(totals.length * 0.99)] ?? mean;
+  return { mean, p25, p75, p90, p99, totals };
 }
-function minUnique(a,b){const sa=new Set(a.map(p=>p.name));let sh=0;b.forEach(p=>{if(sa.has(p.name))sh++;});return Math.max(0,9-sh);}
-function selectPortfolio(candidates,n){
-  const sel=[];const exp={};const maxE=n<=3?1:n<=10?0.65:0.5;const minU=n>=15?3:n>=8?2:1;
-  const sorted=[...candidates].sort((a,b)=>(b._ps2||0)-(a._ps2||0));
-  for(const lu of sorted){
-    if(sel.length>=n)break;
-    if(sel.some(e=>minUnique(e,lu)<minU))continue;
-    let bad=false;for(const p of lu){if(((exp[p.name]||0)+1)/n>maxE){bad=true;break;}}
-    if(bad&&sel.length>=Math.max(2,Math.floor(n*0.35)))continue;
-    sel.push(lu);lu.forEach(p=>{exp[p.name]=(exp[p.name]||0)+1;});
+
+function lineupMinUnique(a, b) {
+  const setA = new Set(a.map(p => p.name));
+  let shared = 0;
+  b.forEach(p => { if (setA.has(p.name)) shared++; });
+  return Math.max(0, 9 - shared);
+}
+
+function selectPortfolio(candidates, desiredCount) {
+  const selected = [];
+  const exposure = {};
+  const targetCount = Math.max(desiredCount, 1);
+  const maxExposure = desiredCount <= 3 ? 1 : desiredCount <= 10 ? 0.65 : 0.5;
+  const minUnique = desiredCount >= 15 ? 3 : desiredCount >= 8 ? 2 : 1;
+  const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
+  for (const lu of sorted) {
+    if (selected.length >= desiredCount) break;
+    const tooSimilar = selected.some(existing => lineupMinUnique(existing, lu) < minUnique);
+    if (tooSimilar) continue;
+    let badExposure = false;
+    for (const p of lu) {
+      const next = (exposure[p.name] || 0) + 1;
+      if (next / targetCount > maxExposure) { badExposure = true; break; }
+    }
+    if (badExposure && selected.length >= Math.max(2, Math.floor(targetCount * 0.35))) continue;
+    selected.push(lu);
+    lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
-  for(const lu of sorted){if(sel.length>=n)break;if(!sel.includes(lu))sel.push(lu);}
-  return sel.slice(0,n);
-}
-function lineupStats(lu){
-  return{total:lu.reduce((s,p)=>s+p.salary,0),proj:lu.reduce((s,p)=>s+p.fppg,0),avgOwn:lu.reduce((s,p)=>s+p.ownership,0)/lu.length,cumOwn:lu.reduce((s,p)=>s+p.ownership,0),chalk:lu.filter(p=>p.ownership>=30).length,mid:lu.filter(p=>p.ownership>=10&&p.ownership<30).length,punt:lu.filter(p=>p.ownership<5).length,anchor:lu.reduce((b,p)=>p.fppg>b.fppg?p:b,lu[0])};
-}
-function gradeSlate(gl){
-  if(!gl||!gl.length)return null;
-  const tots=gl.map(g=>g.total).filter(Boolean);const impl=gl.flatMap(g=>[g.homeImpl,g.awayImpl]).filter(Boolean);
-  const avg=tots.reduce((a,b)=>a+b,0)/tots.length;const hi=gl.filter(g=>g.total>=228).length;const maxI=Math.max(...impl);
-  let sc=0;const notes=[];
-  if(gl.length>=8){sc+=25;notes.push("[OK] Full 8-game slate");}else if(gl.length>=6){sc+=18;notes.push("[!] "+gl.length+" games");}else if(gl.length>=4){sc+=12;notes.push("[!] "+gl.length+" games - playoff");}else{sc+=5;notes.push("[NO] "+gl.length+" games - tiny");}
-  if(avg>=228){sc+=25;notes.push("[OK] Avg O/U "+avg.toFixed(1));}else if(avg>=222){sc+=15;notes.push("[!] Avg O/U "+avg.toFixed(1));}else{sc+=5;notes.push("[NO] Low: "+avg.toFixed(1));}
-  if(hi>=3){sc+=25;notes.push("[OK] "+hi+" games 228+");}else if(hi>=1){sc+=15;notes.push("[!] "+hi+" game(s) 228+");}else{sc+=5;notes.push("[NO] No high-total games");}
-  if(maxI>=122){sc+=25;notes.push("[OK] "+maxI+" implied - elite");}else if(maxI>=116){sc+=15;notes.push("[!] "+maxI+" max implied");}else{sc+=5;notes.push("[NO] Max implied "+maxI);}
-  const grade=sc>=85?"A":sc>=70?"B":sc>=55?"C":sc>=40?"D":"F";
-  const rec=sc>=85?"[HOT] MUST PLAY":sc>=70?"[OK] PLAY - solid":sc>=55?"[!] PLAY SMALL":sc>=40?"[NO] SKIP OR MIN":"[NO] SKIP";
-  return{score:sc,grade,notes,recommendation:rec,playIt:sc>=55,highTotalGames:hi,avgTotal:avg,maxImpl:maxI};
+  for (const lu of sorted) {
+    if (selected.length >= desiredCount) break;
+    if (selected.includes(lu)) continue;
+    selected.push(lu);
+  }
+  return selected.slice(0, desiredCount);
 }
 
-// [v5.2] MAIN GENERATOR with multi-game stack rotation + projection floor
-function generateLineupsWithStrategy(players,count,locked,excl,gamesList,strategy){
-  if(!players||!players.length||count<=0)return[];
-  const bestGames=getBestStackGames(gamesList,players);
-  const all=[];const used=new Set();
-  let chalk=0,lev=0,tourn=0;
-  if(strategy==="chalk"){chalk=count;}else if(strategy==="leverage"){lev=count;}else if(strategy==="tournament"){tourn=count;}
-  else{chalk=Math.max(1,Math.round(count*0.30));lev=Math.max(1,Math.round(count*0.35));tourn=Math.max(0,count-chalk-lev);}
-  const t0=Date.now();const MAX_MS=1500;const small=gamesList.length<=4;const reqStack=!small&&bestGames.length>0;
+function lineupStats(lu) {
+  return {
+    total: lu.reduce((s, p) => s + p.salary, 0),
+    proj: lu.reduce((s, p) => s + p.fppg, 0),
+    avgOwn: lu.reduce((s, p) => s + p.ownership, 0) / lu.length,
+    cumOwn: lu.reduce((s, p) => s + p.ownership, 0),
+    chalk: lu.filter(p => p.ownership >= 30).length,
+    mid: lu.filter(p => p.ownership >= 10 && p.ownership < 30).length,
+    punt: lu.filter(p => p.ownership < 5).length,
+    anchor: lu.reduce((best, p) => p.fppg > best.fppg ? p : best, lu[0]),
+  };
+}
 
-  function batch(target,type){
-    const attempts=Math.max(target*8,25);const perT=Math.max(target,Math.ceil(target*1.8));
-    const minStack=type==="tournament"?3:2; // [v5.2] tournament requires 3-stack
-    for(let att=0;att<attempts;att++){
-      if(Date.now()-t0>MAX_MS)break;
-      if(all.filter(l=>l._type===type).length>=perT)break;
-      // [v5.2] rotate stack game per attempt
-      const gi=bestGames.length>1?(att%bestGames.length):0;
-      const sg=bestGames[gi]||bestGames[0];
-      let st=[],bb=[];
-      if(sg){const hi=sg.homeImpl||LEAGUE_AVG_IMPLIED;const ai=sg.awayImpl||LEAGUE_AVG_IMPLIED;if(hi>=ai){st=[sg.home];bb=[sg.away];}else{st=[sg.away];bb=[sg.home];}}
-      const pool=buildPool(players,locked,excl,st,bb,type,att).slice(0,45);
-      const lu=buildLineup(pool,locked,excl,type,st,bb,reqStack,minStack);
-      if(!lu||lu.length!==9)continue;
-      // [v5.2] projection floor filter
-      const proj=lu.reduce((s,p)=>s+(p.projMean||p.fppg||0),0);
-      if(type!=="chalk"&&proj<MIN_PROJ_FILTER)continue;
-      const k=lineupKey(lu);if(used.has(k))continue;used.add(k);
-      lu._type=type;lu._hasStack=hasStack(lu,minStack);lu._hasBB=hasBB(lu,st,bb);lu._sg=sg?.gameStr||null;lu._proj=round1(proj);
-      all.push(lu);
+function gradeSlate(gamesList) {
+  if (!gamesList || gamesList.length === 0) return null;
+  const totals = gamesList.map(g => g.total).filter(Boolean);
+  const impliedPts = gamesList.flatMap(g => [g.homeImpl, g.awayImpl]).filter(Boolean);
+  const avgTotal = totals.reduce((a,b) => a+b, 0) / totals.length;
+  const highTotalGames = gamesList.filter(g => g.total >= 228).length;
+  const maxImpl = Math.max(...impliedPts);
+  let score = 0; let notes = [];
+  if (gamesList.length >= 8) { score += 25; notes.push("[OK] Full 8-game slate"); }
+  else if (gamesList.length >= 6) { score += 18; notes.push("[!] " + gamesList.length + " games - smaller"); }
+  else if (gamesList.length >= 4) { score += 12; notes.push("[!] " + gamesList.length + " games - playoff/small"); }
+  else { score += 5; notes.push("[NO] Only " + gamesList.length + " games - tiny"); }
+  if (avgTotal >= 228) { score += 25; notes.push("[OK] Avg O/U " + avgTotal.toFixed(1)); }
+  else if (avgTotal >= 222) { score += 15; notes.push("[!] Avg O/U " + avgTotal.toFixed(1)); }
+  else { score += 5; notes.push("[NO] Low-scoring: " + avgTotal.toFixed(1)); }
+  if (highTotalGames >= 3) { score += 25; notes.push("[OK] " + highTotalGames + " games 228+"); }
+  else if (highTotalGames >= 1) { score += 15; notes.push("[!] " + highTotalGames + " game(s) 228+"); }
+  else { score += 5; notes.push("[NO] No high-total games"); }
+  if (maxImpl >= 122) { score += 25; notes.push("[OK] " + maxImpl + " implied - elite"); }
+  else if (maxImpl >= 116) { score += 15; notes.push("[!] " + maxImpl + " max implied"); }
+  else { score += 5; notes.push("[NO] Max implied " + maxImpl); }
+  const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
+  const recommendation = score >= 85 ? "[HOT] MUST PLAY" : score >= 70 ? "[OK] PLAY - solid slate" : score >= 55 ? "[!] PLAY SMALL" : score >= 40 ? "[NO] SKIP OR MIN" : "[NO] SKIP";
+  return { score, grade, notes, recommendation, playIt: score >= 55, highTotalGames, avgTotal, maxImpl };
+}
+
+// [v5.2] Returns TOP 3 games for stack rotation (was single game)
+function getBestStackGames(gamesList, players) {
+  if (!gamesList || gamesList.length === 0) return [];
+  const scored = gamesList.map(g => {
+    const gamePlayers = players.filter(p => p.team === g.home || p.team === g.away);
+    const topPlayers = gamePlayers.sort((a,b) => b.fppg - a.fppg).slice(0,6);
+    return { ...g, stackScore: (g.total || 220) * 0.5 + topPlayers.reduce((s,p) => s+p.fppg, 0) * 0.3, topPlayers };
+  });
+  return scored.sort((a,b) => b.stackScore - a.stackScore).slice(0, 3);
+}
+
+function generateLineupsWithStrategy(players, count, lockedNames, excludedNames, gamesList, strategy) {
+  if (!players || players.length === 0 || count <= 0) return [];
+  // [v5.2] Top 3 stack games for rotation
+  const bestGames = getBestStackGames(gamesList, players);
+  const bestGame = bestGames[0] || null;
+
+  const allCandidates = [];
+  const used = new Set();
+  let chalkCount, leverageCount, tournCount;
+  if (strategy === "chalk") { chalkCount = count; leverageCount = 0; tournCount = 0; }
+  else if (strategy === "leverage") { chalkCount = 0; leverageCount = count; tournCount = 0; }
+  else if (strategy === "tournament") { chalkCount = 0; leverageCount = 0; tournCount = count; }
+  else {
+    chalkCount = Math.max(1, Math.round(count * 0.35));
+    leverageCount = Math.max(1, Math.round(count * 0.35));
+    tournCount = Math.max(0, count - chalkCount - leverageCount);
+  }
+
+  const startedAt = Date.now();
+  const MAX_BUILD_MS = 1200;
+  const smallSlate = gamesList.length <= 4;
+  const requireStack = !smallSlate && bestGames.length > 0;
+
+  const buildBatch = (targetCount, type) => {
+    const attempts = Math.max(targetCount * 8, 28);
+    const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 1.8));
+    // [v5.2] Tournament requires 3-player stack minimum; others stay at 2
+    const minStack = (type === "tournament") ? 3 : 2;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (Date.now() - startedAt > MAX_BUILD_MS) break;
+      if (allCandidates.filter(l => l._type === type).length >= perTypeTarget) break;
+      // [v5.2] Rotate stack game per attempt across top 3 games
+      const gameIdx = bestGames.length > 1 ? (attempt % bestGames.length) : 0;
+      const stackGame = bestGames[gameIdx] || bestGames[0];
+      let stackTeams = [], bringBackTeams = [];
+      if (stackGame) {
+        const homeImpl = stackGame.homeImpl || LEAGUE_AVG_IMPLIED;
+        const awayImpl = stackGame.awayImpl || LEAGUE_AVG_IMPLIED;
+        if (homeImpl >= awayImpl) { stackTeams = [stackGame.home]; bringBackTeams = [stackGame.away]; }
+        else { stackTeams = [stackGame.away]; bringBackTeams = [stackGame.home]; }
+      }
+      const pool = buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, type, attempt).slice(0, 45);
+      const lu = buildLineup(pool, lockedNames, excludedNames, type, stackTeams, bringBackTeams, requireStack, minStack);
+      if (!lu || lu.length !== 9) continue;
+      const key = lineupKey(lu);
+      if (used.has(key)) continue;
+      used.add(key);
+      lu._type = type;
+      lu._hasStack = lineupHasStack(lu, minStack);
+      lu._hasBringBack = lineupHasBringBack(lu, stackTeams, bringBackTeams);
+      lu._stackGame = stackGame?.gameStr || null;
+      allCandidates.push(lu);
+    }
+  };
+
+  if (chalkCount > 0) buildBatch(chalkCount, "chalk");
+  if (leverageCount > 0) buildBatch(leverageCount, "leverage");
+  if (tournCount > 0) buildBatch(tournCount, "tournament");
+
+  if (allCandidates.length === 0 && requireStack) {
+    for (let attempt = 0; attempt < count * 6; attempt++) {
+      const pool = buildCandidatePool(players, lockedNames, excludedNames, [], [], "mixed", attempt).slice(0, 42);
+      const lu = buildLineup(pool, lockedNames, excludedNames, "mixed", [], [], false);
+      if (!lu || lu.length !== 9) continue;
+      const key = lineupKey(lu);
+      if (used.has(key)) continue;
+      used.add(key);
+      lu._type = "mixed"; lu._hasStack = lineupHasStack(lu); lu._hasBringBack = false; lu._stackGame = null;
+      allCandidates.push(lu);
     }
   }
-  if(chalk>0)batch(chalk,"chalk");
-  if(lev>0)batch(lev,"leverage");
-  if(tourn>0)batch(tourn,"tournament");
-  // fallback
-  if(!all.length&&reqStack){for(let att=0;att<count*8;att++){const pool=buildPool(players,locked,excl,[],[],"mixed",att).slice(0,45);const lu=buildLineup(pool,locked,excl,"mixed",[],[],false,2);if(!lu||lu.length!==9)continue;const k=lineupKey(lu);if(used.has(k))continue;used.add(k);lu._type="mixed";lu._hasStack=hasStack(lu);lu._hasBB=false;lu._sg=null;all.push(lu);}}
-  if(!all.length)return[];
-  const iters=Math.min(220,Math.max(80,60+count*6));const sims=simulateSlate(players.slice(0,70),iters);
-  all.forEach(lu=>{
-    const ss=simScore(lu,sims);const st=lineupStats(lu);
-    lu._sm=round1(ss.mean);lu._sp25=round1(ss.p25);lu._sp75=round1(ss.p75);lu._sp90=round1(ss.p90);lu._sp99=round1(ss.p99);
-    // [v5.2] tournament portfolio score prioritizes p99 (tail hits)
-    if(lu._type==="chalk")lu._ps2=ss.mean*0.55+ss.p25*0.35+ss.p75*0.10-st.avgOwn*0.05;
-    else if(lu._type==="tournament")lu._ps2=ss.mean*0.20+ss.p90*0.35+ss.p99*0.40+(lu._hasBB?3.0:0)+(lu._hasStack?2.5:0)-st.avgOwn*0.10;
-    else lu._ps2=ss.mean*0.40+ss.p75*0.25+ss.p90*0.25+(lu._hasStack?2.0:0)+(lu._hasBB?1.5:0)-st.avgOwn*0.08;
+
+  if (allCandidates.length === 0) return [];
+
+  const simIterations = Math.min(200, Math.max(80, 60 + count * 6));
+  const sims = simulateSlate(players.slice(0, 70), simIterations);
+  allCandidates.forEach(lu => {
+    const simScore = scoreLineupAcrossSims(lu, sims);
+    const stats = lineupStats(lu);
+    lu._simMean = round1(simScore.mean);
+    lu._simP25 = round1(simScore.p25);
+    lu._simP75 = round1(simScore.p75);
+    lu._simP90 = round1(simScore.p90);
+    lu._simP99 = round1(simScore.p99);
+    if (lu._type === "chalk") {
+      lu._portfolioScore = simScore.mean * 0.55 + simScore.p25 * 0.35 + simScore.p75 * 0.10 - stats.avgOwn * 0.05;
+    } else if (lu._type === "tournament") {
+      lu._portfolioScore = simScore.mean * 0.18 + simScore.p90 * 0.35 + simScore.p99 * 0.42 + (lu._hasBringBack ? 3.0 : 0) + (lu._hasStack ? 2.5 : 0) - stats.avgOwn * 0.10;
+    } else {
+      lu._portfolioScore = simScore.mean * 0.40 + simScore.p75 * 0.25 + simScore.p90 * 0.25 + (lu._hasStack ? 2.0 : 0) + (lu._hasBringBack ? 1.5 : 0) - stats.avgOwn * 0.08;
+    }
   });
-  return selectPortfolio(all,count).sort((a,b)=>(b._ps2||0)-(a._ps2||0));
+  return selectPortfolio(allCandidates, count).sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
 }
 
-function applyCascades(outP,ownMap,rules){
-  const nm={...ownMap};const log=[];
-  for(const out of outP){for(const rule of rules.filter(r=>r.trigger.toLowerCase()===out.toLowerCase())){for(const b of rule.beneficiaries){const k=b.name.toLowerCase();const cur=nm[k]??15;const bst=Math.min(65,+((cur*(b.ownBoost||1)).toFixed(1)));nm[k]=bst;log.push({out,player:b.name,from:cur,to:bst});}}}
-  return{newMap:nm,log};
+function applyCascades(outPlayers, ownershipMap, cascadeRules) {
+  const newMap = { ...ownershipMap };
+  const log = [];
+  for (const outName of outPlayers) {
+    const rules = cascadeRules.filter(r => r.trigger.toLowerCase() === outName.toLowerCase());
+    for (const rule of rules) {
+      for (const b of rule.beneficiaries) {
+        const key = b.name.toLowerCase();
+        const current = newMap[key] ?? 15;
+        const boosted = Math.min(65, +((current * (b.ownBoost || 1)).toFixed(1)));
+        newMap[key] = boosted;
+        log.push({ out: outName, player: b.name, from: current, to: boosted, projBoost: b.projBoost || 1, note: b.note });
+      }
+    }
+  }
+  return { newMap, log };
 }
-function exportToFD(lineups){
-  const hdr="PG,PG,SG,SG,SF,SF,PF,PF,C";
-  const rows=lineups.map(lu=>{const by={PG:[],SG:[],SF:[],PF:[],C:[]};lu.forEach(p=>{if(by[p.slot])by[p.slot].push(p);});const o=[by.PG[0],by.PG[1],by.SG[0],by.SG[1],by.SF[0],by.SF[1],by.PF[0],by.PF[1],by.C[0]];return o.map(p=>p?.fdId||p?.name||"").join(",");});
-  return hdr+"\n"+rows.join("\n");
-}
-function dlCSV(txt,fn){const b=new Blob([txt],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);}
 
-// ============ UI COMPONENTS ============
-function SlatePanel({games,onUpdate}){
-  const [ng,sng]=useState({away:"",home:"",total:225,homeSpread:0});
-  const add=()=>{if(!ng.away||!ng.home)return;onUpdate([...games,{...ng,total:+ng.total,homeSpread:+ng.homeSpread}]);sng({away:"",home:"",total:225,homeSpread:0});};
-  const del=i=>onUpdate(games.filter((_,j)=>j!==i));
-  const upd=(i,f,v)=>{const n=[...games];n[i]={...n[i],[f]:f==="away"||f==="home"?v.toUpperCase():+v};onUpdate(n);};
-  return(<div>
-    <div style={{fontSize:10,color:"#4a6a80",marginBottom:8}}>Spread = home perspective. v5.2 rotates stacks across top 3 highest-total games. Min proj filter: {MIN_PROJ_FILTER}pts.</div>
-    {!games.length&&<div style={{padding:16,textAlign:"center",color:"#f59e0b",background:"#0a1520",border:"1px dashed #f59e0b44",borderRadius:8,marginBottom:10}}>[!] No games yet. Add below.</div>}
-    {games.map((g,i)=>(<div key={i} style={{display:"grid",gridTemplateColumns:"60px 60px 80px 80px 40px",gap:6,marginBottom:6,alignItems:"center"}}>
-      <input value={g.away} onChange={e=>upd(i,"away",e.target.value)} placeholder="AWAY" style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#e2e8f0",padding:"4px 6px",fontSize:11,borderRadius:4,textAlign:"center",fontFamily:"inherit"}} maxLength={3}/>
-      <input value={g.home} onChange={e=>upd(i,"home",e.target.value)} placeholder="HOME" style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#e2e8f0",padding:"4px 6px",fontSize:11,borderRadius:4,textAlign:"center",fontFamily:"inherit"}} maxLength={3}/>
-      <input type="number" step="0.5" value={g.total} onChange={e=>upd(i,"total",e.target.value)} style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#60a5fa",padding:"4px 6px",fontSize:11,borderRadius:4,fontFamily:"inherit"}}/>
-      <input type="number" step="0.5" value={g.homeSpread} onChange={e=>upd(i,"homeSpread",e.target.value)} style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#f59e0b",padding:"4px 6px",fontSize:11,borderRadius:4,fontFamily:"inherit"}}/>
-      <button onClick={()=>del(i)} style={{background:"#991b1b",color:"#fff",border:"none",borderRadius:4,padding:"4px 6px",fontSize:10,cursor:"pointer"}}>[X]</button>
-    </div>))}
-    <div style={{marginTop:10,padding:10,background:"#0a1520",border:"1px solid #1e3040",borderRadius:6}}>
-      <div style={{fontSize:9,color:"#3b6280",letterSpacing:1,marginBottom:6}}>ADD GAME</div>
-      <div style={{display:"grid",gridTemplateColumns:"60px 60px 80px 80px 50px",gap:6,alignItems:"center"}}>
-        <input value={ng.away} onChange={e=>sng({...ng,away:e.target.value.toUpperCase()})} placeholder="AWAY" style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#e2e8f0",padding:"4px 6px",fontSize:11,borderRadius:4,textAlign:"center",fontFamily:"inherit"}} maxLength={3}/>
-        <input value={ng.home} onChange={e=>sng({...ng,home:e.target.value.toUpperCase()})} placeholder="HOME" style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#e2e8f0",padding:"4px 6px",fontSize:11,borderRadius:4,textAlign:"center",fontFamily:"inherit"}} maxLength={3}/>
-        <input type="number" step="0.5" value={ng.total} onChange={e=>sng({...ng,total:e.target.value})} style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#60a5fa",padding:"4px 6px",fontSize:11,borderRadius:4,fontFamily:"inherit"}}/>
-        <input type="number" step="0.5" value={ng.homeSpread} onChange={e=>sng({...ng,homeSpread:e.target.value})} style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#f59e0b",padding:"4px 6px",fontSize:11,borderRadius:4,fontFamily:"inherit"}}/>
-        <button onClick={add} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:4,padding:"4px 8px",fontSize:10,cursor:"pointer"}}>ADD</button>
+function exportLineupsToFanDuel(lineups) {
+  const header = "PG,PG,SG,SG,SF,SF,PF,PF,C";
+  const rows = lineups.map(lu => {
+    const bySlot = { PG: [], SG: [], SF: [], PF: [], C: [] };
+    lu.forEach(p => { if (bySlot[p.slot]) bySlot[p.slot].push(p); });
+    const ordered = [bySlot.PG[0], bySlot.PG[1], bySlot.SG[0], bySlot.SG[1], bySlot.SF[0], bySlot.SF[1], bySlot.PF[0], bySlot.PF[1], bySlot.C[0]];
+    return ordered.map(p => p?.fdId || p?.name || "").join(",");
+  });
+  return header + "\n" + rows.join("\n");
+}
+function downloadCSV(csvText, filename) {
+  const blob = new Blob([csvText], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function SlatePanel({ games, onUpdate }) {
+  const [newGame, setNewGame] = useState({ away: "", home: "", total: 225, homeSpread: 0 });
+  const addGame = () => { if (!newGame.away || !newGame.home) return; onUpdate([...games, { ...newGame, total: +newGame.total, homeSpread: +newGame.homeSpread }]); setNewGame({ away: "", home: "", total: 225, homeSpread: 0 }); };
+  const removeGame = (idx) => onUpdate(games.filter((_, i) => i !== idx));
+  const updateGame = (idx, field, val) => { const next = [...games]; next[idx] = { ...next[idx], [field]: field === "away" || field === "home" ? val.toUpperCase() : +val }; onUpdate(next); };
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 8 }}>Spread from home team perspective (negative = home favored). League avg total = {LEAGUE_AVG_TOTAL}.</div>
+      {games.length === 0 && <div style={{ padding: 16, textAlign: "center", color: "#f59e0b", background: "#0a1520", border: "1px dashed #f59e0b44", borderRadius: 8, marginBottom: 10 }}>[!] No games yet. Add at least one below.</div>}
+      {games.map((g, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "60px 60px 80px 80px 40px", gap: 6, marginBottom: 6, alignItems: "center" }}>
+          <input value={g.away} onChange={e => updateGame(i, "away", e.target.value)} placeholder="AWAY" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <input value={g.home} onChange={e => updateGame(i, "home", e.target.value)} placeholder="HOME" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <input type="number" step="0.5" value={g.total} onChange={e => updateGame(i, "total", e.target.value)} style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#60a5fa", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <input type="number" step="0.5" value={g.homeSpread} onChange={e => updateGame(i, "homeSpread", e.target.value)} style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#f59e0b", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <button onClick={() => removeGame(i)} style={{ background: "#991b1b", color: "#fff", border: "none", borderRadius: 4, padding: "4px 6px", fontSize: 10, cursor: "pointer" }}>[X]</button>
+        </div>
+      ))}
+      <div style={{ marginTop: 10, padding: 10, background: "#0a1520", border: "1px solid #1e3040", borderRadius: 6 }}>
+        <div style={{ fontSize: 9, color: "#3b6280", letterSpacing: 1, marginBottom: 6 }}>ADD GAME</div>
+        <div style={{ display: "grid", gridTemplateColumns: "60px 60px 80px 80px 50px", gap: 6, alignItems: "center" }}>
+          <input value={newGame.away} onChange={e => setNewGame({...newGame, away: e.target.value.toUpperCase()})} placeholder="AWAY" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <input value={newGame.home} onChange={e => setNewGame({...newGame, home: e.target.value.toUpperCase()})} placeholder="HOME" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <input type="number" step="0.5" value={newGame.total} onChange={e => setNewGame({...newGame, total: e.target.value})} placeholder="total" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#60a5fa", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <input type="number" step="0.5" value={newGame.homeSpread} onChange={e => setNewGame({...newGame, homeSpread: e.target.value})} placeholder="spread" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#f59e0b", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <button onClick={addGame} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 4, padding: "4px 8px", fontSize: 10, cursor: "pointer" }}>ADD</button>
+        </div>
       </div>
     </div>
-  </div>);
+  );
 }
 
-function InjuryEditor({injuries,onUpdate,onExclude,excludedNames}){
-  const [ni,sni]=useState({name:"",team:"",status:"OUT",reason:""});
-  const sCol={OUT:"#ef4444",Q:"#f59e0b",UP:"#22c55e"};
-  const add=()=>{if(!ni.name)return;onUpdate([...injuries,{...ni}]);sni({name:"",team:"",status:"OUT",reason:""});};
-  return(<div>
-    <div style={{maxHeight:280,overflowY:"auto",marginBottom:10}}>
-      {!injuries.length&&<div style={{padding:12,textAlign:"center",color:"#4a6a80",fontSize:11,background:"#0a1520",borderRadius:6}}>No injuries. Add below.</div>}
-      {injuries.map((p,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 8px",borderRadius:5,background:i%2?"#0a1520":"transparent",marginBottom:2}}>
-        <span style={{fontSize:9,fontWeight:700,padding:"2px 5px",borderRadius:3,background:sCol[p.status]+"22",color:sCol[p.status],minWidth:24,textAlign:"center"}}>{p.status}</span>
-        <span style={{fontSize:10,color:"#3b82f6",minWidth:26}}>{p.team}</span>
-        <span style={{flex:1,fontSize:11,color:p.status==="OUT"?"#94a3b8":"#e2e8f0",textDecoration:p.status==="OUT"?"line-through":"none"}}>{p.name}</span>
-        <span style={{fontSize:9,color:"#4a6a80",flex:1}}>{p.reason}</span>
-        {p.status==="OUT"&&<button onClick={()=>onExclude(p.name)} style={{fontSize:9,padding:"2px 6px",borderRadius:3,border:`1px solid ${excludedNames.includes(p.name)?"#16a34a":"#ef444466"}`,background:excludedNames.includes(p.name)?"#16a34a22":"#1a0a0a",color:excludedNames.includes(p.name)?"#22c55e":"#ef4444",cursor:"pointer"}}>{excludedNames.includes(p.name)?"[Y] EX":"EXCL"}</button>}
-        <button onClick={()=>onUpdate(injuries.filter((_,j)=>j!==i))} style={{background:"transparent",color:"#4a6a80",border:"none",fontSize:14,cursor:"pointer"}}>×</button>
-      </div>))}
-    </div>
-    <div style={{padding:10,background:"#0a1520",border:"1px solid #1e3040",borderRadius:6}}>
-      <div style={{fontSize:9,color:"#3b6280",letterSpacing:1,marginBottom:6}}>ADD INJURY</div>
-      <div style={{display:"grid",gridTemplateColumns:"2fr 50px 60px 2fr 40px",gap:5,alignItems:"center"}}>
-        <input value={ni.name} onChange={e=>sni({...ni,name:e.target.value})} placeholder="Player name" style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#e2e8f0",padding:"4px 6px",fontSize:11,borderRadius:4,fontFamily:"inherit"}}/>
-        <input value={ni.team} onChange={e=>sni({...ni,team:e.target.value.toUpperCase()})} placeholder="TEAM" style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#3b82f6",padding:"4px 6px",fontSize:11,borderRadius:4,textAlign:"center",fontFamily:"inherit"}} maxLength={3}/>
-        <select value={ni.status} onChange={e=>sni({...ni,status:e.target.value})} style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#e2e8f0",padding:"4px 6px",fontSize:11,borderRadius:4,fontFamily:"inherit"}}><option value="OUT">OUT</option><option value="Q">Q</option><option value="UP">UP</option></select>
-        <input value={ni.reason} onChange={e=>sni({...ni,reason:e.target.value})} placeholder="reason" style={{background:"#0d1e2e",border:"1px solid #1e3040",color:"#94a3b8",padding:"4px 6px",fontSize:11,borderRadius:4,fontFamily:"inherit"}}/>
-        <button onClick={add} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:4,padding:"4px 8px",fontSize:10,cursor:"pointer"}}>ADD</button>
+function InjuryEditor({ injuries, onUpdate, onExclude, excludedNames }) {
+  const [newInj, setNewInj] = useState({ name: "", team: "", status: "OUT", reason: "" });
+  const statusColor = { OUT: "#ef4444", Q: "#f59e0b", UP: "#22c55e" };
+  const statusBg = { OUT: "#1a0a0a", Q: "#1a1200", UP: "#0a1a0a" };
+  const addInj = () => { if (!newInj.name) return; onUpdate([...injuries, { ...newInj }]); setNewInj({ name: "", team: "", status: "OUT", reason: "" }); };
+  const removeInj = (idx) => onUpdate(injuries.filter((_, i) => i !== idx));
+  return (
+    <div>
+      <div style={{ maxHeight: 280, overflowY: "auto", marginBottom: 10 }}>
+        {injuries.length === 0 && <div style={{ padding: 12, textAlign: "center", color: "#4a6a80", fontSize: 11, background: "#0a1520", borderRadius: 6 }}>No injuries yet. Add below.</div>}
+        {injuries.map((p, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 5, background: i % 2 ? statusBg[p.status] : "transparent", marginBottom: 2, border: `1px solid ${statusColor[p.status]}22` }}>
+            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 3, background: statusColor[p.status] + "22", color: statusColor[p.status], minWidth: 24, textAlign: "center" }}>{p.status}</span>
+            <span style={{ fontSize: 10, color: "#3b82f6", minWidth: 26 }}>{p.team}</span>
+            <span style={{ flex: 1, fontSize: 11, color: p.status === "OUT" ? "#94a3b8" : "#e2e8f0", textDecoration: p.status === "OUT" ? "line-through" : "none" }}>{p.name}</span>
+            <span style={{ fontSize: 9, color: "#4a6a80", flex: 1 }}>{p.reason}</span>
+            {p.status === "OUT" && <button onClick={() => onExclude(p.name)} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#16a34a" : "#ef444466"}`, background: excludedNames.includes(p.name) ? "#16a34a22" : "#1a0a0a", color: excludedNames.includes(p.name) ? "#22c55e" : "#ef4444", cursor: "pointer" }}>{excludedNames.includes(p.name) ? "[Y] EX" : "EXCL"}</button>}
+            <button onClick={() => removeInj(i)} style={{ background: "transparent", color: "#4a6a80", border: "none", fontSize: 14, cursor: "pointer" }}>×</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: 10, background: "#0a1520", border: "1px solid #1e3040", borderRadius: 6 }}>
+        <div style={{ fontSize: 9, color: "#3b6280", letterSpacing: 1, marginBottom: 6 }}>ADD INJURY</div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 50px 60px 2fr 40px", gap: 5, alignItems: "center" }}>
+          <input value={newInj.name} onChange={e => setNewInj({...newInj, name: e.target.value})} placeholder="Player name" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <input value={newInj.team} onChange={e => setNewInj({...newInj, team: e.target.value.toUpperCase()})} placeholder="TEAM" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#3b82f6", padding: "4px 6px", fontSize: 11, borderRadius: 4, textAlign: "center", fontFamily: "inherit" }} maxLength={3} />
+          <select value={newInj.status} onChange={e => setNewInj({...newInj, status: e.target.value})} style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#e2e8f0", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }}>
+            <option value="OUT">OUT</option><option value="Q">Q</option><option value="UP">UP</option>
+          </select>
+          <input value={newInj.reason} onChange={e => setNewInj({...newInj, reason: e.target.value})} placeholder="reason" style={{ background: "#0d1e2e", border: "1px solid #1e3040", color: "#94a3b8", padding: "4px 6px", fontSize: 11, borderRadius: 4, fontFamily: "inherit" }} />
+          <button onClick={addInj} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 4, padding: "4px 8px", fontSize: 10, cursor: "pointer" }}>ADD</button>
+        </div>
       </div>
     </div>
-  </div>);
+  );
 }
 
-function StatMusePanel({players,statMuseMap,onManualUpdate}){
-  const [srch,ss]=useState("");const [mn,smn]=useState("");const [mf,smf]=useState("");
-  const filt=players.filter(p=>!srch||p.name.toLowerCase().includes(srch.toLowerCase())).slice(0,40);
-  const tc=t=>t==="hot"?"#22c55e":t==="cold"?"#60a5fa":"#94a3b8";
-  return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-    <div style={{background:"#0a1520",border:"1px solid #1e3040",borderRadius:8,padding:12}}>
-      <div style={{fontSize:10,color:"#3b6280",letterSpacing:2,marginBottom:8}}>MANUAL FD AVG OVERRIDE</div>
-      <div style={{display:"flex",gap:8}}>
-        <input list="pn" placeholder="Player name..." value={mn} onChange={e=>smn(e.target.value)} style={{flex:1,background:"#0d1e2e",border:"1px solid #1e3040",borderRadius:6,color:"#e2e8f0",padding:"6px 10px",fontSize:12,fontFamily:"inherit"}}/>
-        <datalist id="pn">{players.map(p=><option key={p.name} value={p.name}/>)}</datalist>
-        <input type="number" placeholder="FD avg" value={mf} onChange={e=>smf(e.target.value)} style={{width:80,background:"#0d1e2e",border:"1px solid #1e3040",borderRadius:6,color:"#60a5fa",padding:"6px 10px",fontSize:12,fontFamily:"inherit"}}/>
-        <button onClick={()=>{if(mn&&mf){onManualUpdate(mn,parseFloat(mf));smn("");smf("");}}} style={{background:"#1d4ed8",border:"none",borderRadius:6,color:"#fff",padding:"6px 14px",fontSize:12,cursor:"pointer"}}>SET</button>
+function StatMusePanel({ players, statMuseMap, onManualUpdate }) {
+  const [search, setSearch] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [manualFD, setManualFD] = useState("");
+  const filtered = players.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())).slice(0, 40);
+  const trendColor = (t) => t === "hot" ? "#22c55e" : t === "cold" ? "#60a5fa" : "#94a3b8";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 }}>
+        <div style={{ fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 }}>MANUAL FD AVG OVERRIDE</div>
+        <div style={{ fontSize: 11, color: "#4a6a80", marginBottom: 8, lineHeight: 1.6 }}>Visit <a href="https://www.statmuse.com/nba" target="_blank" rel="noreferrer" style={{ color: "#60a5fa" }}>statmuse.com/nba</a> → "fanduel stat log" → enter FD avg below.</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input list="player-names" placeholder="Player name..." value={manualName} onChange={e => setManualName(e.target.value)} style={{ flex: 1, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }} />
+          <datalist id="player-names">{players.map(p => <option key={p.name} value={p.name} />)}</datalist>
+          <input type="number" placeholder="FD avg" value={manualFD} onChange={e => setManualFD(e.target.value)} style={{ width: 80, background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#60a5fa", padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }} />
+          <button onClick={() => { if (manualName && manualFD) { onManualUpdate(manualName, parseFloat(manualFD)); setManualName(""); setManualFD(""); } }} style={{ background: "#1d4ed8", border: "none", borderRadius: 6, color: "#fff", padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>SET</button>
+        </div>
+      </div>
+      <div style={{ background: "#0a1520", border: "1px solid #1e3040", borderRadius: 8, padding: 12 }}>
+        <div style={{ fontSize: 10, color: "#3b6280", letterSpacing: 2, marginBottom: 8 }}>QUICK STATMUSE LOOKUP</div>
+        <input placeholder="Filter players..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", background: "#0d1e2e", border: "1px solid #1e3040", borderRadius: 6, color: "#e2e8f0", padding: "6px 10px", fontSize: 12, marginBottom: 8, boxSizing: "border-box", fontFamily: "inherit" }} />
+        <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
+          {filtered.map(p => {
+            const sm = statMuseMap[p.name.toLowerCase()];
+            return (
+              <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid #0d1e2e", fontSize: 11 }}>
+                <span style={{ flex: 1, color: sm ? "#22c55e" : "#94a3b8" }}>{p.name}</span>
+                {sm ? <span style={{ color: trendColor(sm.trend), fontSize: 10 }}>{sm.fdAvg.toFixed(1)} FD</span> : <span style={{ color: "#3b6280", fontSize: 10 }}>CSV: {p.csvFppg.toFixed(1)}</span>}
+                <a href={statMuseUrl(p.name)} target="_blank" rel="noreferrer" style={{ color: "#3b82f6", fontSize: 10, textDecoration: "none", background: "#0d2235", border: "1px solid #1e3040", borderRadius: 4, padding: "2px 6px" }}>[→]</a>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
-    <div style={{background:"#0a1520",border:"1px solid #1e3040",borderRadius:8,padding:12}}>
-      <div style={{fontSize:10,color:"#3b6280",letterSpacing:2,marginBottom:8}}>STATMUSE LOOKUP</div>
-      <input placeholder="Filter..." value={srch} onChange={e=>ss(e.target.value)} style={{width:"100%",background:"#0d1e2e",border:"1px solid #1e3040",borderRadius:6,color:"#e2e8f0",padding:"6px 10px",fontSize:12,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}}/>
-      <div style={{maxHeight:260,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
-        {filt.map(p=>{const sm=statMuseMap[p.name.toLowerCase()];return(<div key={p.name} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 0",borderBottom:"1px solid #0d1e2e",fontSize:11}}>
-          <span style={{flex:1,color:sm?"#22c55e":"#94a3b8"}}>{p.name}</span>
-          {sm?<span style={{color:tc(sm.trend),fontSize:10}}>{sm.fdAvg.toFixed(1)} FD</span>:<span style={{color:"#3b6280",fontSize:10}}>CSV: {p.csvFppg.toFixed(1)}</span>}
-          <a href={statMuseUrl(p.name)} target="_blank" rel="noreferrer" style={{color:"#3b82f6",fontSize:10,textDecoration:"none",background:"#0d2235",border:"1px solid #1e3040",borderRadius:4,padding:"2px 6px"}}>[→]</a>
-        </div>);})}
-      </div>
+  );
+}
+
+function OwnershipEditor({ players, ownershipMap, onUpdate }) {
+  return (
+    <div style={{ maxHeight: 380, overflowY: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <thead>
+          <tr style={{ position: "sticky", top: 0, background: "#0f1923", zIndex: 1 }}>
+            {["Player","Pos","Salary","FD Avg","Src","Proj Own%"].map(h => <th key={h} style={{ padding: "6px 8px", textAlign: "left", color: "#7aa2c0", fontWeight: 500, borderBottom: "1px solid #1e3040", fontSize: 10 }}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {players.slice(0, 80).map((p, i) => (
+            <tr key={p.name} style={{ background: i % 2 === 0 ? "transparent" : "#0a1520" }}>
+              <td style={{ padding: "4px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.name}</td>
+              <td style={{ padding: "4px 8px", color: "#7aa2c0" }}>{p.positions[0]}</td>
+              <td style={{ padding: "4px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
+              <td style={{ padding: "4px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
+              <td style={{ padding: "4px 8px" }}><span style={{ fontSize: 9, padding: "1px 4px", borderRadius: 3, background: p.statMuseFD ? "#16a34a33" : "#1e3040", color: p.statMuseFD ? "#22c55e" : "#4a6a80" }}>{p.statMuseFD ? "SM" : "CSV"}</span></td>
+              <td style={{ padding: "4px 8px" }}><input type="number" min="0" max="100" step="0.5" value={ownershipMap[p.name.toLowerCase()] ?? 15} onChange={e => onUpdate(p.name, parseFloat(e.target.value) || 0)} style={{ width: 60, background: "#1a2e40", border: "1px solid #2a4560", color: "#e2e8f0", borderRadius: 4, padding: "2px 6px", fontSize: 12, fontFamily: "inherit" }} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-  </div>);
+  );
 }
 
-function OwnEdit({players,ownershipMap,onUpdate}){
-  return(<div style={{maxHeight:380,overflowY:"auto"}}>
-    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-      <thead><tr style={{position:"sticky",top:0,background:"#0f1923",zIndex:1}}>{["Player","Pos","Salary","FD Avg","Own%"].map(h=><th key={h} style={{padding:"6px 8px",textAlign:"left",color:"#7aa2c0",fontWeight:500,borderBottom:"1px solid #1e3040",fontSize:10}}>{h}</th>)}</tr></thead>
-      <tbody>{players.slice(0,80).map((p,i)=>(<tr key={p.name} style={{background:i%2===0?"transparent":"#0a1520"}}>
-        <td style={{padding:"4px 8px",color:p.statMuseFD?"#22c55e":"#e2e8f0"}}>{p.name}</td>
-        <td style={{padding:"4px 8px",color:"#7aa2c0"}}>{p.positions[0]}</td>
-        <td style={{padding:"4px 8px",color:"#64b587"}}>${p.salary.toLocaleString()}</td>
-        <td style={{padding:"4px 8px",color:p.statMuseFD?"#22c55e":"#e2e8f0"}}>{p.fppg.toFixed(1)}</td>
-        <td style={{padding:"4px 8px"}}><input type="number" min="0" max="100" step="0.5" value={ownershipMap[p.name.toLowerCase()]??15} onChange={e=>onUpdate(p.name,parseFloat(e.target.value)||0)} style={{width:60,background:"#1a2e40",border:"1px solid #2a4560",color:"#e2e8f0",borderRadius:4,padding:"2px 6px",fontSize:12,fontFamily:"inherit"}}/></td>
-      </tr>))}</tbody>
-    </table>
-  </div>);
-}
-
-function LineupCard({lineup,index,isSelected,onSelect}){
-  const st=lineupStats(lineup);
-  const sorted=[...lineup].sort((a,b)=>POSITION_ORDER.indexOf(a.slot)-POSITION_ORDER.indexOf(b.slot));
-  const oc=o=>o>=30?"#f59e0b":o>=10?"#60a5fa":o>=5?"#a78bfa":"#f87171";
-  return(<div onClick={()=>onSelect(index)} style={{background:isSelected?"#0d2235":"#091520",border:`1px solid ${isSelected?"#3b82f6":"#1e3040"}`,borderRadius:10,padding:"12px 14px",cursor:"pointer",marginBottom:8}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:4}}>
-      <div style={{display:"flex",gap:6,fontSize:12,alignItems:"center",flexWrap:"wrap"}}>
-        <span style={{background:"#1a3550",color:"#60a5fa",borderRadius:5,padding:"2px 9px",fontWeight:600}}>#{index+1}</span>
-        {lineup._type&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:4,fontWeight:700,background:lineup._type==="chalk"?"#f59e0b22":lineup._type==="leverage"?"#22c55e22":lineup._type==="tournament"?"#a78bfa22":"#60a5fa22",color:lineup._type==="chalk"?"#f59e0b":lineup._type==="leverage"?"#22c55e":lineup._type==="tournament"?"#a78bfa":"#60a5fa"}}>{lineup._type.toUpperCase().slice(0,5)}</span>}
-        {lineup._hasStack&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:4,background:"#16a34a22",color:"#22c55e"}}>STACK</span>}
-        {lineup._hasBB&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:4,background:"#a78bfa22",color:"#a78bfa"}}>BB</span>}
-        <span style={{color:"#64b587",fontWeight:600}}>{st.proj.toFixed(1)}</span>
-        <span style={{color:"#94a3b8"}}>${st.total.toLocaleString()}</span>
+function LineupCard({ lineup, index, isSelected, onSelect }) {
+  const stats = lineupStats(lineup);
+  const sorted = [...lineup].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
+  const ownColor = (o) => o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171";
+  return (
+    <div onClick={() => onSelect(index)} style={{ background: isSelected ? "#0d2235" : "#091520", border: `1px solid ${isSelected ? "#3b82f6" : "#1e3040"}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer", marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 4 }}>
+        <div style={{ display: "flex", gap: 6, fontSize: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ background: "#1a3550", color: "#60a5fa", borderRadius: 5, padding: "2px 9px", fontWeight: 600 }}>#{index + 1}</span>
+          {lineup._type && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 700, background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : lineup._type === "tournament" ? "#a78bfa22" : "#60a5fa22", color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : lineup._type === "tournament" ? "#a78bfa" : "#60a5fa" }}>{lineup._type.toUpperCase().slice(0,5)}</span>}
+          {lineup._hasStack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e" }}>STACK</span>}
+          {lineup._hasBringBack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#a78bfa22", color: "#a78bfa" }}>BB</span>}
+          <span style={{ color: "#64b587", fontWeight: 600 }}>{stats.proj.toFixed(1)}</span>
+          <span style={{ color: "#94a3b8" }}>${stats.total.toLocaleString()}</span>
+        </div>
+        <div style={{ display: "flex", gap: 4, fontSize: 10 }}>
+          <span style={{ background: "#94a3b822", color: "#94a3b8", borderRadius: 4, padding: "1px 5px" }}>O{stats.avgOwn.toFixed(0)}%</span>
+          {lineup._simP90 && <span style={{ background: "#22c55e22", color: "#22c55e", borderRadius: 4, padding: "1px 5px" }}>C{lineup._simP90.toFixed(0)}</span>}
+        </div>
       </div>
-      <div style={{display:"flex",gap:4,fontSize:10}}>
-        <span style={{background:"#94a3b822",color:"#94a3b8",borderRadius:4,padding:"1px 5px"}}>O{st.avgOwn.toFixed(0)}%</span>
-        {lineup._sp90&&<span style={{background:"#22c55e22",color:"#22c55e",borderRadius:4,padding:"1px 5px"}}>C{lineup._sp90.toFixed(0)}</span>}
-      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+        <tbody>
+          {sorted.map((p, i) => (
+            <tr key={i} style={{ borderTop: "1px solid #0f2030" }}>
+              <td style={{ padding: "2px 0", color: "#3b82f6", width: 24, fontWeight: 700, fontSize: 10 }}>{p.slot}</td>
+              <td style={{ padding: "2px 4px", color: "#e2e8f0", fontWeight: p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD ? 700 : 400 }}>
+                {p.name}
+                {p.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9, marginLeft: 3 }}>[.]</span>}
+                {p.fppg >= RULES.ANCHOR_FPPG_THRESHOLD && <span style={{ color: "#f59e0b", fontSize: 10, marginLeft: 2 }}>[*]</span>}
+              </td>
+              <td style={{ padding: "2px 4px", color: "#64b587", textAlign: "right" }}>{p.fppg.toFixed(1)}</td>
+              <td style={{ padding: "2px 4px", textAlign: "right" }}><span style={{ color: ownColor(p.ownership), fontSize: 10 }}>{p.ownership.toFixed(0)}%</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-      <tbody>{sorted.map((p,i)=>(<tr key={i} style={{borderTop:"1px solid #0f2030"}}>
-        <td style={{padding:"2px 0",color:"#3b82f6",width:24,fontWeight:700,fontSize:10}}>{p.slot}</td>
-        <td style={{padding:"2px 4px",color:"#e2e8f0",fontWeight:p.fppg>=RULES.ANCHOR_FPPG_THRESHOLD?700:400}}>{p.name}{p.statMuseFD&&<span style={{color:"#22c55e",fontSize:9,marginLeft:3}}>[.]</span>}{p.fppg>=RULES.ANCHOR_FPPG_THRESHOLD&&<span style={{color:"#f59e0b",fontSize:10,marginLeft:2}}>[*]</span>}</td>
-        <td style={{padding:"2px 4px",color:"#64b587",textAlign:"right"}}>{p.fppg.toFixed(1)}</td>
-        <td style={{padding:"2px 4px",textAlign:"right"}}><span style={{color:oc(p.ownership),fontSize:10}}>{p.ownership.toFixed(0)}%</span></td>
-      </tr>))}</tbody>
-    </table>
-  </div>);
+  );
 }
 
-function App(){
-  const [games,sg]=useState([]);const [injuries,si]=useState([]);const [cascadeRules,scr]=useState([]);
-  const vmap=useMemo(()=>buildTeamMap(games),[games]);
-  const vg=useMemo(()=>buildGamesList(games),[games]);
-  const [step,ss]=useState("upload");const [csv,sc]=useState("");const [players,sp]=useState([]);
-  const [ownMap,som]=useState({});const [smMap,ssm]=useState({});const [lineups,sl]=useState([]);
-  const [sel,ssel]=useState(0);const [locked,slk]=useState([]);const [excl,sex]=useState([]);
-  const [cascLog,scl]=useState([]);const [cnt,scnt]=useState(5);const [gen,sgen]=useState(false);
-  const [tab,stab]=useState("lineups");const [rtab,srt]=useState("slate");const [strat,sst]=useState("mixed");
-  const fr=useRef();
+function App() {
+  const [games, setGames] = useState(DEFAULT_SLATE_GAMES);
+  const [injuries, setInjuries] = useState(DEFAULT_INJURIES);
+  const [cascadeRules, setCascadeRules] = useState([]);
+  const vegasMap = useMemo(() => buildTeamMap(games), [games]);
+  const vegasGames = useMemo(() => buildGamesList(games), [games]);
+  const [step, setStep] = useState("upload");
+  const [csvText, setCsvText] = useState("");
+  const [players, setPlayers] = useState([]);
+  const [ownershipMap, setOwnershipMap] = useState({});
+  const [statMuseMap, setStatMuseMap] = useState({});
+  const [lineups, setLineups] = useState([]);
+  const [selectedLineup, setSelectedLineup] = useState(0);
+  const [lockedNames, setLockedNames] = useState([]);
+  const [excludedNames, setExcludedNames] = useState([]);
+  const [cascadeLog, setCascadeLog] = useState([]);
+  const [lastGenTime, setLastGenTime] = useState(null);
+  const [lineupCount, setLineupCount] = useState(5);
+  const [generating, setGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState("lineups");
+  const [rightTab, setRightTab] = useState("slate");
+  const [lineupStrategy, setLineupStrategy] = useState("mixed");
+  const fileRef = useRef();
 
-  const rebuild=useCallback((c,om,sm,ex)=>{const p=parsePlayers(c,om,sm,vmap,ex,[]);sp(p);return p;},[vmap]);
-  const handleCSV=useCallback((txt)=>{
-    sc(txt);const dom={};const ls=txt.trim().split("\n");const hs=ls[0].split(",").map(h=>h.trim().toLowerCase().replace(/\s+/g,""));
-    const ni=hs.indexOf("nickname");const fi=hs.indexOf("firstname");const li=hs.indexOf("lastname");
-    ls.slice(1).forEach(l=>{const c=l.split(",");const n=(ni>=0?c[ni]:"").trim()||((c[fi]||"")+" "+(c[li]||"")).trim();if(n)dom[n.toLowerCase()]=15;});
-    som(dom);rebuild(txt,dom,{},excl);ssm({});
-    if(games.length>0){const prs=parsePlayers(txt,dom,{},vmap,excl,[]);const nom={...dom};prs.forEach(p=>{nom[p.name.toLowerCase()]=estimateOwnership(p,vmap);});som(nom);rebuild(txt,nom,{},excl);}
-    ss("build");
-  },[rebuild,excl,games,vmap]);
-  const hf=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>handleCSV(ev.target.result);r.readAsText(f);};
-  const updOwn=(n,v)=>{const k=n.toLowerCase();const nm={...ownMap,[k]:v};som(nm);rebuild(csv,nm,smMap,excl);};
-  const updSM=(n,fa)=>{const k=n.toLowerCase();const nm={...smMap,[k]:{fdAvg:fa,lastGame:null,trend:"neutral"}};ssm(nm);rebuild(csv,ownMap,nm,excl);};
-  const estOwn=()=>{if(!players.length||!games.length)return;const nom={...ownMap};players.forEach(p=>{nom[p.name.toLowerCase()]=estimateOwnership(p,vmap);});som(nom);rebuild(csv,nom,smMap,excl);};
-  const doGen=()=>{
-    if(!players||!players.length)return;sgen(true);
-    requestAnimationFrame(()=>{try{const lus=generateLineupsWithStrategy(players,Math.max(1,Math.min(cnt||5,50)),locked,excl,vg,strat);sl(Array.isArray(lus)?lus:[]);ssel(0);ss("results");stab("lineups");}catch(e){console.error(e);throw e;}finally{sgen(false);}});
+  const rebuildPlayers = useCallback((csv, ownMap, smMap, outNames) => {
+    const parsed = parsePlayers(csv, ownMap, smMap, vegasMap, outNames, cascadeRules);
+    setPlayers(parsed);
+    return parsed;
+  }, [vegasMap, cascadeRules]);
+
+  const handleCSV = useCallback((text) => {
+    setCsvText(text);
+    const defaultOwn = {};
+    const lines = text.trim().split("\n");
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, ""));
+    const nickIdx = headers.indexOf("nickname");
+    const firstIdx = headers.indexOf("firstname");
+    const lastIdx = headers.indexOf("lastname");
+    lines.slice(1).forEach(line => {
+      const cols = line.split(",");
+      const name = (nickIdx >= 0 ? cols[nickIdx] : "").trim() || ((cols[firstIdx] || "") + " " + (cols[lastIdx] || "")).trim();
+      if (name) defaultOwn[name.toLowerCase()] = 15;
+    });
+    setOwnershipMap(defaultOwn);
+    rebuildPlayers(text, defaultOwn, {}, excludedNames);
+    setStatMuseMap({});
+    if (games.length > 0) {
+      const parsed = parsePlayers(text, defaultOwn, {}, vegasMap, excludedNames, cascadeRules);
+      const newOwn = { ...defaultOwn };
+      parsed.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, vegasMap); });
+      setOwnershipMap(newOwn);
+      rebuildPlayers(text, newOwn, {}, excludedNames);
+    }
+    setStep("build");
+  }, [rebuildPlayers, excludedNames, games, vegasMap, cascadeRules]);
+
+  const handleFile = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => handleCSV(ev.target.result); reader.readAsText(file); };
+  const updateOwnership = (name, val) => { const key = name.toLowerCase(); const newMap = { ...ownershipMap, [key]: val }; setOwnershipMap(newMap); rebuildPlayers(csvText, newMap, statMuseMap, excludedNames); };
+  const handleStatMuseManual = (name, fdAvg) => { const key = name.toLowerCase(); const newSM = { ...statMuseMap, [key]: { fdAvg, lastGame: null, trend: "neutral" } }; setStatMuseMap(newSM); rebuildPlayers(csvText, ownershipMap, newSM, excludedNames); };
+  const handleEstimateOwnership = () => { if (!players.length || !games.length) return; const newOwn = { ...ownershipMap }; players.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, vegasMap); }); setOwnershipMap(newOwn); rebuildPlayers(csvText, newOwn, statMuseMap, excludedNames); };
+
+  const handleGenerate = () => {
+    if (!players || players.length === 0) return;
+    setGenerating(true);
+    requestAnimationFrame(() => {
+      try {
+        const safeCount = Math.max(1, Math.min(lineupCount || 5, 50));
+        const lus = generateLineupsWithStrategy(players, safeCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
+        setLineups(Array.isArray(lus) ? lus : []);
+        setSelectedLineup(0);
+        setStep("results");
+        setActiveTab("lineups");
+        setLastGenTime(new Date());
+      } catch (e) { console.error("Generate failed", e); throw e; }
+      finally { setGenerating(false); }
+    });
   };
-  const doExport=()=>{if(!lineups.length)return;dlCSV(exportToFD(lineups),`court-edge-v52-${new Date().toISOString().slice(0,10)}.csv`);};
-  const applyEx=(next,rm=null)=>{const un=[...new Set(next)];const {newMap,log}=applyCascades(un.filter(n=>injuries.some(i=>i.name===n&&i.status==="OUT")),ownMap,[]);scl(log);som(newMap);sex(un);if(rm)slk(p=>p.filter(n=>n!==rm));rebuild(csv,newMap,smMap,un);};
-  const togLock=n=>{slk(p=>p.includes(n)?p.filter(x=>x!==n):[...p,n]);sex(p=>p.filter(x=>x!==n));};
-  const togEx=n=>{const nx=excl.includes(n)?excl.filter(x=>x!==n):[...excl,n];applyEx(nx,n);};
-  useEffect(()=>{if(csv)rebuild(csv,ownMap,smMap,excl);},[games]);
-  const S={app:{minHeight:"100vh",background:"#060e18",color:"#e2e8f0",fontFamily:"'IBM Plex Mono',monospace",paddingBottom:40},hdr:{background:"linear-gradient(180deg,#0a1f35 0%,#060e18 100%)",borderBottom:"1px solid #1e3040",padding:"16px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"},pill:a=>({padding:"4px 12px",borderRadius:20,border:`1px solid ${a?"#3b82f6":"#1e3040"}`,background:a?"#1a3550":"transparent",color:a?"#60a5fa":"#4a6a80",fontSize:11,cursor:"pointer",letterSpacing:1,fontFamily:"inherit"}),card:{background:"#091520",border:"1px solid #1e3040",borderRadius:12,padding:20},btn:(v="primary")=>({padding:"9px 20px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,letterSpacing:1,background:v==="primary"?"#2563eb":v==="success"?"#16a34a":v==="warning"?"#ea580c":"#1e3040",color:v==="ghost"?"#94a3b8":"#fff"}),sec:{padding:"20px 24px"}};
-  const sg2=games.length?gradeSlate(vg):null;
-  return(<div style={S.app}>
-    <div style={S.hdr}>
-      <div>
-        <div style={{fontSize:16,fontWeight:700,letterSpacing:2,color:"#60a5fa"}}>COURT EDGE</div>
-        <div style={{fontSize:9,color:"#3b82f6",letterSpacing:3}}>NBA DFS OPTIMIZER v5.2 · STACKING OVERHAUL · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+
+  const handleExport = () => { if (!lineups.length) return; const csv = exportLineupsToFanDuel(lineups); const timestamp = new Date().toISOString().slice(0,10); downloadCSV(csv, `court-edge-lineups-${timestamp}.csv`); };
+
+  const applyExclusions = (next, removedName = null) => {
+    const uniqueNext = [...new Set(next)];
+    const outList = uniqueNext.filter(n => injuries.some(i => i.name === n && i.status === "OUT"));
+    const { newMap, log } = applyCascades(outList, ownershipMap, cascadeRules);
+    setCascadeLog(log);
+    setOwnershipMap(newMap);
+    setExcludedNames(uniqueNext);
+    if (removedName) setLockedNames(prev => prev.filter(n => n !== removedName));
+    rebuildPlayers(csvText, newMap, statMuseMap, uniqueNext);
+  };
+  const toggleLock = (name) => { setLockedNames(p => p.includes(name) ? p.filter(n => n !== name) : [...p, name]); setExcludedNames(p => p.filter(n => n !== name)); };
+  const toggleExclude = (name) => { const next = excludedNames.includes(name) ? excludedNames.filter(n => n !== name) : [...excludedNames, name]; applyExclusions(next, name); };
+
+  useEffect(() => {
+    if (csvText) rebuildPlayers(csvText, ownershipMap, statMuseMap, excludedNames);
+    // eslint-disable-next-line
+  }, [games]);
+
+  const S = {
+    app: { minHeight: "100vh", background: "#060e18", color: "#e2e8f0", fontFamily: "'IBM Plex Mono', monospace", paddingBottom: 40 },
+    hdr: { background: "linear-gradient(180deg,#0a1f35 0%,#060e18 100%)", borderBottom: "1px solid #1e3040", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" },
+    pill: (a) => ({ padding: "4px 12px", borderRadius: 20, border: `1px solid ${a ? "#3b82f6" : "#1e3040"}`, background: a ? "#1a3550" : "transparent", color: a ? "#60a5fa" : "#4a6a80", fontSize: 11, cursor: "pointer", letterSpacing: 1, fontFamily: "inherit" }),
+    card: { background: "#091520", border: "1px solid #1e3040", borderRadius: 12, padding: 20 },
+    btn: (v = "primary") => ({ padding: "9px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 12, letterSpacing: 1, background: v === "primary" ? "#2563eb" : v === "success" ? "#16a34a" : v === "warning" ? "#ea580c" : "#1e3040", color: v === "ghost" ? "#94a3b8" : "#fff" }),
+    sec: { padding: "20px 24px" },
+  };
+
+  const slateGrade = games.length ? gradeSlate(vegasGames) : null;
+
+  return (
+    <div style={S.app}>
+      <div style={S.hdr}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.2 · STACKING OVERHAUL · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
+        </div>
       </div>
-      <div style={{display:"flex",gap:6}}>{[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st,lb])=><button key={st} style={S.pill(step===st)} onClick={()=>players.length>0&&ss(st)}>{lb}</button>)}</div>
+
+      {step === "upload" && (
+        <div style={{ maxWidth: 680, margin: "40px auto", padding: "0 24px" }}>
+          {slateGrade && (() => {
+            const gradeColor = slateGrade.grade === "A" ? "#22c55e" : slateGrade.grade === "B" ? "#60a5fa" : slateGrade.grade === "C" ? "#f59e0b" : "#ef4444";
+            return (
+              <div style={{ marginBottom: 16, background: "#091520", border: `1px solid ${gradeColor}44`, borderRadius: 12, padding: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ textAlign: "center", minWidth: 56 }}>
+                    <div style={{ fontSize: 42, fontWeight: 900, color: gradeColor, lineHeight: 1 }}>{slateGrade.grade}</div>
+                    <div style={{ fontSize: 9, color: "#4a6a80", letterSpacing: 2 }}>SLATE</div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: gradeColor, marginBottom: 3 }}>{slateGrade.recommendation}</div>
+                    <div style={{ fontSize: 10, color: "#4a6a80" }}>{games.length} games · Avg O/U {slateGrade.avgTotal.toFixed(1)} · Max implied {slateGrade.maxImpl}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: gradeColor }}>{slateGrade.score}/100</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          <div style={{ ...S.card, marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div><div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>TONIGHT'S SLATE</div></div>
+              <div style={{ fontSize: 11, color: games.length ? "#22c55e" : "#f59e0b" }}>{games.length} game{games.length !== 1 ? "s" : ""}</div>
+            </div>
+            <SlatePanel games={games} onUpdate={setGames} />
+          </div>
+          <div style={S.card}>
+            <div style={{ textAlign: "center", marginBottom: 22 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 6 }}>UPLOAD FANDUEL CSV</div>
+              <div style={{ fontSize: 11, color: "#4a6a80", lineHeight: 1.8 }}>Make sure "Id" column is included for lineup export.</div>
+            </div>
+            <div onClick={() => fileRef.current.click()} style={{ border: "2px dashed #1e3040", borderRadius: 10, padding: "36px 20px", textAlign: "center", cursor: "pointer" }} onMouseOver={e => e.currentTarget.style.borderColor = "#3b82f6"} onMouseOut={e => e.currentTarget.style.borderColor = "#1e3040"}>
+              <div style={{ fontSize: 13, color: "#60a5fa", marginBottom: 4 }}>Click to select CSV</div>
+              <div style={{ fontSize: 11, color: "#4a6a80" }}>FanDuel-NBA-*.csv</div>
+            </div>
+            <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
+          </div>
+
+          <div style={{ ...S.card, marginTop: 16, borderColor: "#a78bfa44" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", letterSpacing: 1, marginBottom: 10 }}>v5.2 STACKING OVERHAUL — fixes for 4-game playoff slates</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.8 }}>
+              · <strong style={{color:"#e2e8f0"}}>Projection fixes:</strong> Removed leverageAdj (was mixing game theory into math), removed sampleAdj (confused confidence with mean), now uses <em>ratios</em> vs league avg instead of absolute thresholds<br/>
+              · <strong style={{color:"#e2e8f0"}}>Floor tightened</strong> to 1.4σ (8th percentile) — more conservative cash floor<br/>
+              · <strong style={{color:"#e2e8f0"}}>Leverage capped</strong> at 8× in composite score (was unbounded, low-ownership players were dominating)<br/>
+              · <strong style={{color:"#e2e8f0"}}>Monte Carlo</strong> now splits team shock into (+) pace component and (-) usage component — more accurate DFS correlation<br/>
+              · <strong style={{color:"#e2e8f0"}}>Back-to-back penalty</strong> (-5%) when flagged<br/>
+              · <strong style={{color:"#e2e8f0"}}>Home court</strong> +1.5% bump<br/>
+              · <strong style={{color:"#e2e8f0"}}>Bring-back bonus</strong> — leverage/tournament lineups now prefer having 1 player from the OPPOSING team in the stacked game<br/>
+              · <strong style={{color:"#e2e8f0"}}>Per-strategy portfolio scoring</strong> — chalk favors floor (p25), tournament favors tail (p99), leverage favors ceiling (p90)<br/>
+              · <strong style={{color:"#e2e8f0"}}>Exposure caps tightened</strong> to 50-65% (was 70-80%) for proper portfolio diversification
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === "build" && (
+        <div style={S.sec}>
+          {games.length === 0 && (
+            <div style={{ marginBottom: 14, background: "#1a1200", border: "1px solid #f59e0b44", borderRadius: 8, padding: 12 }}>
+              <div style={{ fontSize: 12, color: "#f59e0b" }}>[!] No games in slate - add via SLATE tab below</div>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 }}>
+            <div style={S.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>{rightTab === "ownership" ? "OWNERSHIP" : rightTab === "statmuse" ? "STATMUSE" : rightTab === "slate" ? "SLATE" : "INJURIES"}</div>
+                  <div style={{ fontSize: 10, color: "#4a6a80", marginTop: 2 }}>{players.length} players</div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <button style={S.pill(rightTab === "slate")} onClick={() => setRightTab("slate")}>SLATE ({games.length})</button>
+                  <button style={S.pill(rightTab === "ownership")} onClick={() => setRightTab("ownership")}>OWNERSHIP</button>
+                  <button style={S.pill(rightTab === "statmuse")} onClick={() => setRightTab("statmuse")}>STATMUSE {Object.keys(statMuseMap).length > 0 && `(${Object.keys(statMuseMap).length})`}</button>
+                  <button style={S.pill(rightTab === "injuries")} onClick={() => setRightTab("injuries")}>INJURIES ({injuries.length})</button>
+                </div>
+              </div>
+              {rightTab === "slate" && <div><SlatePanel games={games} onUpdate={setGames} />{games.length > 0 && players.length > 0 && <button onClick={handleEstimateOwnership} style={{ ...S.btn("success"), marginTop: 12, width: "100%" }}>[*] AUTO-ESTIMATE OWNERSHIP</button>}</div>}
+              {rightTab === "ownership" && <OwnershipEditor players={players} ownershipMap={ownershipMap} onUpdate={updateOwnership} />}
+              {rightTab === "statmuse" && <StatMusePanel players={players} statMuseMap={statMuseMap} onManualUpdate={handleStatMuseManual} />}
+              {rightTab === "injuries" && <InjuryEditor injuries={injuries} onUpdate={setInjuries} onExclude={(name) => applyExclusions([...excludedNames, name], name)} excludedNames={excludedNames} />}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={S.card}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 }}>LOCK / EXCLUDE</div>
+                <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                  {players.slice(0, 40).map(p => (
+                    <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, fontSize: 11 }}>
+                      <button onClick={() => toggleLock(p.name)} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 }}>L</button>
+                      <button onClick={() => toggleExclude(p.name)} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#991b1b" : "transparent", color: "#fff", cursor: "pointer", fontSize: 9 }}>X</button>
+                      <span style={{ flex: 1, color: excludedNames.includes(p.name) ? "#4a6a80" : "#e2e8f0", textDecoration: excludedNames.includes(p.name) ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={S.card}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 10 }}>GENERATE</div>
+                <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 6, letterSpacing: 1 }}>STRATEGY</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 14 }}>
+                  {[["mixed","[AIM] MIXED","Balance"],["chalk","[PIN] CHALK","Cash / floor"],["leverage","[+] LEVERAGE","Ceiling stacks"],["tournament","[GPP] TOURN","Tail events"]].map(([val, label, desc]) => (
+                    <button key={val} onClick={() => setLineupStrategy(val)} style={{ padding: "8px 10px", borderRadius: 7, border: `1px solid ${lineupStrategy === val ? "#3b82f6" : "#1e3040"}`, background: lineupStrategy === val ? "#1a3550" : "#0a1520", color: lineupStrategy === val ? "#60a5fa" : "#4a6a80", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 2 }}>{label}</div>
+                      <div style={{ fontSize: 9, color: lineupStrategy === val ? "#4a8aaa" : "#3b6280" }}>{desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 4, letterSpacing: 1 }}>LINEUP COUNT</div>
+                <input type="range" min="1" max="20" value={lineupCount} onChange={e => setLineupCount(+e.target.value)} style={{ width: "100%", marginBottom: 4 }} />
+                <div style={{ textAlign: "center", color: "#60a5fa", fontWeight: 700, fontSize: 18, marginBottom: 12 }}>{lineupCount}</div>
+                <button style={{ ...S.btn("primary"), width: "100%", fontSize: 13, padding: "12px 0" }} onClick={handleGenerate} disabled={generating || players.length === 0}>{generating ? "BUILDING..." : players.length === 0 ? "UPLOAD CSV FIRST" : "[*] GENERATE"}</button>
+                {cascadeLog.length > 0 && (
+                  <div style={{ marginTop: 10, padding: "8px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 }}>
+                    <div style={{ fontSize: 9, color: "#22c55e", letterSpacing: 2, marginBottom: 5 }}>[+] CASCADES APPLIED</div>
+                    {cascadeLog.map((c, i) => <div key={i} style={{ fontSize: 9, color: "#4a6a80", marginBottom: 2 }}><span style={{ color: "#ef4444" }}>{c.out}</span>{" → "}<span style={{ color: "#22c55e" }}>{c.player}</span>{" "}<span style={{ color: "#94a3b8" }}>{`${c.from}% → ${c.to}%`}</span></div>)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === "results" && (
+        <div style={S.sec}>
+          {lineups.length === 0 && (
+            <div style={{ background: "#1a0a0a", border: "1px solid #ef444444", borderRadius: 10, padding: 24, textAlign: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 14, color: "#ef4444", marginBottom: 8 }}>[!] No lineups generated</div>
+              <button onClick={() => setStep("build")} style={{ ...S.btn("primary"), marginTop: 12 }}>[←] BACK</button>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            {["lineups","players","exposure"].map(t => <button key={t} style={S.pill(activeTab === t)} onClick={() => setActiveTab(t)}>{t.toUpperCase()}</button>)}
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button style={S.btn("ghost")} onClick={() => setStep("build")}>[←] EDIT</button>
+              <button style={S.btn("success")} onClick={handleGenerate}>[R] REGEN</button>
+              {lineups.length > 0 && <button style={S.btn("warning")} onClick={handleExport}>[↓] EXPORT CSV</button>}
+            </div>
+          </div>
+
+          {activeTab === "lineups" && lineups.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
+              <div style={{ maxHeight: "80vh", overflowY: "auto", paddingRight: 4 }}>
+                {lineups.map((lu, i) => <LineupCard key={i} lineup={lu} index={i} isSelected={selectedLineup === i} onSelect={setSelectedLineup} />)}
+              </div>
+              {(() => {
+                const lu = lineups[selectedLineup];
+                if (!lu) return null;
+                const stats = lineupStats(lu);
+                const sorted = [...lu].sort((a, b) => POSITION_ORDER.indexOf(a.slot) - POSITION_ORDER.indexOf(b.slot));
+                const ownColor = o => o >= 30 ? "#f59e0b" : o >= 10 ? "#60a5fa" : o >= 5 ? "#a78bfa" : "#f87171";
+                return (
+                  <div style={S.card}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>LINEUP #{selectedLineup + 1}</div>
+                        {lu._simP90 && <div style={{ fontSize: 9, color: "#4a6a80", marginTop: 2 }}>Sim: mean {lu._simMean} · p75 {lu._simP75} · p90 {lu._simP90} · p99 {lu._simP99}</div>}
+                        {lu._stackGame && <div style={{ fontSize: 9, color: "#22c55e", marginTop: 2 }}>Stack: {lu._stackGame}</div>}
+                      </div>
+                      <div style={{ display: "flex", gap: 18, fontSize: 12 }}>
+                        <div><span style={{ color: "#4a6a80" }}>PROJ </span><span style={{ color: "#64b587", fontWeight: 700, fontSize: 20 }}>{stats.proj.toFixed(1)}</span></div>
+                        <div><span style={{ color: "#4a6a80" }}>SAL </span><span style={{ color: "#e2e8f0", fontWeight: 700 }}>${stats.total.toLocaleString()}</span></div>
+                        <div><span style={{ color: "#4a6a80" }}>OWN </span><span style={{ color: "#f59e0b", fontWeight: 700 }}>{stats.avgOwn.toFixed(1)}%</span></div>
+                        <div><span style={{ color: "#4a6a80" }}>CUM </span><span style={{ color: stats.cumOwn < 150 ? "#22c55e" : stats.cumOwn < 200 ? "#f59e0b" : "#ef4444", fontWeight: 700 }}>{stats.cumOwn.toFixed(0)}%</span></div>
+                      </div>
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead><tr>{["SLOT","PLAYER","TEAM","SAL","FD AVG","MIN","VALUE","OWN%"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {sorted.map((p, i) => (
+                          <tr key={i} style={{ borderBottom: "1px solid #0d1e2e" }}>
+                            <td style={{ padding: "9px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11 }}>{p.slot}</td>
+                            <td style={{ padding: "9px 8px", color: "#e2e8f0" }}>{p.name}{p.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9, marginLeft: 3 }}>[.]</span>}</td>
+                            <td style={{ padding: "9px 8px", color: "#4a6a80", fontSize: 10 }}>{p.team}</td>
+                            <td style={{ padding: "9px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
+                            <td style={{ padding: "9px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
+                            <td style={{ padding: "9px 8px", color: "#94a3b8", fontSize: 10 }}>{p.minutesProj?.toFixed(0) || "-"}</td>
+                            <td style={{ padding: "9px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" }}>{p.value.toFixed(2)}x</td>
+                            <td style={{ padding: "9px 8px" }}><span style={{ color: ownColor(p.ownership), fontWeight: 600 }}>{p.ownership.toFixed(1)}%</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ marginTop: 14, padding: 10, background: "#0a1a2a", border: "1px solid #3b82f644", borderRadius: 6, fontSize: 10, color: "#60a5fa" }}>
+                      <strong>Export:</strong> Click [↓] EXPORT CSV above to download all {lineups.length} lineups. Upload to FanDuel contest lobby → "Upload Lineups".
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {activeTab === "players" && (
+            <div style={S.card}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 }}>PLAYER POOL (ranked by composite score)</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead><tr>{["#","PLAYER","POS","SAL","PROJ","MIN","VALUE","OWN%","SCORE","ACTIONS"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {players.slice(0, 60).map((p, i) => {
+                    const b = ownershipBucket(p.ownership);
+                    const bc = { chalk: "#f59e0b", mid: "#60a5fa", low: "#a78bfa", punt: "#f87171" }[b];
+                    return (
+                      <tr key={p.name} style={{ borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" }}>
+                        <td style={{ padding: "6px 8px", color: "#3b6280" }}>{i + 1}</td>
+                        <td style={{ padding: "6px 8px", color: "#e2e8f0" }}>{p.name}</td>
+                        <td style={{ padding: "6px 8px", color: "#3b82f6" }}>{p.positions[0]}</td>
+                        <td style={{ padding: "6px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
+                        <td style={{ padding: "6px 8px", color: p.fppg >= 40 ? "#f59e0b" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
+                        <td style={{ padding: "6px 8px", color: "#94a3b8" }}>{p.minutesProj?.toFixed(0) || "-"}</td>
+                        <td style={{ padding: "6px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" }}>{p.value.toFixed(2)}x</td>
+                        <td style={{ padding: "6px 8px", color: bc, fontWeight: 600 }}>{p.ownership.toFixed(1)}%</td>
+                        <td style={{ padding: "6px 8px", color: "#60a5fa" }}>{p.score.toFixed(2)}</td>
+                        <td style={{ padding: "6px 8px" }}><div style={{ display: "flex", gap: 3 }}>
+                          <button onClick={() => toggleLock(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" }}>LOCK</button>
+                          <button onClick={() => toggleExclude(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" }}>OUT</button>
+                        </div></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === "exposure" && lineups.length > 0 && (
+            <div style={S.card}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 }}>EXPOSURE - {lineups.length} LINEUPS</div>
+              {(() => {
+                const exp = {};
+                lineups.forEach(lu => lu.forEach(p => { exp[p.name] = (exp[p.name] || 0) + 1; }));
+                return (
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead><tr>{["PLAYER","APPS","EXP%","OWN%","PROJ","POS"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {Object.entries(exp).sort((a,b) => b[1]-a[1]).map(([name, cnt], i) => {
+                        const p = players.find(pl => pl.name === name);
+                        const pct = cnt / lineups.length * 100;
+                        return (
+                          <tr key={name} style={{ borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" }}>
+                            <td style={{ padding: "7px 8px", color: "#e2e8f0" }}>{name}</td>
+                            <td style={{ padding: "7px 8px", color: "#e2e8f0" }}>{cnt}</td>
+                            <td style={{ padding: "7px 8px", color: pct > 60 ? "#f59e0b" : "#94a3b8" }}>{pct.toFixed(0)}%</td>
+                            <td style={{ padding: "7px 8px", color: "#60a5fa" }}>{p?.ownership.toFixed(1) ?? "-"}%</td>
+                            <td style={{ padding: "7px 8px", color: p?.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p?.fppg.toFixed(1) ?? "-"}</td>
+                            <td style={{ padding: "7px 8px", color: "#3b82f6" }}>{p?.positions[0] ?? "-"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.2</div>
     </div>
-
-    {step==="upload"&&<div style={{maxWidth:680,margin:"40px auto",padding:"0 24px"}}>
-      {sg2&&(()=>{const gc=sg2.grade==="A"?"#22c55e":sg2.grade==="B"?"#60a5fa":sg2.grade==="C"?"#f59e0b":"#ef4444";return(<div style={{marginBottom:16,background:"#091520",border:`1px solid ${gc}44`,borderRadius:12,padding:18}}><div style={{display:"flex",alignItems:"center",gap:14}}><div style={{textAlign:"center",minWidth:56}}><div style={{fontSize:42,fontWeight:900,color:gc,lineHeight:1}}>{sg2.grade}</div><div style={{fontSize:9,color:"#4a6a80",letterSpacing:2}}>SLATE</div></div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:gc,marginBottom:3}}>{sg2.recommendation}</div><div style={{fontSize:10,color:"#4a6a80"}}>{games.length} games · Avg O/U {sg2.avgTotal.toFixed(1)} · Max {sg2.maxImpl}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:22,fontWeight:700,color:gc}}>{sg2.score}/100</div></div></div></div>);})()}
-      <div style={{...S.card,marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",letterSpacing:1}}>TONIGHT'S SLATE</div>
-          <div style={{fontSize:11,color:games.length?"#22c55e":"#f59e0b"}}>{games.length} games</div>
-        </div>
-        <SlatePanel games={games} onUpdate={sg}/>
-      </div>
-      <div style={S.card}>
-        <div style={{textAlign:"center",marginBottom:22}}>
-          <div style={{fontSize:18,fontWeight:700,color:"#60a5fa",letterSpacing:1,marginBottom:6}}>UPLOAD FANDUEL CSV</div>
-          <div style={{fontSize:11,color:"#4a6a80"}}>Include the "Id" column for lineup export.</div>
-        </div>
-        <div onClick={()=>fr.current.click()} style={{border:"2px dashed #1e3040",borderRadius:10,padding:"36px 20px",textAlign:"center",cursor:"pointer"}} onMouseOver={e=>e.currentTarget.style.borderColor="#3b82f6"} onMouseOut={e=>e.currentTarget.style.borderColor="#1e3040"}>
-          <div style={{fontSize:13,color:"#60a5fa",marginBottom:4}}>Click to select CSV</div>
-          <div style={{fontSize:11,color:"#4a6a80"}}>FanDuel-NBA-*.csv</div>
-        </div>
-        <input ref={fr} type="file" accept=".csv" onChange={hf} style={{display:"none"}}/>
-      </div>
-      <div style={{...S.card,marginTop:16,borderColor:"#a78bfa44"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#a78bfa",letterSpacing:1,marginBottom:10}}>v5.2 STACKING OVERHAUL — WHY YOUR SCORES WERE LOW</div>
-        <div style={{fontSize:10,color:"#94a3b8",lineHeight:1.9}}>
-          · <strong style={{color:"#ef4444"}}>Last night: 245-277 range. Need 310-330+ to cash. Gap = ~40-60 pts.</strong><br/>
-          · <strong style={{color:"#22c55e"}}>[FIX 1] 3-player stack minimum</strong> for tournament (was 2). Correlated players hit ceiling together.<br/>
-          · <strong style={{color:"#22c55e"}}>[FIX 2] stackBoost: tournament 3.3 → 6.5</strong>, leverage 2.8 → 4.5. Stack players now dominate objective score.<br/>
-          · <strong style={{color:"#22c55e"}}>[FIX 3] Multi-game rotation</strong>: getBestStackGames() returns top 3 games. Batches rotate stacks across all 3.<br/>
-          · <strong style={{color:"#22c55e"}}>[FIX 4] Projection floor {MIN_PROJ_FILTER}pts</strong>: weak lineups dropped before portfolio selection.<br/>
-          · <strong style={{color:"#22c55e"}}>[FIX 5] Ceiling weight 0.40→0.58</strong> in tournament compositeScore.<br/>
-          · <strong style={{color:"#22c55e"}}>[FIX 6] Portfolio p99 weight 0.35→0.40</strong> — pure tail optimization for GPP.
-        </div>
-      </div>
-    </div>}
-
-    {step==="build"&&<div style={S.sec}>
-      {!games.length&&<div style={{marginBottom:14,background:"#1a1200",border:"1px solid #f59e0b44",borderRadius:8,padding:12}}><div style={{fontSize:12,color:"#f59e0b"}}>[!] No games - add via SLATE tab</div></div>}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:16}}>
-        <div style={S.card}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-            <div><div style={{fontSize:13,fontWeight:700,color:"#60a5fa",letterSpacing:1}}>{rtab==="ownership"?"OWNERSHIP":rtab==="statmuse"?"STATMUSE":rtab==="slate"?"SLATE":"INJURIES"}</div><div style={{fontSize:10,color:"#4a6a80",marginTop:2}}>{players.length} players</div></div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              <button style={S.pill(rtab==="slate")} onClick={()=>srt("slate")}>SLATE</button>
-              <button style={S.pill(rtab==="ownership")} onClick={()=>srt("ownership")}>OWNERSHIP</button>
-              <button style={S.pill(rtab==="statmuse")} onClick={()=>srt("statmuse")}>STATMUSE</button>
-              <button style={S.pill(rtab==="injuries")} onClick={()=>srt("injuries")}>INJURIES</button>
-            </div>
-          </div>
-          {rtab==="slate"&&<div><SlatePanel games={games} onUpdate={sg}/>{games.length>0&&players.length>0&&<button onClick={estOwn} style={{...S.btn("success"),marginTop:12,width:"100%"}}>[*] AUTO-ESTIMATE OWNERSHIP</button>}</div>}
-          {rtab==="ownership"&&<OwnEdit players={players} ownershipMap={ownMap} onUpdate={updOwn}/>}
-          {rtab==="statmuse"&&<StatMusePanel players={players} statMuseMap={smMap} onManualUpdate={updSM}/>}
-          {rtab==="injuries"&&<InjuryEditor injuries={injuries} onUpdate={si} onExclude={n=>applyEx([...excl,n],n)} excludedNames={excl}/>}
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div style={S.card}>
-            <div style={{fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:1,marginBottom:10}}>LOCK / EXCLUDE</div>
-            <div style={{maxHeight:220,overflowY:"auto"}}>
-              {players.slice(0,40).map(p=>(<div key={p.name} style={{display:"flex",alignItems:"center",gap:5,marginBottom:5,fontSize:11}}>
-                <button onClick={()=>togLock(p.name)} style={{width:20,height:20,borderRadius:4,border:`1px solid ${locked.includes(p.name)?"#22c55e":"#1e3040"}`,background:locked.includes(p.name)?"#16a34a":"transparent",color:"#fff",cursor:"pointer",fontSize:9}}>L</button>
-                <button onClick={()=>togEx(p.name)} style={{width:20,height:20,borderRadius:4,border:`1px solid ${excl.includes(p.name)?"#ef4444":"#1e3040"}`,background:excl.includes(p.name)?"#991b1b":"transparent",color:"#fff",cursor:"pointer",fontSize:9}}>X</button>
-                <span style={{flex:1,color:excl.includes(p.name)?"#4a6a80":"#e2e8f0",textDecoration:excl.includes(p.name)?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
-              </div>))}
-            </div>
-          </div>
-          <div style={S.card}>
-            <div style={{fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:1,marginBottom:10}}>GENERATE</div>
-            <div style={{fontSize:10,color:"#4a6a80",marginBottom:6,letterSpacing:1}}>STRATEGY</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:10}}>
-              {[["mixed","[AIM] MIXED","Balance"],["chalk","[PIN] CHALK","Cash/floor"],["leverage","[+] LEVERAGE","3-stack ceil"],["tournament","[GPP] TOURN","3-stack tail"]].map(([v,lb,d])=>(<button key={v} onClick={()=>sst(v)} style={{padding:"8px 10px",borderRadius:7,border:`1px solid ${strat===v?"#3b82f6":"#1e3040"}`,background:strat===v?"#1a3550":"#0a1520",color:strat===v?"#60a5fa":"#4a6a80",cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
-                <div style={{fontSize:10,fontWeight:700,marginBottom:2}}>{lb}</div>
-                <div style={{fontSize:9,color:strat===v?"#4a8aaa":"#3b6280"}}>{d}</div>
-              </button>))}
-            </div>
-            <div style={{fontSize:9,color:"#a78bfa",marginBottom:8,padding:"5px 8px",background:"#0a0a1a",borderRadius:4,border:"1px solid #a78bfa22"}}>v5.2: TOURN=3-stack min · floor={MIN_PROJ_FILTER}pts · 3-game rotation</div>
-            <div style={{fontSize:10,color:"#4a6a80",marginBottom:4}}>COUNT</div>
-            <input type="range" min="1" max="20" value={cnt} onChange={e=>scnt(+e.target.value)} style={{width:"100%",marginBottom:4}}/>
-            <div style={{textAlign:"center",color:"#60a5fa",fontWeight:700,fontSize:18,marginBottom:12}}>{cnt}</div>
-            <button style={{...S.btn("primary"),width:"100%",fontSize:13,padding:"12px 0"}} onClick={doGen} disabled={gen||!players.length}>{gen?"BUILDING...":!players.length?"UPLOAD CSV FIRST":"[*] GENERATE"}</button>
-            {cascLog.length>0&&<div style={{marginTop:10,padding:"8px 10px",background:"#0a1a0a",border:"1px solid #16a34a33",borderRadius:7}}><div style={{fontSize:9,color:"#22c55e",letterSpacing:2,marginBottom:5}}>[+] CASCADES</div>{cascLog.map((c,i)=><div key={i} style={{fontSize:9,color:"#4a6a80",marginBottom:2}}><span style={{color:"#ef4444"}}>{c.out}</span>{" → "}<span style={{color:"#22c55e"}}>{c.player}</span></div>)}</div>}
-          </div>
-        </div>
-      </div>
-    </div>}
-
-    {step==="results"&&<div style={S.sec}>
-      {!lineups.length&&<div style={{background:"#1a0a0a",border:"1px solid #ef444444",borderRadius:10,padding:24,textAlign:"center",marginBottom:16}}>
-        <div style={{fontSize:14,color:"#ef4444",marginBottom:8}}>[!] No lineups — projection floor {MIN_PROJ_FILTER}pts may be too high. Try LEVERAGE or lower-total slate.</div>
-        <button onClick={()=>ss("build")} style={{...S.btn("primary"),marginTop:12}}>[←] BACK</button>
-      </div>}
-      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-        {["lineups","players","exposure"].map(t=><button key={t} style={S.pill(tab===t)} onClick={()=>stab(t)}>{t.toUpperCase()}</button>)}
-        <div style={{marginLeft:"auto",display:"flex",gap:8}}>
-          <button style={S.btn("ghost")} onClick={()=>ss("build")}>[←] EDIT</button>
-          <button style={S.btn("success")} onClick={doGen}>[R] REGEN</button>
-          {lineups.length>0&&<button style={S.btn("warning")} onClick={doExport}>[↓] EXPORT</button>}
-        </div>
-      </div>
-
-      {tab==="lineups"&&lineups.length>0&&<div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:16}}>
-        <div style={{maxHeight:"80vh",overflowY:"auto",paddingRight:4}}>
-          {lineups.map((lu,i)=><LineupCard key={i} lineup={lu} index={i} isSelected={sel===i} onSelect={ssel}/>)}
-        </div>
-        {(()=>{
-          const lu=lineups[sel];if(!lu)return null;
-          const st=lineupStats(lu);const sorted=[...lu].sort((a,b)=>POSITION_ORDER.indexOf(a.slot)-POSITION_ORDER.indexOf(b.slot));
-          const oc=o=>o>=30?"#f59e0b":o>=10?"#60a5fa":o>=5?"#a78bfa":"#f87171";
-          return(<div style={S.card}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:12}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:700,color:"#60a5fa",letterSpacing:1}}>LINEUP #{sel+1}</div>
-                {lu._sp90&&<div style={{fontSize:9,color:"#4a6a80",marginTop:2}}>Sim: mean {lu._sm} · p75 {lu._sp75} · p90 {lu._sp90} · p99 {lu._sp99}</div>}
-                {lu._sg&&<div style={{fontSize:9,color:"#22c55e",marginTop:2}}>Stack: {lu._sg}</div>}
-              </div>
-              <div style={{display:"flex",gap:18,fontSize:12}}>
-                <div><span style={{color:"#4a6a80"}}>PROJ </span><span style={{color:"#64b587",fontWeight:700,fontSize:20}}>{st.proj.toFixed(1)}</span></div>
-                <div><span style={{color:"#4a6a80"}}>SAL </span><span style={{color:"#e2e8f0",fontWeight:700}}>${st.total.toLocaleString()}</span></div>
-                <div><span style={{color:"#4a6a80"}}>OWN </span><span style={{color:"#f59e0b",fontWeight:700}}>{st.avgOwn.toFixed(1)}%</span></div>
-                <div><span style={{color:"#4a6a80"}}>CUM </span><span style={{color:st.cumOwn<150?"#22c55e":st.cumOwn<200?"#f59e0b":"#ef4444",fontWeight:700}}>{st.cumOwn.toFixed(0)}%</span></div>
-              </div>
-            </div>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead><tr>{["SLOT","PLAYER","TEAM","SAL","FD AVG","CEIL","VALUE","OWN%"].map(h=><th key={h} style={{padding:"7px 8px",textAlign:"left",color:"#3b6280",fontSize:9,letterSpacing:1,borderBottom:"1px solid #1e3040"}}>{h}</th>)}</tr></thead>
-              <tbody>{sorted.map((p,i)=>(<tr key={i} style={{borderBottom:"1px solid #0d1e2e"}}>
-                <td style={{padding:"9px 8px",color:"#3b82f6",fontWeight:700,fontSize:11}}>{p.slot}</td>
-                <td style={{padding:"9px 8px",color:"#e2e8f0"}}>{p.name}{p.statMuseFD&&<span style={{color:"#22c55e",fontSize:9,marginLeft:3}}>[.]</span>}</td>
-                <td style={{padding:"9px 8px",color:"#4a6a80",fontSize:10}}>{p.team}</td>
-                <td style={{padding:"9px 8px",color:"#64b587"}}>${p.salary.toLocaleString()}</td>
-                <td style={{padding:"9px 8px",color:p.statMuseFD?"#22c55e":"#e2e8f0"}}>{p.fppg.toFixed(1)}</td>
-                <td style={{padding:"9px 8px",color:"#a78bfa",fontSize:10}}>{p.projCeiling?.toFixed(1)||"-"}</td>
-                <td style={{padding:"9px 8px",color:p.value>=5?"#22c55e":"#94a3b8"}}>{p.value.toFixed(2)}x</td>
-                <td style={{padding:"9px 8px"}}><span style={{color:oc(p.ownership),fontWeight:600}}>{p.ownership.toFixed(1)}%</span></td>
-              </tr>))}</tbody>
-            </table>
-          </div>);
-        })()}
-      </div>}
-
-      {tab==="players"&&<div style={S.card}>
-        <div style={{fontSize:12,fontWeight:700,color:"#60a5fa",letterSpacing:1,marginBottom:14}}>PLAYER POOL (by composite score)</div>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-          <thead><tr>{["#","PLAYER","POS","SAL","PROJ","CEIL","VALUE","OWN%","SCORE","ACTIONS"].map(h=><th key={h} style={{padding:"7px 8px",textAlign:"left",color:"#3b6280",fontSize:9,borderBottom:"1px solid #1e3040"}}>{h}</th>)}</tr></thead>
-          <tbody>{players.slice(0,60).map((p,i)=>{const b=ownershipBucket(p.ownership);const bc={chalk:"#f59e0b",mid:"#60a5fa",low:"#a78bfa",punt:"#f87171"}[b];return(<tr key={p.name} style={{borderBottom:"1px solid #0d1e2e",background:i%2?"#0a1520":"transparent"}}>
-            <td style={{padding:"6px 8px",color:"#3b6280"}}>{i+1}</td>
-            <td style={{padding:"6px 8px",color:"#e2e8f0"}}>{p.name}</td>
-            <td style={{padding:"6px 8px",color:"#3b82f6"}}>{p.positions[0]}</td>
-            <td style={{padding:"6px 8px",color:"#64b587"}}>${p.salary.toLocaleString()}</td>
-            <td style={{padding:"6px 8px",color:p.fppg>=40?"#f59e0b":"#e2e8f0"}}>{p.fppg.toFixed(1)}</td>
-            <td style={{padding:"6px 8px",color:"#a78bfa"}}>{p.projCeiling?.toFixed(1)||"-"}</td>
-            <td style={{padding:"6px 8px",color:p.value>=5?"#22c55e":"#94a3b8"}}>{p.value.toFixed(2)}x</td>
-            <td style={{padding:"6px 8px",color:bc,fontWeight:600}}>{p.ownership.toFixed(1)}%</td>
-            <td style={{padding:"6px 8px",color:"#60a5fa"}}>{p.score.toFixed(2)}</td>
-            <td style={{padding:"6px 8px"}}><div style={{display:"flex",gap:3}}>
-              <button onClick={()=>togLock(p.name)} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:`1px solid ${locked.includes(p.name)?"#22c55e":"#1e3040"}`,background:locked.includes(p.name)?"#16a34a33":"transparent",color:locked.includes(p.name)?"#22c55e":"#4a6a80",cursor:"pointer"}}>LOCK</button>
-              <button onClick={()=>togEx(p.name)} style={{fontSize:9,padding:"2px 5px",borderRadius:3,border:`1px solid ${excl.includes(p.name)?"#ef4444":"#1e3040"}`,background:excl.includes(p.name)?"#99000033":"transparent",color:excl.includes(p.name)?"#ef4444":"#4a6a80",cursor:"pointer"}}>OUT</button>
-            </div></td>
-          </tr>);})}
-          </tbody>
-        </table>
-      </div>}
-
-      {tab==="exposure"&&lineups.length>0&&<div style={S.card}>
-        <div style={{fontSize:12,fontWeight:700,color:"#60a5fa",letterSpacing:1,marginBottom:14}}>EXPOSURE - {lineups.length} LINEUPS</div>
-        {(()=>{const exp={};lineups.forEach(lu=>lu.forEach(p=>{exp[p.name]=(exp[p.name]||0)+1;}));return(<table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-          <thead><tr>{["PLAYER","APPS","EXP%","OWN%","PROJ","CEIL","POS"].map(h=><th key={h} style={{padding:"7px 8px",textAlign:"left",color:"#3b6280",fontSize:9,borderBottom:"1px solid #1e3040"}}>{h}</th>)}</tr></thead>
-          <tbody>{Object.entries(exp).sort((a,b)=>b[1]-a[1]).map(([n,c],i)=>{const p=players.find(x=>x.name===n);const pct=c/lineups.length*100;return(<tr key={n} style={{borderBottom:"1px solid #0d1e2e",background:i%2?"#0a1520":"transparent"}}>
-            <td style={{padding:"7px 8px",color:"#e2e8f0"}}>{n}</td>
-            <td style={{padding:"7px 8px",color:"#e2e8f0"}}>{c}</td>
-            <td style={{padding:"7px 8px",color:pct>60?"#f59e0b":"#94a3b8"}}>{pct.toFixed(0)}%</td>
-            <td style={{padding:"7px 8px",color:"#60a5fa"}}>{p?.ownership.toFixed(1)??"-"}%</td>
-            <td style={{padding:"7px 8px",color:p?.statMuseFD?"#22c55e":"#e2e8f0"}}>{p?.fppg.toFixed(1)??"-"}</td>
-            <td style={{padding:"7px 8px",color:"#a78bfa"}}>{p?.projCeiling?.toFixed(1)??"-"}</td>
-            <td style={{padding:"7px 8px",color:"#3b82f6"}}>{p?.positions[0]??"-"}</td>
-          </tr>);})}</tbody>
-        </table>);})()}
-      </div>}
-    </div>}
-
-    <div style={{textAlign:"center",padding:"20px",fontSize:9,color:"#3b6280",letterSpacing:2}}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.2</div>
-  </div>);
+  );
 }
-ReactDOM.render(React.createElement(App),document.getElementById("root"));
+
+ReactDOM.render(React.createElement(App), document.getElementById("root"));
 </script>
 </body>
 </html>
