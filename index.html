@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Court Edge - NBA DFS Optimizer v5.4</title>
+<title>Court Edge - NBA DFS Optimizer v5.5</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.4...</div></div>
+<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.5...</div></div>
 <script>
 (function () {
   function showErrorOverlay(message, line, stack) {
@@ -70,6 +70,36 @@ const LEAGUE_AVG_PACE = 100;
 const LEAGUE_AVG_DVP = { PG: 44.2, SG: 40.8, SF: 41.5, PF: 40.1, C: 43.6 };
 // Matchup grade thresholds
 const DVP_GRADES = { A: 1.10, B: 1.05, C: 1.00, D: 0.95, F: 0.88 };
+
+// League average stats allowed per position (for DvP multiplier calc)
+const LEAGUE_AVG_STATS = {
+  PG: {pts:23.8,reb:4.2,ast:7.6,stl:1.6,blk:0.3,to:3.2},
+  SG: {pts:21.2,reb:4.1,ast:4.6,stl:1.3,blk:0.3,to:2.4},
+  SF: {pts:20.8,reb:5.7,ast:3.5,stl:1.2,blk:0.4,to:2.3},
+  PF: {pts:21.5,reb:8.8,ast:3.6,stl:1.2,blk:0.9,to:2.7},
+  C:  {pts:20.8,reb:13.0,ast:3.0,stl:1.0,blk:1.5,to:2.8},
+};
+
+// Per-stat DvP — allowed pts/reb/ast/stl/blk/to per position per defending team
+// Source: hashtagbasketball.com — updated Apr 19 2026
+const DVP_STATS = {
+  BOS:{PG:{pts:22.6,reb:4.2,ast:7.4,stl:1.6,blk:0.3,to:3.0},SG:{pts:19.9,reb:4.1,ast:4.7,stl:1.4,blk:0.3,to:2.3},SF:{pts:18.6,reb:5.6,ast:3.5,stl:1.2,blk:0.4,to:2.2},PF:{pts:19.4,reb:8.2,ast:3.5,stl:1.1,blk:0.8,to:2.5},C:{pts:19.0,reb:11.8,ast:3.1,stl:0.9,blk:1.4,to:2.6}},
+  PHI:{PG:{pts:25.4,reb:4.5,ast:7.9,stl:1.7,blk:0.3,to:3.1},SG:{pts:22.9,reb:4.4,ast:4.9,stl:1.4,blk:0.3,to:2.5},SF:{pts:22.2,reb:5.8,ast:3.7,stl:1.3,blk:0.4,to:2.4},PF:{pts:25.1,reb:9.0,ast:3.9,stl:1.3,blk:0.9,to:2.8},C:{pts:24.0,reb:12.8,ast:3.2,stl:1.1,blk:1.4,to:2.9}},
+  OKC:{PG:{pts:22.1,reb:4.0,ast:7.2,stl:1.6,blk:0.3,to:3.4},SG:{pts:21.0,reb:4.2,ast:4.5,stl:1.3,blk:0.3,to:2.5},SF:{pts:20.8,reb:5.5,ast:3.4,stl:1.1,blk:0.5,to:2.4},PF:{pts:21.2,reb:8.8,ast:3.5,stl:1.1,blk:1.0,to:2.7},C:{pts:21.6,reb:12.8,ast:3.0,stl:1.0,blk:1.5,to:2.8}},
+  PHO:{PG:{pts:23.0,reb:4.2,ast:7.4,stl:1.6,blk:0.3,to:3.2},SG:{pts:20.2,reb:4.0,ast:4.4,stl:1.2,blk:0.3,to:2.3},SF:{pts:20.2,reb:5.6,ast:3.4,stl:1.1,blk:0.5,to:2.3},PF:{pts:20.8,reb:8.5,ast:3.3,stl:1.1,blk:0.9,to:2.6},C:{pts:22.3,reb:13.2,ast:2.9,stl:0.9,blk:1.6,to:2.7}},
+  DET:{PG:{pts:25.0,reb:4.4,ast:7.6,stl:2.0,blk:0.3,to:3.3},SG:{pts:21.8,reb:4.2,ast:4.5,stl:1.4,blk:0.3,to:2.4},SF:{pts:20.7,reb:5.6,ast:3.4,stl:1.3,blk:0.5,to:2.5},PF:{pts:24.2,reb:9.3,ast:3.7,stl:1.3,blk:0.9,to:2.9},C:{pts:21.8,reb:13.5,ast:3.1,stl:1.5,blk:1.9,to:2.8}},
+  ORL:{PG:{pts:25.4,reb:4.8,ast:7.9,stl:1.7,blk:0.4,to:3.2},SG:{pts:22.1,reb:4.6,ast:4.7,stl:1.3,blk:0.4,to:2.4},SF:{pts:20.8,reb:5.9,ast:3.5,stl:1.3,blk:0.4,to:2.3},PF:{pts:23.2,reb:9.1,ast:3.8,stl:1.3,blk:0.9,to:2.8},C:{pts:20.6,reb:13.4,ast:3.2,stl:1.1,blk:1.5,to:3.1}},
+  POR:{PG:{pts:28.1,reb:4.4,ast:7.6,stl:1.9,blk:0.3,to:3.1},SG:{pts:21.8,reb:4.1,ast:4.4,stl:1.4,blk:0.3,to:2.3},SF:{pts:21.7,reb:5.9,ast:3.6,stl:1.2,blk:0.5,to:2.4},PF:{pts:20.9,reb:7.9,ast:3.3,stl:1.2,blk:0.8,to:2.3},C:{pts:18.9,reb:14.2,ast:2.5,stl:1.0,blk:1.5,to:2.7}},
+  SA: {PG:{pts:23.0,reb:4.2,ast:7.4,stl:1.6,blk:0.3,to:3.2},SG:{pts:20.2,reb:4.0,ast:4.4,stl:1.2,blk:0.3,to:2.3},SF:{pts:20.2,reb:5.6,ast:3.4,stl:1.1,blk:0.5,to:2.3},PF:{pts:20.8,reb:8.5,ast:3.3,stl:1.1,blk:0.9,to:2.6},C:{pts:22.3,reb:13.2,ast:2.9,stl:0.9,blk:1.6,to:2.7}},
+  CLE:{PG:{pts:25.9,reb:4.5,ast:8.0,stl:1.7,blk:0.3,to:3.3},SG:{pts:21.3,reb:4.1,ast:4.6,stl:1.3,blk:0.3,to:2.4},SF:{pts:20.5,reb:5.7,ast:3.5,stl:1.2,blk:0.4,to:2.3},PF:{pts:22.8,reb:9.1,ast:3.7,stl:1.2,blk:0.9,to:2.7},C:{pts:22.8,reb:13.5,ast:3.1,stl:1.0,blk:1.5,to:2.9}},
+  TOR:{PG:{pts:25.5,reb:4.5,ast:8.0,stl:1.7,blk:0.3,to:3.3},SG:{pts:21.3,reb:4.1,ast:4.6,stl:1.3,blk:0.3,to:2.4},SF:{pts:20.3,reb:5.6,ast:3.4,stl:1.2,blk:0.4,to:2.3},PF:{pts:22.4,reb:8.9,ast:3.6,stl:1.2,blk:0.9,to:2.7},C:{pts:22.3,reb:13.3,ast:3.0,stl:1.0,blk:1.5,to:2.8}},
+  NYK:{PG:{pts:23.8,reb:4.0,ast:7.5,stl:1.6,blk:0.3,to:3.1},SG:{pts:21.5,reb:4.0,ast:4.6,stl:1.3,blk:0.3,to:2.4},SF:{pts:19.8,reb:5.5,ast:3.4,stl:1.2,blk:0.4,to:2.3},PF:{pts:21.9,reb:8.8,ast:3.6,stl:1.2,blk:0.9,to:2.7},C:{pts:21.8,reb:12.9,ast:3.0,stl:1.0,blk:1.5,to:2.8}},
+  ATL:{PG:{pts:25.9,reb:4.5,ast:8.1,stl:1.8,blk:0.3,to:3.4},SG:{pts:22.9,reb:4.3,ast:4.8,stl:1.4,blk:0.3,to:2.5},SF:{pts:22.5,reb:5.9,ast:3.7,stl:1.3,blk:0.5,to:2.5},PF:{pts:24.0,reb:9.2,ast:3.8,stl:1.3,blk:1.0,to:2.9},C:{pts:24.6,reb:13.5,ast:3.3,stl:1.1,blk:1.6,to:3.0}},
+  DEN:{PG:{pts:24.5,reb:4.4,ast:7.7,stl:1.6,blk:0.3,to:3.2},SG:{pts:21.8,reb:4.1,ast:4.6,stl:1.3,blk:0.3,to:2.4},SF:{pts:21.7,reb:5.8,ast:3.5,stl:1.2,blk:0.5,to:2.4},PF:{pts:23.2,reb:9.3,ast:3.8,stl:1.2,blk:1.0,to:2.8},C:{pts:21.9,reb:13.1,ast:3.0,stl:1.0,blk:1.5,to:2.8}},
+  MIN:{PG:{pts:26.1,reb:4.7,ast:8.2,stl:1.8,blk:0.3,to:3.5},SG:{pts:22.0,reb:4.2,ast:4.7,stl:1.4,blk:0.3,to:2.5},SF:{pts:20.8,reb:5.8,ast:3.5,stl:1.3,blk:0.5,to:2.4},PF:{pts:23.1,reb:9.2,ast:3.8,stl:1.3,blk:1.0,to:2.8},C:{pts:23.0,reb:13.6,ast:3.2,stl:1.1,blk:1.6,to:3.0}},
+  HOU:{PG:{pts:24.0,reb:4.2,ast:7.6,stl:1.6,blk:0.3,to:3.2},SG:{pts:21.5,reb:4.0,ast:4.5,stl:1.3,blk:0.3,to:2.3},SF:{pts:20.5,reb:5.6,ast:3.4,stl:1.2,blk:0.4,to:2.3},PF:{pts:21.0,reb:8.6,ast:3.4,stl:1.1,blk:0.9,to:2.6},C:{pts:22.0,reb:13.0,ast:2.9,stl:1.0,blk:1.5,to:2.8}},
+  LAL:{PG:{pts:24.5,reb:4.2,ast:7.7,stl:1.6,blk:0.3,to:3.2},SG:{pts:21.6,reb:4.1,ast:4.6,stl:1.3,blk:0.3,to:2.4},SF:{pts:21.7,reb:5.7,ast:3.5,stl:1.2,blk:0.4,to:2.4},PF:{pts:21.5,reb:8.7,ast:3.5,stl:1.2,blk:0.9,to:2.6},C:{pts:21.5,reb:12.6,ast:3.0,stl:1.0,blk:1.4,to:2.7}},
+};
 
 const DEFAULT_SLATE_GAMES = [];
 const DEFAULT_INJURIES = [];
@@ -276,6 +306,77 @@ function buildProjection(player, teamMap = {}, projectionBoost = 1, minutesBoost
   };
 }
 
+// ============================================================================
+// PRA PROJECTION ENGINE — projects per-stat line from:
+//   salary tier → base stat split
+//   × pace ratio (possessions scale all counting stats)
+//   × per-stat DvP vs opponent defense
+//   + injury minutes cascade (per-stat boost from absorbed minutes)
+// ============================================================================
+function buildStatLine(player, teamMap = {}, dvpMap = {}, minuteBoostFppg = 0) {
+  const pos = player.positions[0] || 'PG';
+  const opp = teamMap[player.team]?.opponent || '';
+  const fppg = player.projMean || player.fppg || player.csvFppg || 0;
+  if (fppg <= 0) return null;
+
+  // Step 1: Estimate base stat splits from salary tier + position
+  // Salary tier correlates with role (starter vs bench)
+  const sal = player.salary || 5000;
+  const roleScale = sal >= 10000 ? 1.35 : sal >= 8000 ? 1.15 : sal >= 6000 ? 1.0 : sal >= 4500 ? 0.82 : 0.65;
+
+  const avgStats = LEAGUE_AVG_STATS[pos] || LEAGUE_AVG_STATS.PG;
+  let base = {
+    pts: avgStats.pts * roleScale,
+    reb: avgStats.reb * roleScale,
+    ast: avgStats.ast * roleScale,
+    stl: avgStats.stl * roleScale,
+    blk: avgStats.blk * roleScale,
+    to:  avgStats.to  * roleScale,
+  };
+
+  // Normalize so FD score matches player's actual fppg
+  const baseFD = base.pts + base.reb*1.2 + base.ast*1.5 + base.stl*3 + base.blk*3 - base.to;
+  if (baseFD > 0) {
+    const scale = fppg / baseFD;
+    Object.keys(base).forEach(k => { base[k] = base[k] * scale; });
+  }
+
+  // Step 2: Pace adjustment — faster pace = more possessions = more of everything
+  const ctx = teamMap[player.team] || {};
+  const total = ctx.total || LEAGUE_AVG_TOTAL;
+  const paceScale = clamp(total / LEAGUE_AVG_TOTAL, 0.92, 1.10);
+  Object.keys(base).forEach(k => { base[k] = base[k] * paceScale; });
+
+  // Step 3: Per-stat DvP vs opponent
+  const oppStats = DVP_STATS[opp]?.[pos];
+  if (oppStats) {
+    const avgOppStats = LEAGUE_AVG_STATS[pos];
+    ['pts','reb','ast','stl','blk','to'].forEach(stat => {
+      const dvpMult = clamp(oppStats[stat] / (avgOppStats[stat] || 1), 0.75, 1.30);
+      base[stat] = base[stat] * dvpMult;
+    });
+  }
+
+  // Step 4: Injury minutes cascade — add per-stat boost from absorbed minutes
+  // minuteBoostFppg is already computed; distribute it back into stat line proportionally
+  if (minuteBoostFppg > 0) {
+    const boostFD = base.pts + base.reb*1.2 + base.ast*1.5 + base.stl*3 + base.blk*3 - base.to;
+    if (boostFD > 0) {
+      const boostScale = (boostFD + minuteBoostFppg) / boostFD;
+      Object.keys(base).forEach(k => { base[k] = base[k] * boostScale; });
+    }
+  }
+
+  // Round to 1 decimal
+  const line = {};
+  Object.keys(base).forEach(k => { line[k] = Math.round(base[k] * 10) / 10; });
+
+  // Compute implied FD from stat line
+  line.impliedFD = Math.round((line.pts + line.reb*1.2 + line.ast*1.5 + line.stl*3 + line.blk*3 - line.to) * 10) / 10;
+
+  return line;
+}
+
 function compositeScore(p) {
   const rawLeverage = (p.projCeiling || p.fppg || 0) / Math.max(p.ownership || 5, 5);
   const leverage = Math.min(rawLeverage, 8);
@@ -385,6 +486,9 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     const projected = buildProjection(p, teamMap, boost, minutesBoost, dvpMap, minBoostFppg);
     if (!projected) continue;
     projected.score = compositeScore(projected);
+    // Build per-stat projection line for O/U display
+    const minBoostForStats = (_minuteBoosts[key]?.projBoost) || 0;
+    projected.statLine = buildStatLine(projected, teamMap, dvpMap, minBoostForStats);
     players.push(projected);
   }
   return players.sort((a, b) => b.score - a.score);
@@ -1388,7 +1492,7 @@ function App() {
       <div style={S.hdr}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
-          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.4 · DvP WIRED · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.5 · PRA ENGINE · MAXRESULTS4U BUSINESS SOLUTIONS</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
@@ -1585,7 +1689,7 @@ function App() {
             </div>
           )}
           <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-            {["lineups","players","exposure"].map(t => <button key={t} style={S.pill(activeTab === t)} onClick={() => setActiveTab(t)}>{t.toUpperCase()}</button>)}
+            {["lineups","players","props","exposure"].map(t => <button key={t} style={S.pill(activeTab === t)} onClick={() => setActiveTab(t)}>{t.toUpperCase()}</button>)}
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button style={S.btn("ghost")} onClick={() => setStep("build")}>[←] EDIT</button>
               <button style={S.btn("success")} onClick={handleGenerate}>[R] REGEN</button>
@@ -1620,18 +1724,33 @@ function App() {
                       </div>
                     </div>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                      <thead><tr>{["SLOT","PLAYER","TEAM","SAL","PROJ","MATCH","VALUE","OWN%"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
+                      <thead><tr>{["SLOT","PLAYER","SAL","PROJ","PTS","REB","AST","STL","BLK","MATCH","OWN%"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
                       <tbody>
                         {sorted.map((p, i) => (
                           <tr key={i} style={{ borderBottom: "1px solid #0d1e2e" }}>
-                            <td style={{ padding: "9px 8px", color: "#3b82f6", fontWeight: 700, fontSize: 11 }}>{p.slot}</td>
-                            <td style={{ padding: "9px 8px", color: "#e2e8f0" }}>{p.name}{p.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9, marginLeft: 3 }}>[.]</span>}</td>
-                            <td style={{ padding: "9px 8px", color: "#4a6a80", fontSize: 10 }}>{p.team}</td>
-                            <td style={{ padding: "9px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
-                            <td style={{ padding: "9px 8px", color: p.statMuseFD ? "#22c55e" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
-                            <td style={{ padding: "9px 8px", textAlign: "center" }}>{p.dvpGrade ? <span style={{ fontSize: 10, fontWeight: 700, color: p.dvpGrade.color }}>{p.dvpGrade.grade} {p.dvpAdj !== undefined && p.dvpAdj !== 1 ? <span style={{fontSize:9, color:"#4a6a80"}}>({p.dvpAdj >= 1 ? "+" : ""}{((p.dvpAdj-1)*100).toFixed(0)}%)</span> : ""}</span> : <span style={{color:"#3b6280"}}>-</span>}</td>
-                            <td style={{ padding: "9px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" }}>{p.value.toFixed(2)}x</td>
-                            <td style={{ padding: "9px 8px" }}><span style={{ color: ownColor(p.ownership), fontWeight: 600 }}>{p.ownership.toFixed(1)}%</span></td>
+                            <td style={{ padding: "8px 6px", color: "#3b82f6", fontWeight: 700, fontSize: 11 }}>{p.slot}</td>
+                            <td style={{ padding: "8px 6px" }}>
+                              <div style={{ color: "#e2e8f0", fontSize: 11 }}>{p.name}{p.statMuseFD && <span style={{ color: "#22c55e", fontSize: 9, marginLeft: 3 }}>[.]</span>}</div>
+                              <div style={{ fontSize: 9, color: "#4a6a80", marginTop: 1 }}>{p.team} · ${p.salary.toLocaleString()}</div>
+                            </td>
+                            <td style={{ padding: "8px 6px", color: "#64b587", fontWeight: 700 }}>{p.fppg.toFixed(1)}</td>
+                            <td style={{ padding: "8px 6px" }}>
+                              <span style={{ color: "#f0a500", fontWeight: 700, fontSize: 11 }}>{p.statLine?.pts?.toFixed(1) || "-"}</span>
+                            </td>
+                            <td style={{ padding: "8px 6px" }}>
+                              <span style={{ color: "#60a5fa", fontSize: 11 }}>{p.statLine?.reb?.toFixed(1) || "-"}</span>
+                            </td>
+                            <td style={{ padding: "8px 6px" }}>
+                              <span style={{ color: "#a78bfa", fontSize: 11 }}>{p.statLine?.ast?.toFixed(1) || "-"}</span>
+                            </td>
+                            <td style={{ padding: "8px 6px" }}>
+                              <span style={{ color: "#22c55e", fontSize: 10 }}>{p.statLine?.stl?.toFixed(1) || "-"}</span>
+                            </td>
+                            <td style={{ padding: "8px 6px" }}>
+                              <span style={{ color: "#22c55e", fontSize: 10 }}>{p.statLine?.blk?.toFixed(1) || "-"}</span>
+                            </td>
+                            <td style={{ padding: "8px 6px", textAlign: "center" }}>{p.dvpGrade ? <span style={{ fontSize: 10, fontWeight: 700, color: p.dvpGrade.color }}>{p.dvpGrade.grade}</span> : <span style={{color:"#3b6280"}}>-</span>}</td>
+                            <td style={{ padding: "8px 6px" }}><span style={{ color: ownColor(p.ownership), fontWeight: 600 }}>{p.ownership.toFixed(1)}%</span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -1662,6 +1781,9 @@ function App() {
                         <td style={{ padding: "6px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
                         <td style={{ padding: "6px 8px", color: p.fppg >= 40 ? "#f59e0b" : "#e2e8f0" }}>{p.fppg.toFixed(1)}</td>
                         <td style={{ padding: "6px 8px", color: "#94a3b8" }}>{p.minutesProj?.toFixed(0) || "-"}</td>
+                        <td style={{ padding: "6px 8px", color: "#f0a500", fontSize: 10, fontWeight: 600 }}>{p.statLine?.pts?.toFixed(1) || "-"}</td>
+                        <td style={{ padding: "6px 8px", color: "#60a5fa", fontSize: 10 }}>{p.statLine?.reb?.toFixed(1) || "-"}</td>
+                        <td style={{ padding: "6px 8px", color: "#a78bfa", fontSize: 10 }}>{p.statLine?.ast?.toFixed(1) || "-"}</td>
                         <td style={{ padding: "6px 8px", color: p.value >= 5 ? "#22c55e" : "#94a3b8" }}>{p.value.toFixed(2)}x</td>
                         <td style={{ padding: "6px 8px", color: bc, fontWeight: 600 }}>{p.ownership.toFixed(1)}%</td>
                         <td style={{ padding: "6px 8px", color: "#60a5fa" }}>{p.score.toFixed(2)}</td>
@@ -1669,6 +1791,74 @@ function App() {
                           <button onClick={() => toggleLock(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${lockedNames.includes(p.name) ? "#22c55e" : "#1e3040"}`, background: lockedNames.includes(p.name) ? "#16a34a33" : "transparent", color: lockedNames.includes(p.name) ? "#22c55e" : "#4a6a80", cursor: "pointer" }}>LOCK</button>
                           <button onClick={() => toggleExclude(p.name)} style={{ fontSize: 9, padding: "2px 5px", borderRadius: 3, border: `1px solid ${excludedNames.includes(p.name) ? "#ef4444" : "#1e3040"}`, background: excludedNames.includes(p.name) ? "#99000033" : "transparent", color: excludedNames.includes(p.name) ? "#ef4444" : "#4a6a80", cursor: "pointer" }}>OUT</button>
                         </div></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === "props" && players.length > 0 && (
+            <div style={S.card}>
+              <div style={{ marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>PLAYER PROP PROJECTIONS</div>
+                  <div style={{ fontSize: 9, color: "#4a6a80", marginTop: 2 }}>
+                    Projected stat lines · Vegas pace + Per-stat DvP + Injury cascade · Apr 19 2026
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 12, fontSize: 9 }}>
+                  {[["PTS","#f0a500"],["REB","#60a5fa"],["AST","#a78bfa"],["STL","#22c55e"],["BLK","#22c55e"]].map(([s,c]) => (
+                    <span key={s} style={{ color: c, fontWeight: 700 }}>{s}</span>
+                  ))}
+                </div>
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: "#0a1520" }}>
+                    {["PLAYER","POS","TEAM","SAL","PROJ FD","PTS","REB","AST","STL","BLK","MATCH","MINUTES"].map(h => (
+                      <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {players.filter(p => p.statLine).slice(0, 60).map((p, i) => {
+                    const sl = p.statLine;
+                    const matchColor = p.dvpGrade?.color || "#94a3b8";
+                    const hasBoost = p.minuteBoost > 0;
+                    return (
+                      <tr key={p.name} style={{ borderBottom: "1px solid #0d1e2e", background: i % 2 ? "#0a1520" : "transparent" }}>
+                        <td style={{ padding: "7px 8px" }}>
+                          <div style={{ color: "#e2e8f0", fontWeight: p.fppg >= 40 ? 700 : 400 }}>{p.name}</div>
+                          {hasBoost && <div style={{ fontSize: 8, color: "#22c55e" }}>↑ cascade +{p.minuteBoost?.toFixed(1)} FD</div>}
+                        </td>
+                        <td style={{ padding: "7px 8px", color: "#3b82f6" }}>{p.positions[0]}</td>
+                        <td style={{ padding: "7px 8px", color: "#4a6a80" }}>{p.team}</td>
+                        <td style={{ padding: "7px 8px", color: "#64b587" }}>${p.salary.toLocaleString()}</td>
+                        <td style={{ padding: "7px 8px", color: "#64b587", fontWeight: 700 }}>{p.fppg.toFixed(1)}</td>
+                        <td style={{ padding: "7px 8px" }}>
+                          <span style={{ color: "#f0a500", fontWeight: 700 }}>{sl.pts?.toFixed(1)}</span>
+                        </td>
+                        <td style={{ padding: "7px 8px" }}>
+                          <span style={{ color: "#60a5fa" }}>{sl.reb?.toFixed(1)}</span>
+                        </td>
+                        <td style={{ padding: "7px 8px" }}>
+                          <span style={{ color: "#a78bfa" }}>{sl.ast?.toFixed(1)}</span>
+                        </td>
+                        <td style={{ padding: "7px 8px" }}>
+                          <span style={{ color: "#22c55e", fontSize: 10 }}>{sl.stl?.toFixed(1)}</span>
+                        </td>
+                        <td style={{ padding: "7px 8px" }}>
+                          <span style={{ color: "#22c55e", fontSize: 10 }}>{sl.blk?.toFixed(1)}</span>
+                        </td>
+                        <td style={{ padding: "7px 8px", textAlign: "center" }}>
+                          {p.dvpGrade ? <span style={{ fontSize: 10, fontWeight: 700, color: matchColor, padding: "1px 5px", background: matchColor + "22", borderRadius: 3 }}>{p.dvpGrade.grade}</span> : <span style={{ color: "#3b6280" }}>-</span>}
+                        </td>
+                        <td style={{ padding: "7px 8px", color: "#94a3b8", fontSize: 10 }}>
+                          {p.minutesProj?.toFixed(0) || "-"} min
+                          {hasBoost && <span style={{ color: "#22c55e" }}> +{(p.minuteBoost / (p.fppg / (p.minutesProj || 30)))?.toFixed(0)}m</span>}
+                        </td>
                       </tr>
                     );
                   })}
@@ -1710,7 +1900,7 @@ function App() {
         </div>
       )}
 
-      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.4</div>
+      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.5</div>
     </div>
   );
 }
