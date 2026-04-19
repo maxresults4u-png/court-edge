@@ -750,10 +750,10 @@ function selectPortfolio(candidates, desiredCount) {
   const targetCount = Math.max(desiredCount, 1);
   // [v5.2 FIX] Never allow 100% exposure; always require real diversity
   // [v5.4] Scale exposure cap by count — smaller portfolios can have higher natural overlap
-  const maxExposure = desiredCount <= 3 ? 0.67 : desiredCount <= 5 ? 0.65 : desiredCount <= 10 ? 0.60 : 0.50;
+  const maxExposure = desiredCount <= 3 ? 0.67 : desiredCount <= 5 ? 0.65 : desiredCount <= 10 ? 0.60 : desiredCount <= 30 ? 0.50 : desiredCount <= 75 ? 0.40 : 0.33;
   // Hard cap: no player in more than this many lineups regardless of count
   const hardCapCount = Math.max(2, Math.floor(desiredCount * maxExposure));
-  const minUnique = Math.max(3, desiredCount >= 15 ? 4 : 3);
+  const minUnique = desiredCount >= 100 ? 2 : desiredCount >= 50 ? 2 : desiredCount >= 15 ? 3 : 3;
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
   for (const lu of sorted) {
     if (selected.length >= desiredCount) break;
@@ -852,13 +852,13 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   }
 
   const startedAt = Date.now();
-  const MAX_BUILD_MS = 1200;
+  const MAX_BUILD_MS = Math.min(8000, 1200 + count * 40); // scales with lineup count
   const smallSlate = gamesList.length <= 4;
   const requireStack = !smallSlate && bestGames.length > 0;
 
   const buildBatch = (targetCount, type) => {
-    const attempts = Math.max(targetCount * 16, 60);
-    const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 3.0));
+    const attempts = Math.max(targetCount * 10, 60); // enough attempts without hanging browser
+    const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 2.2)); // tighter ratio for large counts
     const minStack = (type === "tournament") ? 3 : 2;
     const candidateExposure = {};
 
@@ -977,17 +977,42 @@ function applyCascades(outPlayers, ownershipMap, cascadeRules) {
 }
 
 function exportLineupsToFanDuel(lineups) {
+  // FanDuel bulk upload format:
+  // Header: position slots
+  // Rows: player IDs (fdId = "129170-XXXXX") in slot order
+  // Line endings: \r\n (Windows) for max compatibility
   const header = "PG,PG,SG,SG,SF,SF,PF,PF,C";
-  const rows = lineups.map(lu => {
+  const rows = [];
+  for (const lu of lineups) {
     const bySlot = { PG: [], SG: [], SF: [], PF: [], C: [] };
     lu.forEach(p => { if (bySlot[p.slot]) bySlot[p.slot].push(p); });
-    const ordered = [bySlot.PG[0], bySlot.PG[1], bySlot.SG[0], bySlot.SG[1], bySlot.SF[0], bySlot.SF[1], bySlot.PF[0], bySlot.PF[1], bySlot.C[0]];
-    return ordered.map(p => p?.fdId || p?.name || "").join(",");
-  });
-  return header + "\n" + rows.join("\n");
+    // Ensure exactly 2 PG, 2 SG, 2 SF, 2 PF, 1 C
+    const ordered = [
+      bySlot.PG[0], bySlot.PG[1],
+      bySlot.SG[0], bySlot.SG[1],
+      bySlot.SF[0], bySlot.SF[1],
+      bySlot.PF[0], bySlot.PF[1],
+      bySlot.C[0]
+    ];
+    // Skip lineup if any slot is empty
+    if (ordered.some(p => !p)) {
+      console.warn("Skipping lineup with missing slot:", lu.map(p => p.slot + ":" + p.name).join(", "));
+      continue;
+    }
+    // Use fdId (129170-XXXXX) — fall back to name only if no ID
+    const ids = ordered.map(p => p.fdId || "");
+    if (ids.some(id => !id)) {
+      console.warn("Missing fdId for player — lineup may not upload correctly");
+    }
+    rows.push(ids.join(","));
+  }
+  // \r\n for Windows compatibility with FanDuel upload
+  return header + "\r\n" + rows.join("\r\n");
 }
 function downloadCSV(csvText, filename) {
-  const blob = new Blob([csvText], { type: "text/csv" });
+  // UTF-8 BOM ensures proper encoding when opened in Excel or uploaded to FanDuel
+  const BOM = "\uFEFF";
+  const blob = new Blob([BOM + csvText], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = filename;
@@ -1357,7 +1382,7 @@ function App() {
   const [excludedNames, setExcludedNames] = useState([]);
   const [cascadeLog, setCascadeLog] = useState([]);
   const [lastGenTime, setLastGenTime] = useState(null);
-  const [lineupCount, setLineupCount] = useState(5);
+  const [lineupCount, setLineupCount] = useState(20);
   const [generating, setGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState("lineups");
   const [rightTab, setRightTab] = useState("slate");
@@ -1484,7 +1509,7 @@ function App() {
     setGenerating(true);
     requestAnimationFrame(() => {
       try {
-        const safeCount = Math.max(1, Math.min(lineupCount || 5, 50));
+        const safeCount = Math.max(1, Math.min(lineupCount || 20, 150));
         const lus = generateLineupsWithStrategy(players, safeCount, lockedNames, excludedNames, vegasGames, lineupStrategy);
         setLineups(Array.isArray(lus) ? lus : []);
         setSelectedLineup(0);
@@ -1705,8 +1730,16 @@ function App() {
                   ))}
                 </div>
                 <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 4, letterSpacing: 1 }}>LINEUP COUNT</div>
-                <input type="range" min="1" max="20" value={lineupCount} onChange={e => setLineupCount(+e.target.value)} style={{ width: "100%", marginBottom: 4 }} />
-                <div style={{ textAlign: "center", color: "#60a5fa", fontWeight: 700, fontSize: 18, marginBottom: 12 }}>{lineupCount}</div>
+                <input type="range" min="1" max="150" value={lineupCount} onChange={e => setLineupCount(+e.target.value)} style={{ width: "100%", marginBottom: 4 }} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 12 }}>
+                  <span style={{ color: "#60a5fa", fontWeight: 700, fontSize: 22 }}>{lineupCount}</span>
+                  <input type="number" min="1" max="150" value={lineupCount} onChange={e => setLineupCount(Math.max(1,Math.min(150,+e.target.value||1)))} style={{ width: 60, background: "#0d1e2e", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "4px 8px", fontSize: 14, fontFamily: "inherit", fontWeight: 700, textAlign: "center" }} />
+                </div>
+                {lineupCount > 50 && (
+                  <div style={{ fontSize: 9, color: "#f59e0b", padding: "5px 8px", background: "#1a1200", borderRadius: 4, border: "1px solid #f59e0b33", marginBottom: 8, textAlign: "center" }}>
+                    ⚠️ {lineupCount} lineups · est. {lineupCount > 100 ? "30-60" : "10-25"}s to generate
+                  </div>
+                )}
                 <button style={{ ...S.btn("primary"), width: "100%", fontSize: 13, padding: "12px 0" }} onClick={handleGenerate} disabled={generating || players.length === 0}>{generating ? "BUILDING..." : players.length === 0 ? "UPLOAD CSV FIRST" : "[*] GENERATE"}</button>
                 {cascadeLog.length > 0 && (
                   <div style={{ marginTop: 10, padding: "8px 10px", background: "#0a1a0a", border: "1px solid #16a34a33", borderRadius: 7 }}>
