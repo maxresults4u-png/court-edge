@@ -219,8 +219,10 @@ function estimateMinutes(player) {
   else if (fppg >= 10) mins = 14;
   else                 mins = 9;
   // Cross-check with salary: if salary suggests a clear bench role, cap minutes
+  // [v5.6 tune] Old buckets were too stingy — Sharpe at $4900 was capped at 22min
+  // despite being a 30+ min starter. Bumped up so value starters aren't shortchanged.
   const sal = player.salary;
-  const salCap = sal >= 9000 ? 36 : sal >= 7000 ? 33 : sal >= 5000 ? 28 : sal >= 4000 ? 22 : 18;
+  const salCap = sal >= 9000 ? 38 : sal >= 7000 ? 36 : sal >= 5500 ? 34 : sal >= 4500 ? 30 : sal >= 3500 ? 24 : 18;
   mins = Math.min(mins, salCap);
   const perMin = mins > 0 ? fppg / mins : 0;
   return { minutes: mins, perMin };
@@ -793,8 +795,26 @@ function selectPortfolio(candidates, desiredCount) {
     const simB = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, b))) : 0;
     return simA - simB;
   });
+  // [v5.6 tune] Even the fallback fill respects a SOFT exposure cap.
+  // Old code let players hit 100% exposure once the primary loop gave up.
+  // For small portfolios (6 lineups on a 2-game slate), this meant 4 locks at 6/6.
+  // Soft cap = max(hardCap, ceil(count * 0.67)) — tight enough to prevent locks,
+  // loose enough that we still fill the portfolio.
+  const softCap = Math.max(hardCapCount, Math.ceil(desiredCount * 0.67));
   for (const lu of remaining) {
     if (selected.length >= desiredCount) break;
+    let overExposed = false;
+    for (const p of lu) {
+      if ((exposure[p.name] || 0) + 1 > softCap) { overExposed = true; break; }
+    }
+    if (overExposed) continue;
+    selected.push(lu);
+    lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
+  }
+  // Final safety net — if soft cap starved us, drop the remaining slots without it
+  for (const lu of remaining) {
+    if (selected.length >= desiredCount) break;
+    if (selected.includes(lu)) continue;
     selected.push(lu);
   }
   return selected.slice(0, desiredCount);
@@ -876,8 +896,10 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
 
   const startedAt = Date.now();
   const MAX_BUILD_MS = Math.min(8000, 1200 + count * 40);
-  const smallSlate = gamesList.length <= 4;
-  const requireStack = !smallSlate && bestGames.length > 0;
+  // [v5.6 tune] Small slates WANT stacks — correlation matters MORE with fewer games.
+  // Only disable stack requirement when there's 1 game (no meaningful correlation available).
+  const singleGameSlate = gamesList.length <= 1;
+  const requireStack = !singleGameSlate && bestGames.length > 0;
 
   const buildBatch = (targetCount, type) => {
     const attempts = Math.max(targetCount * 10, 60);
@@ -1624,11 +1646,14 @@ function App() {
           </div>
 
           <div style={{ ...S.card, marginTop: 16, borderColor: "#22c55e44" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#22c55e", letterSpacing: 1, marginBottom: 10 }}>v5.6 — CASCADE FIX (Apr 20 post-mortem patch)</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#22c55e", letterSpacing: 1, marginBottom: 10 }}>v5.6 — CASCADE FIX + post-validation tunes (Apr 20)</div>
             <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.8 }}>
               · <strong style={{color:"#22c55e"}}>Cascade regression 0.75 → 0.40:</strong> Backups were getting overprojected by +15 FD on stars going OUT. Dropped to 0.40 + added 38-min stamina cap so absorbers can't "play" 40+ minutes.<br/>
               · <strong style={{color:"#22c55e"}}>Stack detection top 3 → 5 + pace bonus:</strong> Fast-pace games (230+ total) get an 18pt stack-score bonus. Fixes Apr 19 ORL@DET miss.<br/>
               · <strong style={{color:"#22c55e"}}>DvP penalty softened ±18% → ±12% + star carveout:</strong> Players projecting 45+ FPPG get half the DvP penalty vs tough D. Tatum hit 53.7 despite BOS-tier penalty — this models usage-driven ceilings.<br/>
+              · <strong style={{color:"#60a5fa"}}>Minutes model retune:</strong> Salary caps were too stingy — value starters at $4500-5500 now project 30-34 min (was 22-28). Sharpe-type plays now model accurately.<br/>
+              · <strong style={{color:"#60a5fa"}}>Small-slate stack fix:</strong> Was disabling stack requirement for ≤4 games. Now only disabled for 1-game slates — small slates WANT stacks.<br/>
+              · <strong style={{color:"#60a5fa"}}>Portfolio diversity hardened:</strong> Soft exposure cap now applies even during fallback fill. No more 100% exposure locks on small portfolios.<br/>
               · All v5.5 features retained (PRA engine, 150 lineups, FD template export, tooltips, auto injury cascade, anchor rotation)
             </div>
           </div>
