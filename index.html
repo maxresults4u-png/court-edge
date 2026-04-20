@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Court Edge - NBA DFS Optimizer v5.5</title>
+<title>Court Edge - NBA DFS Optimizer v5.6</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.5...</div></div>
+<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.6...</div></div>
 <script>
 (function () {
   function showErrorOverlay(message, line, stack) {
@@ -60,7 +60,14 @@
 const { useState, useCallback, useRef, useEffect, useMemo } = React;
 
 // ============================================================================
-// v5.1 MATH IMPROVEMENTS
+// v5.6 — CASCADE FIX (Apr 20 2026)
+// Post-mortem from Apr 19 slate (-$4.18 net, 256.1 avg):
+//   1. Cascade regression 0.75 was way too generous (Barlow -80%, Sharpe -54%)
+//      FIX: regression 0.75 → 0.40, plus stamina cap (38min max per player)
+//   2. ORL@DET stack was missed (ranked below top-3 stack games)
+//      FIX: added pace bonus to stackScore, expanded top-3 → top-5 rotation
+//   3. BOS DvP penalty hit Tatum too hard (he scored 53.7 anyway)
+//      FIX: tightened DvP clamp ±18% → ±12%, added star carveout (FPPG >= 45)
 // ============================================================================
 
 const LEAGUE_AVG_TOTAL = 226;
@@ -170,8 +177,17 @@ function dvpAdj(player, teamMap, dvpMap) {
   const baseline = LEAGUE_AVG_DVP[pos] || 41.0;
   const allowed = dvpMap[opponent][pos];
   if (!allowed || allowed <= 0) return 1.0;
-  // ratio clamped: teams can't be more than 18% above/below avg
-  return clamp(allowed / baseline, 0.82, 1.18);
+  // [v5.6] Tightened clamp ±18% → ±12% after Apr 19 post-mortem
+  // (Tatum hit 53.7 despite BOS-tier penalty — model was over-penalizing tough D)
+  let mult = clamp(allowed / baseline, 0.88, 1.12);
+  // [v5.6] Star carveout: elite usage players (FPPG >= 45) get half the DvP penalty
+  // Tough D suppresses role players but can't lock down a true #1 option.
+  // Models the fact that stars have usage-driven ceilings, not matchup-driven ones.
+  const fppg = player.csvFppg || player.fppg || 0;
+  if (fppg >= 45 && mult < 1.0) {
+    mult = 1.0 - (1.0 - mult) * 0.5;
+  }
+  return mult;
 }
 
 function dvpGrade(multiplier) {
@@ -236,9 +252,16 @@ function autoMinutesCascade(outPlayers, allPlayers, teamMap) {
     const shares = [0.55, 0.30, 0.15].slice(0, teammates.length);
     const totalShare = shares.reduce((a,b)=>a+b,0);
     teammates.forEach((tm, i) => {
-      const absorbedMins = outMins * (shares[i] / totalShare);
-      // Regression: backups are ~75% as efficient as the starter in extra mins
-      const bonusFppg = absorbedMins * outRate * 0.75;
+      const rawAbsorbed = outMins * (shares[i] / totalShare);
+      // [v5.6] Stamina cap — a bench player can't suddenly play 40+ min.
+      // Cap total minutes at 38, only absorb what fits in headroom.
+      // This is what was missing — Barlow "absorbed" 19 min on top of his usual 19 (impossible).
+      const tmMins = estimateMinutes(tm).minutes;
+      const headroom = Math.max(0, 38 - tmMins);
+      const absorbedMins = Math.min(rawAbsorbed, headroom);
+      // [v5.6] Regression 0.75 → 0.40 — post-mortem Apr 19 (Barlow -80%, Sharpe -54%)
+      // Backups are WAY less efficient in extended minutes than the 0.75 assumed.
+      const bonusFppg = absorbedMins * outRate * 0.40;
       const key = tm.name.toLowerCase();
       if (!boosts[key]) boosts[key] = { minuteBoost: 0, projBoost: 0, notes: [] };
       boosts[key].minuteBoost += absorbedMins;
@@ -351,8 +374,12 @@ function buildStatLine(player, teamMap = {}, dvpMap = {}, minuteBoostFppg = 0) {
   const oppStats = DVP_STATS[opp]?.[pos];
   if (oppStats) {
     const avgOppStats = LEAGUE_AVG_STATS[pos];
+    // [v5.6] Softer per-stat clamp (0.75-1.30 → 0.82-1.22) to match aggregate DvP
+    // + star carveout so elite scorers don't get pts slashed against tough D
+    const isStar = fppg >= 45;
     ['pts','reb','ast','stl','blk','to'].forEach(stat => {
-      const dvpMult = clamp(oppStats[stat] / (avgOppStats[stat] || 1), 0.75, 1.30);
+      let dvpMult = clamp(oppStats[stat] / (avgOppStats[stat] || 1), 0.82, 1.22);
+      if (isStar && dvpMult < 1.0) dvpMult = 1.0 - (1.0 - dvpMult) * 0.5;
       base[stat] = base[stat] * dvpMult;
     });
   }
@@ -427,8 +454,6 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     if (n2 && s2 && f2 && inj2 !== "O" && pos2.length) _rawPlayers.push({name:n2,fppg:f2,csvFppg:f2,salary:s2,team:t2,positions:pos2,minutes:0});
   }
   // [v5.3] Also cascade players marked OUT in the CSV itself
-  // (injury === "O" players are already excluded from the pool but their minutes
-  //  should boost teammates — collect them from the raw parse)
   const _csvOutPlayers = [];
   for (let _ci = 1; _ci < lines.length; _ci++) {
     const _cc = lines[_ci].split(","); if (_cc.length < 8) continue;
@@ -557,11 +582,8 @@ function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bri
   const excludeSet = new Set(excludedNames);
   const filtered = players.filter(p => !excludeSet.has(p.name));
   const scored = filtered.map(p => {
-    // [v5.2 FIX] Penalize players already overexposed in candidate pool
-    // Scale penalty based on how many lineups they've appeared in vs total generated
     const expCount = candidateExposure[p.name] || 0;
     const expRate = generatedSoFar > 0 ? expCount / generatedSoFar : 0;
-    // Strong penalty when exposure > 60% — pushes optimizer to try alternatives
     const exposurePenalty = lockSet.has(p.name) ? 0 : Math.max(0, expRate - 0.60) * weights.noise * 3.5;
     return {
       ...p,
@@ -748,10 +770,7 @@ function selectPortfolio(candidates, desiredCount) {
   const selected = [];
   const exposure = {};
   const targetCount = Math.max(desiredCount, 1);
-  // [v5.2 FIX] Never allow 100% exposure; always require real diversity
-  // [v5.4] Scale exposure cap by count — smaller portfolios can have higher natural overlap
   const maxExposure = desiredCount <= 3 ? 0.67 : desiredCount <= 5 ? 0.65 : desiredCount <= 10 ? 0.60 : desiredCount <= 30 ? 0.50 : desiredCount <= 75 ? 0.40 : 0.33;
-  // Hard cap: no player in more than this many lineups regardless of count
   const hardCapCount = Math.max(2, Math.floor(desiredCount * maxExposure));
   const minUnique = desiredCount >= 100 ? 2 : desiredCount >= 50 ? 2 : desiredCount >= 15 ? 3 : 3;
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
@@ -764,17 +783,15 @@ function selectPortfolio(candidates, desiredCount) {
       const next = (exposure[p.name] || 0) + 1;
       if (next > hardCapCount || next / targetCount > maxExposure) { badExposure = true; break; }
     }
-    // Only bypass exposure cap when portfolio is nearly full AND we've run out of options
     if (badExposure && selected.length < Math.floor(targetCount * 0.80)) continue;
     selected.push(lu);
     lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
-  // Fill remainder — prefer least similar to already-selected lineups
   const remaining = sorted.filter(lu => !selected.includes(lu));
   remaining.sort((a, b) => {
     const simA = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, a))) : 0;
     const simB = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, b))) : 0;
-    return simA - simB; // least similar first
+    return simA - simB;
   });
   for (const lu of remaining) {
     if (selected.length >= desiredCount) break;
@@ -822,20 +839,26 @@ function gradeSlate(gamesList) {
   return { score, grade, notes, recommendation, playIt: score >= 55, highTotalGames, avgTotal, maxImpl };
 }
 
-// [v5.2] Returns TOP 3 games for stack rotation (was single game)
+// [v5.6] TOP 5 stack games (was 3) + pace bonus — fixes Apr 19 ORL@DET miss
+// Fast-pace games deserve stacking even without a superstar on either roster
 function getBestStackGames(gamesList, players) {
   if (!gamesList || gamesList.length === 0) return [];
   const scored = gamesList.map(g => {
     const gamePlayers = players.filter(p => p.team === g.home || p.team === g.away);
     const topPlayers = gamePlayers.sort((a,b) => b.fppg - a.fppg).slice(0,6);
-    return { ...g, stackScore: (g.total || 220) * 0.5 + topPlayers.reduce((s,p) => s+p.fppg, 0) * 0.3, topPlayers };
+    // [v5.6] Pace bonus — fast games deserve stacks even without top-heavy rosters.
+    // ORL@DET scored 230+ total on Apr 19 but was outranked by games with bigger names.
+    const total = g.total || 220;
+    const paceBonus = total >= 232 ? 18 : total >= 228 ? 12 : total >= 224 ? 6 : 0;
+    return { ...g, stackScore: total * 0.5 + topPlayers.reduce((s,p) => s+p.fppg, 0) * 0.3 + paceBonus, topPlayers };
   });
-  return scored.sort((a,b) => b.stackScore - a.stackScore).slice(0, 3);
+  // [v5.6] Top 5 (was 3) — broader stack rotation catches mid-tier pace games
+  return scored.sort((a,b) => b.stackScore - a.stackScore).slice(0, 5);
 }
 
 function generateLineupsWithStrategy(players, count, lockedNames, excludedNames, gamesList, strategy) {
   if (!players || players.length === 0 || count <= 0) return [];
-  // [v5.2] Top 3 stack games for rotation
+  // [v5.6] Top 5 stack games for rotation
   const bestGames = getBestStackGames(gamesList, players);
   const bestGame = bestGames[0] || null;
 
@@ -852,17 +875,16 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   }
 
   const startedAt = Date.now();
-  const MAX_BUILD_MS = Math.min(8000, 1200 + count * 40); // scales with lineup count
+  const MAX_BUILD_MS = Math.min(8000, 1200 + count * 40);
   const smallSlate = gamesList.length <= 4;
   const requireStack = !smallSlate && bestGames.length > 0;
 
   const buildBatch = (targetCount, type) => {
-    const attempts = Math.max(targetCount * 10, 60); // enough attempts without hanging browser
-    const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 2.2)); // tighter ratio for large counts
+    const attempts = Math.max(targetCount * 10, 60);
+    const perTypeTarget = Math.max(targetCount, Math.ceil(targetCount * 2.2));
     const minStack = (type === "tournament") ? 3 : 2;
     const candidateExposure = {};
 
-    // [v5.3] Identify top anchor players by salary for forced rotation
     const topAnchors = [...players]
       .filter(p => p.salary >= 9000 && !lockedNames.includes(p.name) && !excludedNames.includes(p.name))
       .sort((a, b) => b.fppg - a.fppg)
@@ -873,18 +895,12 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
       if (Date.now() - startedAt > MAX_BUILD_MS) break;
       if (allCandidates.filter(l => l._type === type).length >= perTypeTarget) break;
 
-      // [v5.3] FORCED ANCHOR ROTATION
-      // Every N attempts, force-exclude the most overexposed expensive player
-      // This guarantees diverse candidates (Wemby-free, SGA-free, etc.)
       const forcedExcludes = [...excludedNames];
       const genSoFar = allCandidates.filter(l => l._type === type).length;
 
       if (topAnchors.length > 0 && genSoFar >= 2) {
-        // Find which anchor is most overexposed
         const anchorExposure = topAnchors.map(n => ({ name: n, exp: (candidateExposure[n] || 0) / Math.max(genSoFar, 1) }));
         anchorExposure.sort((a, b) => b.exp - a.exp);
-        // Rotate: attempt % topAnchors.length decides which anchor to exclude
-        // But only exclude if that anchor's exposure is already >50%
         const rotateIdx = attempt % Math.max(topAnchors.length, 3);
         const candidate = anchorExposure[rotateIdx % anchorExposure.length];
         if (candidate && candidate.exp > 0.45 && !lockedNames.includes(candidate.name)) {
@@ -892,7 +908,6 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
         }
       }
 
-      // Stack game rotation
       const gameIdx = bestGames.length > 1 ? (attempt % bestGames.length) : 0;
       const stackGame = bestGames[gameIdx] || bestGames[0];
       let stackTeams = [], bringBackTeams = [];
@@ -997,15 +1012,12 @@ function buildLineupRows(lineups) {
   return rows;
 }
 
-// Format 1: Simple position header (for FanDuel "Import Lineups" flow)
 function exportLineupsToFanDuel(lineups) {
   const header = "PG,PG,SG,SG,SF,SF,PF,PF,C";
   const rows = buildLineupRows(lineups);
   return header + "\r\n" + rows.join("\r\n");
 }
 
-// Format 2: FanDuel template format (for "Upload" with contest columns)
-// Use when FanDuel says "download our template first"
 function exportLineupsToFanDuelTemplate(lineups, contestName = "", contestId = "", entryFee = "") {
   const header = "Entry ID,Contest Name,Contest ID,Entry Fee,PG,PG,SG,SG,SF,SF,PF,PF,C";
   const rows = buildLineupRows(lineups);
@@ -1013,7 +1025,6 @@ function exportLineupsToFanDuelTemplate(lineups, contestName = "", contestId = "
   return header + "\r\n" + dataRows.join("\r\n");
 }
 function downloadCSV(csvText, filename) {
-  // UTF-8 BOM ensures proper encoding when opened in Excel or uploaded to FanDuel
   const BOM = "\uFEFF";
   const blob = new Blob([BOM + csvText], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -1198,11 +1209,6 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
   );
 }
 
-// ============================================================================
-// DvP PANEL — Defense vs Position ratings input
-// User enters pts allowed per position for each team's defense
-// Source: hashtagbasketball.com or basketball-reference DvP tables
-// ============================================================================
 function DvPPanel({ games, dvpMap, onUpdate }) {
   const teams = [];
   games.forEach(g => { if(!teams.includes(g.home)) teams.push(g.home); if(!teams.includes(g.away)) teams.push(g.away); });
@@ -1285,9 +1291,6 @@ function DvPPanel({ games, dvpMap, onUpdate }) {
   );
 }
 
-// ============================================================================
-// TOOLTIP COMPONENT
-// ============================================================================
 function Tip({ text, children, wide = false }) {
   const [show, setShow] = React.useState(false);
   const [pos, setPos] = React.useState({ x: 0, y: 0 });
@@ -1328,8 +1331,6 @@ function App() {
   const [injuries, setInjuries] = useState(DEFAULT_INJURIES);
   const [cascadeRules, setCascadeRules] = useState([]);
   const [dvpMap, setDvpMap] = useState({
-    // Pre-loaded: hashtagbasketball.com DvP — week of Apr 19 2026
-    // FD pts allowed per position (calc: pts + reb*1.2 + ast*1.5 + stl*3 + blk*3 - to)
     "BOS":{"PG":45.0,"SG":39.8,"SF":39.2,"PF":43.6,"C":46.4},
     "PHI":{"PG":44.7,"SG":44.5,"SF":44.3,"PF":48.8,"C":51.7},
     "OKC":{"PG":43.1,"SG":42.3,"SF":42.3,"PF":43.6,"C":47.8},
@@ -1410,8 +1411,6 @@ function App() {
     const teamIdx = headers.indexOf("team");
     const posIdx = headers.indexOf("rosterposition");
 
-    // [v5.3] AUTO-PARSE INJURIES FROM CSV
-    // Extract OUT/Q/D players automatically — no manual entry needed
     const autoInjuries = [];
     const autoExcluded = [];
     lines.slice(1).forEach(line => {
@@ -1452,7 +1451,6 @@ function App() {
   const handleStatMuseManual = (name, fdAvg) => { const key = name.toLowerCase(); const newSM = { ...statMuseMap, [key]: { fdAvg, lastGame: null, trend: "neutral" } }; setStatMuseMap(newSM); rebuildPlayers(csvText, ownershipMap, newSM, excludedNames); };
   const handleEstimateOwnership = () => { if (!players.length || !games.length) return; const newOwn = { ...ownershipMap }; players.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, vegasMap); }); setOwnershipMap(newOwn); rebuildPlayers(csvText, newOwn, statMuseMap, excludedNames); };
 
-  // [v5.4] Fetch DvP data from Campione server (cached 24h, scraped from hashtagbasketball)
   const fetchDvP = async () => {
     setDvpLoading(true); setDvpStatus("");
     try {
@@ -1469,7 +1467,6 @@ function App() {
     setDvpLoading(false);
   };
 
-  // [v5.3] Fetch live Vegas lines from the-odds-api.com
   const fetchVegasLines = async () => {
     if (!oddsApiKey.trim()) { setOddsError("Enter your Odds API key first (the-odds-api.com)"); return; }
     setFetchingOdds(true); setOddsError("");
@@ -1481,7 +1478,6 @@ function App() {
       const newGames = [];
       for (const game of data) {
         const home = game.home_team; const away = game.away_team;
-        // Map full team names to abbreviations
         const abbr = (name) => {
           const map = { "Oklahoma City Thunder":"OKC","Boston Celtics":"BOS","San Antonio Spurs":"SA","Portland Trail Blazers":"POR","Philadelphia 76ers":"PHI","Orlando Magic":"ORL","Phoenix Suns":"PHO","Detroit Pistons":"DET","Miami Heat":"MIA","Milwaukee Bucks":"MIL","Denver Nuggets":"DEN","Los Angeles Lakers":"LAL","Los Angeles Clippers":"LAC","Golden State Warriors":"GSW","Dallas Mavericks":"DAL","Memphis Grizzlies":"MEM","New Orleans Pelicans":"NOP","Minnesota Timberwolves":"MIN","Sacramento Kings":"SAC","Utah Jazz":"UTA","Houston Rockets":"HOU","Atlanta Hawks":"ATL","Chicago Bulls":"CHI","Cleveland Cavaliers":"CLE","Indiana Pacers":"IND","Brooklyn Nets":"BKN","New York Knicks":"NYK","Toronto Raptors":"TOR","Washington Wizards":"WAS","Charlotte Hornets":"CHA" };
           return map[name] || name.split(" ").pop().slice(0,3).toUpperCase();
@@ -1560,7 +1556,7 @@ function App() {
       <div style={S.hdr}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
-          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.5 · PRA ENGINE · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.6 · CASCADE FIX · MAXRESULTS4U BUSINESS SOLUTIONS</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
@@ -1594,7 +1590,6 @@ function App() {
               <div><div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", letterSpacing: 1 }}>TONIGHT'S SLATE</div></div>
               <div style={{ fontSize: 11, color: games.length ? "#22c55e" : "#f59e0b" }}>{games.length} game{games.length !== 1 ? "s" : ""}</div>
             </div>
-            {/* Odds API auto-fill */}
             <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
               <input
                 value={oddsApiKey}
@@ -1628,15 +1623,13 @@ function App() {
             <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
           </div>
 
-          <div style={{ ...S.card, marginTop: 16, borderColor: "#a78bfa44" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", letterSpacing: 1, marginBottom: 10 }}>v5.4 — Auto injury cascade from CSV · Odds API · Anchor rotation · Diversity fix</div>
+          <div style={{ ...S.card, marginTop: 16, borderColor: "#22c55e44" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#22c55e", letterSpacing: 1, marginBottom: 10 }}>v5.6 — CASCADE FIX (Apr 20 post-mortem patch)</div>
             <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.8 }}>
-              · <strong style={{color:"#22c55e"}}>Auto Injury Cascade from CSV:</strong> FanDuel CSV Injury Indicator column is parsed automatically on upload. OUT players excluded, minutes redistributed to positional teammates instantly.<br/>
-              · <strong style={{color:"#22c55e"}}>Odds API Integration:</strong> Enter your the-odds-api.com key → click AUTO-FILL LINES → game totals, spreads, and moneylines populate automatically.<br/>
-              · <strong style={{color:"#22c55e"}}>Anchor Rotation:</strong> Top $9k+ players rotated in/out during candidate generation. Guarantees diverse lineup pool — no more 7/9 shared players.<br/>
-              · <strong style={{color:"#22c55e"}}>DvP Matchup Engine:</strong> MATCHUPS tab — enter pts allowed per position per defense. A–F grades applied to projections.<br/>
-              · <strong style={{color:"#22c55e"}}>Portfolio diversity fallback:</strong> When filling remainder, prefers least-similar lineups over random fill.<br/>
-              · All v5.3 features retained (DvP ratings, auto cascade, CEIL column, 3-stack tournament, exposure cap)
+              · <strong style={{color:"#22c55e"}}>Cascade regression 0.75 → 0.40:</strong> Backups were getting overprojected by +15 FD on stars going OUT. Dropped to 0.40 + added 38-min stamina cap so absorbers can't "play" 40+ minutes.<br/>
+              · <strong style={{color:"#22c55e"}}>Stack detection top 3 → 5 + pace bonus:</strong> Fast-pace games (230+ total) get an 18pt stack-score bonus. Fixes Apr 19 ORL@DET miss.<br/>
+              · <strong style={{color:"#22c55e"}}>DvP penalty softened ±18% → ±12% + star carveout:</strong> Players projecting 45+ FPPG get half the DvP penalty vs tough D. Tatum hit 53.7 despite BOS-tier penalty — this models usage-driven ceilings.<br/>
+              · All v5.5 features retained (PRA engine, 150 lineups, FD template export, tooltips, auto injury cascade, anchor rotation)
             </div>
           </div>
         </div>
@@ -1697,7 +1690,7 @@ function App() {
                     </div>
                   )}
                   <div style={{ marginBottom: 10, padding: "10px 12px", background: "#0a1520", border: "1px solid #a78bfa33", borderRadius: 8, fontSize: 10, color: "#a78bfa", lineHeight: 1.7 }}>
-                    <strong style={{color:"#c4b5fd"}}>How it works:</strong> DvP = pts allowed per position vs league avg. A grade (+10%) = soft matchup, F grade (-12%) = lockdown. Auto-updates projections and lineup scores.
+                    <strong style={{color:"#c4b5fd"}}>How it works:</strong> DvP = pts allowed per position vs league avg. A grade (+10%) = soft matchup, F grade (-12%) = lockdown. Auto-updates projections and lineup scores. <strong style={{color:"#22c55e"}}>v5.6:</strong> Stars (FPPG ≥ 45) get half the DvP penalty — their usage protects them vs tough D.
                     <br/>Or enter manually below. Auto minutes cascade fires when players are marked OUT in Injuries.
                   </div>
                   <DvPPanel games={games} dvpMap={dvpMap} onUpdate={setDvpMap} />
@@ -1868,7 +1861,7 @@ function App() {
             <div style={S.card}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 }}>PLAYER POOL (ranked by composite score)</div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                <thead><tr>{["#","PLAYER","POS","SAL","PROJ","MIN","VALUE","OWN%","SCORE","ACTIONS"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
+                <thead><tr>{["#","PLAYER","POS","SAL","PROJ","MIN","PTS","REB","AST","VALUE","OWN%","SCORE","ACTIONS"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {players.slice(0, 60).map((p, i) => {
                     const b = ownershipBucket(p.ownership);
@@ -1928,8 +1921,8 @@ function App() {
                       ["AST", "Projected assists. PGs get highest weight. Adjusted for opponent's AST allowed to position."],
                       ["STL", "Projected steals. Small boost, but at 3× FD scoring they matter."],
                       ["BLK", "Projected blocks. Centers/PFs dominate. Worth 3× in FD scoring."],
-                      ["MATCH", "Matchup grade vs tonight's opponent defense. A = soft (+10% boost), B = favorable (+5%), C = neutral, D = tough (-5%), F = lockdown (-12%). Based on opponent's pts/reb/ast allowed to this position."],
-                      ["MINUTES", "Estimated minutes. +Xm in green = extra minutes absorbed from injured teammate. More minutes = proportionally more of every stat."],
+                      ["MATCH", "Matchup grade vs tonight's opponent defense. A = soft (+10% boost), B = favorable (+5%), C = neutral, D = tough (-5%), F = lockdown (-12%). v5.6: stars get half the penalty when grade is D or F."],
+                      ["MINUTES", "Estimated minutes. +Xm in green = extra minutes absorbed from injured teammate (capped at 38min stamina limit in v5.6)."],
                     ].map(([h, tip]) => (
                       <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, letterSpacing: 1, borderBottom: "1px solid #1e3040" }}>
                         <Tip text={tip} wide={h === "PROJ FD" || h === "MATCH" || h === "PLAYER"}>{h} <span style={{color:"#1e3040"}}>?</span></Tip>
@@ -1978,12 +1971,12 @@ function App() {
                           </Tip>
                         </td>
                         <td style={{ padding: "7px 8px", textAlign: "center" }}>
-                          <Tip text={`${p.dvpGrade?.grade || "?"} matchup vs ${vegasMap[p.team]?.opponent || "opp"}. ${p.dvpAdj ? ((p.dvpAdj-1)*100).toFixed(1)+"% vs league avg" : ""}. ${p.dvpAdj >= 1.08 ? "Soft D — target." : p.dvpAdj >= 1.03 ? "Favorable." : p.dvpAdj >= 0.97 ? "Neutral." : p.dvpAdj >= 0.92 ? "Tough — discount." : "Lockdown — fade."}`} wide>
+                          <Tip text={`${p.dvpGrade?.grade || "?"} matchup vs ${vegasMap[p.team]?.opponent || "opp"}. ${p.dvpAdj ? ((p.dvpAdj-1)*100).toFixed(1)+"% vs league avg" : ""}. ${p.dvpAdj >= 1.08 ? "Soft D — target." : p.dvpAdj >= 1.03 ? "Favorable." : p.dvpAdj >= 0.97 ? "Neutral." : p.dvpAdj >= 0.92 ? "Tough — discount." : "Lockdown — star carveout may apply."}`} wide>
                             {p.dvpGrade ? <span style={{ fontSize: 10, fontWeight: 700, color: matchColor, padding: "1px 5px", background: matchColor + "22", borderRadius: 3 }}>{p.dvpGrade.grade}</span> : <span style={{ color: "#3b6280" }}>-</span>}
                           </Tip>
                         </td>
                         <td style={{ padding: "7px 8px", fontSize: 10 }}>
-                          <Tip text={`Estimated ${p.minutesProj?.toFixed(0) || "?"} min from salary tier. ${hasBoost ? "Extra minutes from injured teammate cascade. More mins = more pts/reb/ast." : "Standard rotation minutes."}`} wide>
+                          <Tip text={`Estimated ${p.minutesProj?.toFixed(0) || "?"} min from salary tier. ${hasBoost ? "Extra minutes from injured teammate cascade (capped at 38min stamina limit). More mins = more pts/reb/ast." : "Standard rotation minutes."}`} wide>
                             <span style={{ color: "#94a3b8" }}>{p.minutesProj?.toFixed(0) || "-"} min</span>
                             {hasBoost && <span style={{ color: "#22c55e" }}> +{(p.minuteBoost / (p.fppg / (p.minutesProj || 30)))?.toFixed(0)}m</span>}
                           </Tip>
@@ -2029,7 +2022,7 @@ function App() {
         </div>
       )}
 
-      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.5</div>
+      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.6</div>
     </div>
   );
 }
