@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Court Edge - NBA DFS Optimizer v5.6</title>
+<title>Court Edge - NBA DFS Optimizer v5.7</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.6...</div></div>
+<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.7...</div></div>
 <script>
 (function () {
   function showErrorOverlay(message, line, stack) {
@@ -60,14 +60,20 @@
 const { useState, useCallback, useRef, useEffect, useMemo } = React;
 
 // ============================================================================
-// v5.6 — CASCADE FIX (Apr 20 2026)
-// Post-mortem from Apr 19 slate (-$4.18 net, 256.1 avg):
-//   1. Cascade regression 0.75 was way too generous (Barlow -80%, Sharpe -54%)
-//      FIX: regression 0.75 → 0.40, plus stamina cap (38min max per player)
-//   2. ORL@DET stack was missed (ranked below top-3 stack games)
-//      FIX: added pace bonus to stackScore, expanded top-3 → top-5 rotation
-//   3. BOS DvP penalty hit Tatum too hard (he scored 53.7 anyway)
-//      FIX: tightened DvP clamp ±18% → ±12%, added star carveout (FPPG >= 45)
+// v5.7 — PLAYOFF MODE (Apr 20 2026)
+// The Apr 19 post-mortem revealed v5.6's cascade fix wasn't enough. Sharpe and
+// Vassell were still locked in 100% of lineups despite busting — because their
+// CSV FPPG (regular-season production) overstates playoff production where
+// defense tightens and role players get squeezed by shortened rotations.
+//
+// Key changes:
+//   1. PLAYOFF MODE toggle — tiered FPPG haircut (stars +3%, role players -6 to -20%)
+//      to reflect playoff rotation/defense realities
+//   2. Diversity hardening — no more safety-net fill that bypassed exposure caps.
+//      Portfolio may be smaller than requested on narrow slates, which is
+//      correct behavior (better 8 diverse lineups than 11 with 100% Sharpe)
+//   3. Broader anchor rotation — value plays ($4500+) now rotate too, not just
+//      $9k+ stars. Fixes Sharpe/Vassell/Champagnie lock-in on small slates
 // ============================================================================
 
 const LEAGUE_AVG_TOTAL = 226;
@@ -438,7 +444,30 @@ function estimateOwnership(player, teamMap) {
   return Math.min(65, Math.max(2, +(base * salaryTier * fppgTier * valueTier).toFixed(1)));
 }
 
-function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, outPlayers = [], cascadeRules = [], extraData = {}, dvpMap = {}) {
+// ============================================================================
+// [v5.7] PLAYOFF FPPG ADJUSTMENT
+// Regular-season FPPG overstates playoff production for non-stars. Why:
+//   - Rotations shrink (10-12 deep → 8-9 deep), bench minutes disappear
+//   - Defense tightens, scheme-specific, more film-study per matchup
+//   - Usage concentrates on top 2-3 scorers (stars actually go UP)
+// Haircut is tiered by role, proxied via FPPG:
+//   45+ FPPG (superstars, 10% of slate): +3% — usage increases in playoffs
+//   35-44 FPPG (secondaries): -6% — modest squeeze
+//   28-34 FPPG (3rd options): -12% — rotation cuts + D focus
+//   22-27 FPPG (role players): -18% — biggest squeeze, this is where Sharpe lives
+//   15-21 FPPG (rotation/bench): -22%
+//   < 15 FPPG: -25% (deep bench barely plays in playoffs)
+// ============================================================================
+function playoffAdjust(fppg) {
+  if (fppg >= 45) return fppg * 1.03;
+  if (fppg >= 35) return fppg * 0.94;
+  if (fppg >= 28) return fppg * 0.88;
+  if (fppg >= 22) return fppg * 0.82;
+  if (fppg >= 15) return fppg * 0.78;
+  return fppg * 0.75;
+}
+
+function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, outPlayers = [], cascadeRules = [], extraData = {}, dvpMap = {}, playoffMode = false) {
   const lines = csvText.trim().split("\n");
   const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, ""));
   const players = [];
@@ -450,7 +479,10 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     const cols = lines[i].split(","); if (cols.length < 8) continue;
     const get2 = (key) => cols[headers.indexOf(key)]?.trim() ?? "";
     const n2 = get2("nickname") || ((get2("firstname") + " " + get2("lastname")).trim());
-    const f2 = parseFloat(get2("fppg")) || 0; const s2 = parseInt(get2("salary")) || 0;
+    let f2 = parseFloat(get2("fppg")) || 0;
+    // [v5.7] Apply playoff FPPG haircut to the raw source, so cascade math uses adjusted rates
+    if (playoffMode && f2 > 0) f2 = playoffAdjust(f2);
+    const s2 = parseInt(get2("salary")) || 0;
     const t2 = get2("team"); const inj2 = get2("injuryindicator") || "";
     const pos2 = (get2("rosterposition")||get2("position")).split("/").map(p=>p.trim()).filter(p=>POSITION_ORDER.includes(p));
     if (n2 && s2 && f2 && inj2 !== "O" && pos2.length) _rawPlayers.push({name:n2,fppg:f2,csvFppg:f2,salary:s2,team:t2,positions:pos2,minutes:0});
@@ -462,7 +494,9 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     const _cget = k => _cc[headers.indexOf(k)]?.trim() ?? "";
     const _cn = _cget("nickname") || ((_cget("firstname") + " " + _cget("lastname")).trim());
     const _cinj = _cget("injuryindicator");
-    const _cf = parseFloat(_cget("fppg")) || 0;
+    let _cf = parseFloat(_cget("fppg")) || 0;
+    // [v5.7] Apply playoff haircut so their cascade per-min rate reflects playoff usage
+    if (playoffMode && _cf > 0) _cf = playoffAdjust(_cf);
     const _cs = parseInt(_cget("salary")) || 0;
     const _ct = _cget("team");
     const _cpos = (_cget("rosterposition")||_cget("position")).split("/").map(p=>p.trim()).filter(p=>POSITION_ORDER.includes(p));
@@ -482,7 +516,9 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     const get = (key) => cols[headers.indexOf(key)]?.trim() ?? "";
     const fdId = idCol >= 0 ? (cols[idCol]?.trim() ?? "") : "";
     const name = get("nickname") || ((get("firstname") + " " + get("lastname")).trim());
-    const csvFppg = parseFloat(get("fppg")) || 0;
+    let csvFppg = parseFloat(get("fppg")) || 0;
+    // [v5.7] Playoff haircut — tiered by role (stars +3%, role players -18%)
+    if (playoffMode && csvFppg > 0) csvFppg = playoffAdjust(csvFppg);
     const salary = parseInt(get("salary")) || 0;
     const injury = get("injuryindicator") || "";
     const played = parseInt(get("played")) || 0;
@@ -771,52 +807,44 @@ function lineupMinUnique(a, b) {
 function selectPortfolio(candidates, desiredCount) {
   const selected = [];
   const exposure = {};
-  const targetCount = Math.max(desiredCount, 1);
+  // [v5.7] Two-pass selection with clean exposure enforcement.
+  // Pass 1 uses strict hardCap, pass 2 relaxes to relaxedCap if portfolio is short.
+  // NO MORE safety-net fill that bypassed caps — that's what let Sharpe hit 100%.
+  // Result: portfolio may be slightly smaller than requested on narrow slates,
+  // which is the correct behavior (better 8 diverse lineups than 11 locked ones).
   const maxExposure = desiredCount <= 3 ? 0.67 : desiredCount <= 5 ? 0.65 : desiredCount <= 10 ? 0.60 : desiredCount <= 30 ? 0.50 : desiredCount <= 75 ? 0.40 : 0.33;
-  const hardCapCount = Math.max(2, Math.floor(desiredCount * maxExposure));
+  const hardCap = Math.max(2, Math.floor(desiredCount * maxExposure));
+  // Relaxed cap = absolute ceiling. At 75% of portfolio, still enforces diversity.
+  const relaxedCap = Math.max(hardCap + 1, Math.ceil(desiredCount * 0.75));
   const minUnique = desiredCount >= 100 ? 2 : desiredCount >= 50 ? 2 : desiredCount >= 15 ? 3 : 3;
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
+
+  // Pass 1: strict hardCap enforcement
   for (const lu of sorted) {
     if (selected.length >= desiredCount) break;
-    const tooSimilar = selected.some(existing => lineupMinUnique(existing, lu) < minUnique);
-    if (tooSimilar) continue;
-    let badExposure = false;
-    for (const p of lu) {
-      const next = (exposure[p.name] || 0) + 1;
-      if (next > hardCapCount || next / targetCount > maxExposure) { badExposure = true; break; }
-    }
-    if (badExposure && selected.length < Math.floor(targetCount * 0.80)) continue;
+    if (selected.some(existing => lineupMinUnique(existing, lu) < minUnique)) continue;
+    if (lu.some(p => (exposure[p.name] || 0) + 1 > hardCap)) continue;
     selected.push(lu);
     lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
-  const remaining = sorted.filter(lu => !selected.includes(lu));
-  remaining.sort((a, b) => {
-    const simA = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, a))) : 0;
-    const simB = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, b))) : 0;
-    return simA - simB;
-  });
-  // [v5.6 tune] Even the fallback fill respects a SOFT exposure cap.
-  // Old code let players hit 100% exposure once the primary loop gave up.
-  // For small portfolios (6 lineups on a 2-game slate), this meant 4 locks at 6/6.
-  // Soft cap = max(hardCap, ceil(count * 0.67)) — tight enough to prevent locks,
-  // loose enough that we still fill the portfolio.
-  const softCap = Math.max(hardCapCount, Math.ceil(desiredCount * 0.67));
-  for (const lu of remaining) {
-    if (selected.length >= desiredCount) break;
-    let overExposed = false;
-    for (const p of lu) {
-      if ((exposure[p.name] || 0) + 1 > softCap) { overExposed = true; break; }
+
+  // Pass 2: relax to relaxedCap — prefer least-similar lineups
+  if (selected.length < desiredCount) {
+    const remaining = sorted.filter(lu => !selected.includes(lu));
+    remaining.sort((a, b) => {
+      const simA = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, a))) : 0;
+      const simB = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, b))) : 0;
+      return simA - simB; // least similar first
+    });
+    for (const lu of remaining) {
+      if (selected.length >= desiredCount) break;
+      if (lu.some(p => (exposure[p.name] || 0) + 1 > relaxedCap)) continue;
+      selected.push(lu);
+      lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
     }
-    if (overExposed) continue;
-    selected.push(lu);
-    lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
-  // Final safety net — if soft cap starved us, drop the remaining slots without it
-  for (const lu of remaining) {
-    if (selected.length >= desiredCount) break;
-    if (selected.includes(lu)) continue;
-    selected.push(lu);
-  }
+
+  // Portfolio may be short if slate is too narrow — that's OK, user sees smaller count
   return selected.slice(0, desiredCount);
 }
 
@@ -907,10 +935,13 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     const minStack = (type === "tournament") ? 3 : 2;
     const candidateExposure = {};
 
+    // [v5.7] Broader anchor rotation — rotate VALUE anchors not just salary anchors.
+    // Old code only rotated $9k+ stars, which let Sharpe/Vassell at $4900 lock at 100%.
+    // Now we rotate the top 8 highest-VALUE (FPPG/salary) players — stars AND value plays.
     const topAnchors = [...players]
-      .filter(p => p.salary >= 9000 && !lockedNames.includes(p.name) && !excludedNames.includes(p.name))
-      .sort((a, b) => b.fppg - a.fppg)
-      .slice(0, 5)
+      .filter(p => p.salary >= 4500 && !lockedNames.includes(p.name) && !excludedNames.includes(p.name))
+      .sort((a, b) => (b.value || 0) - (a.value || 0))
+      .slice(0, 8)
       .map(p => p.name);
 
     for (let attempt = 0; attempt < attempts; attempt++) {
@@ -1413,13 +1444,16 @@ function App() {
   const [activeTab, setActiveTab] = useState("lineups");
   const [rightTab, setRightTab] = useState("slate");
   const [lineupStrategy, setLineupStrategy] = useState("mixed");
+  // [v5.7] Playoff Mode — applies tiered FPPG haircut to reflect playoff rotation/defense.
+  // Default ON during April-June (playoff window). Toggle on upload screen.
+  const [playoffMode, setPlayoffMode] = useState(true);
   const fileRef = useRef();
 
   const rebuildPlayers = useCallback((csv, ownMap, smMap, outNames) => {
-    const parsed = parsePlayers(csv, ownMap, smMap, vegasMap, outNames, cascadeRules, {}, dvpMap);
+    const parsed = parsePlayers(csv, ownMap, smMap, vegasMap, outNames, cascadeRules, {}, dvpMap, playoffMode);
     setPlayers(parsed);
     return parsed;
-  }, [vegasMap, cascadeRules]);
+  }, [vegasMap, cascadeRules, dvpMap, playoffMode]);
 
   const handleCSV = useCallback((text) => {
     setCsvText(text);
@@ -1459,14 +1493,14 @@ function App() {
     rebuildPlayers(text, defaultOwn, {}, autoExcluded);
     setStatMuseMap({});
     if (games.length > 0) {
-      const parsed = parsePlayers(text, defaultOwn, {}, vegasMap, autoExcluded, cascadeRules, {}, dvpMap);
+      const parsed = parsePlayers(text, defaultOwn, {}, vegasMap, autoExcluded, cascadeRules, {}, dvpMap, playoffMode);
       const newOwn = { ...defaultOwn };
       parsed.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, vegasMap); });
       setOwnershipMap(newOwn);
       rebuildPlayers(text, newOwn, {}, autoExcluded);
     }
     setStep("build");
-  }, [rebuildPlayers, excludedNames, games, vegasMap, cascadeRules, dvpMap]);
+  }, [rebuildPlayers, excludedNames, games, vegasMap, cascadeRules, dvpMap, playoffMode]);
 
   const handleFile = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => handleCSV(ev.target.result); reader.readAsText(file); };
   const updateOwnership = (name, val) => { const key = name.toLowerCase(); const newMap = { ...ownershipMap, [key]: val }; setOwnershipMap(newMap); rebuildPlayers(csvText, newMap, statMuseMap, excludedNames); };
@@ -1560,7 +1594,7 @@ function App() {
   useEffect(() => {
     if (csvText) rebuildPlayers(csvText, ownershipMap, statMuseMap, excludedNames);
     // eslint-disable-next-line
-  }, [games, dvpMap]);
+  }, [games, dvpMap, playoffMode]);
 
   const S = {
     app: { minHeight: "100vh", background: "#060e18", color: "#e2e8f0", fontFamily: "'IBM Plex Mono', monospace", paddingBottom: 40 },
@@ -1578,7 +1612,7 @@ function App() {
       <div style={S.hdr}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
-          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.6 · CASCADE FIX · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.7 · PLAYOFF MODE · MAXRESULTS4U BUSINESS SOLUTIONS</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
@@ -1645,16 +1679,42 @@ function App() {
             <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
           </div>
 
+          {/* [v5.7] PLAYOFF MODE toggle — reflects playoff rotation/defense realities */}
+          <div style={{ marginBottom: 16, background: playoffMode ? "#0a1a0a" : "#0a1520", border: `1px solid ${playoffMode ? "#22c55e66" : "#1e3040"}`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 14 }}>
+            <button
+              onClick={() => setPlayoffMode(!playoffMode)}
+              style={{
+                width: 46, height: 24, borderRadius: 12, padding: 0,
+                background: playoffMode ? "#16a34a" : "#374151",
+                border: "none", cursor: "pointer", position: "relative", flexShrink: 0,
+                transition: "background 0.2s"
+              }}
+              aria-label={playoffMode ? "Disable Playoff Mode" : "Enable Playoff Mode"}
+            >
+              <div style={{
+                position: "absolute", width: 20, height: 20, borderRadius: "50%",
+                background: "#fff", top: 2, left: playoffMode ? 24 : 2,
+                transition: "left 0.2s", boxShadow: "0 2px 4px rgba(0,0,0,0.3)"
+              }} />
+            </button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: playoffMode ? "#22c55e" : "#4a6a80", letterSpacing: 1, marginBottom: 2 }}>
+                PLAYOFF MODE {playoffMode ? "ON" : "OFF"}
+              </div>
+              <div style={{ fontSize: 10, color: "#4a6a80", lineHeight: 1.5 }}>
+                {playoffMode
+                  ? "Applying tiered FPPG haircut · stars +3% · mid-tier -6 to -12% · role players -18 to -22%"
+                  : "Regular-season FPPG used as baseline — turn ON when playoffs tip off"}
+              </div>
+            </div>
+          </div>
           <div style={{ ...S.card, marginTop: 16, borderColor: "#22c55e44" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#22c55e", letterSpacing: 1, marginBottom: 10 }}>v5.6 — CASCADE FIX + post-validation tunes (Apr 20)</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#22c55e", letterSpacing: 1, marginBottom: 10 }}>v5.7 — PLAYOFF MODE (Apr 20 post-Apr 19 post-mortem #2)</div>
             <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.8 }}>
-              · <strong style={{color:"#22c55e"}}>Cascade regression 0.75 → 0.40:</strong> Backups were getting overprojected by +15 FD on stars going OUT. Dropped to 0.40 + added 38-min stamina cap so absorbers can't "play" 40+ minutes.<br/>
-              · <strong style={{color:"#22c55e"}}>Stack detection top 3 → 5 + pace bonus:</strong> Fast-pace games (230+ total) get an 18pt stack-score bonus. Fixes Apr 19 ORL@DET miss.<br/>
-              · <strong style={{color:"#22c55e"}}>DvP penalty softened ±18% → ±12% + star carveout:</strong> Players projecting 45+ FPPG get half the DvP penalty vs tough D. Tatum hit 53.7 despite BOS-tier penalty — this models usage-driven ceilings.<br/>
-              · <strong style={{color:"#60a5fa"}}>Minutes model retune:</strong> Salary caps were too stingy — value starters at $4500-5500 now project 30-34 min (was 22-28). Sharpe-type plays now model accurately.<br/>
-              · <strong style={{color:"#60a5fa"}}>Small-slate stack fix:</strong> Was disabling stack requirement for ≤4 games. Now only disabled for 1-game slates — small slates WANT stacks.<br/>
-              · <strong style={{color:"#60a5fa"}}>Portfolio diversity hardened:</strong> Soft exposure cap now applies even during fallback fill. No more 100% exposure locks on small portfolios.<br/>
-              · All v5.5 features retained (PRA engine, 150 lineups, FD template export, tooltips, auto injury cascade, anchor rotation)
+              · <strong style={{color:"#22c55e"}}>Playoff FPPG haircut:</strong> Sharpe was 11/11 exposure in v5.6 because his 31.3 regular-season FPPG overstates playoff production (tight D, short rotations). v5.7 applies tiered haircut — stars +3%, role players -18% — reflecting that usage concentrates on top 2-3 guys in playoffs.<br/>
+              · <strong style={{color:"#22c55e"}}>Diversity hardening:</strong> Removed the safety-net final fill that let players hit 100% exposure when the optimizer ran out of diverse candidates. Portfolio may be slightly smaller than requested on narrow slates — this is correct behavior (better 8 diverse lineups than 11 locked ones).<br/>
+              · <strong style={{color:"#22c55e"}}>Broader anchor rotation:</strong> Rotation now includes value plays at $4500+ sorted by value (FPPG/salary), not just $9k+ stars by FPPG. Fixes Sharpe/Vassell/Champagnie lock-in on small slates.<br/>
+              · All v5.6 features retained (cascade fix, stack rotation, DvP star carveout, minutes retune, StatMuse overrides, Odds API fill)
             </div>
           </div>
         </div>
@@ -2047,7 +2107,7 @@ function App() {
         </div>
       )}
 
-      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.6</div>
+      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.7</div>
     </div>
   );
 }
