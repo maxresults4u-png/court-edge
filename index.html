@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Court Edge - NBA DFS Optimizer v5.7</title>
+<title>Court Edge - NBA DFS Optimizer v5.7.1</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.7...</div></div>
+<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.7.1...</div></div>
 <script>
 (function () {
   function showErrorOverlay(message, line, stack) {
@@ -1466,6 +1466,32 @@ function App() {
     const injIdx = headers.indexOf("injuryindicator");
     const teamIdx = headers.indexOf("team");
     const posIdx = headers.indexOf("rosterposition");
+    const gameIdx = headers.indexOf("game");
+
+    // [v5.7.1] Auto-extract games from CSV — THIS WAS THE ROOT CAUSE BUG.
+    // Previously games only came from Odds API or manual entry, so uploading a new
+    // CSV left stale games from prior slate, which broke stack detection and often
+    // resulted in zero lineups generated. CSV Game column has format "AWAY@HOME".
+    const csvGamesSet = new Set();
+    if (gameIdx >= 0) {
+      lines.slice(1).forEach(line => {
+        const cols = line.split(",");
+        const g = (cols[gameIdx] || "").trim();
+        if (g && g.includes("@")) csvGamesSet.add(g);
+      });
+    }
+    const csvGames = [];
+    csvGamesSet.forEach(gameStr => {
+      const [away, home] = gameStr.split("@").map(s => s.trim());
+      if (away && home) {
+        csvGames.push({
+          home, away,
+          total: LEAGUE_AVG_TOTAL,       // default, user can edit in SLATE tab
+          homeSpread: 0,
+          homeML: -110, awayML: -110,
+        });
+      }
+    });
 
     const autoInjuries = [];
     const autoExcluded = [];
@@ -1489,13 +1515,26 @@ function App() {
       setExcludedNames(autoExcluded);
     }
 
+    // [v5.7.1] Set games BEFORE rebuilding players so projections use fresh vegas context
+    if (csvGames.length > 0) setGames(csvGames);
+
     setOwnershipMap(defaultOwn);
     rebuildPlayers(text, defaultOwn, {}, autoExcluded);
     setStatMuseMap({});
-    if (games.length > 0) {
-      const parsed = parsePlayers(text, defaultOwn, {}, vegasMap, autoExcluded, cascadeRules, {}, dvpMap, playoffMode);
+    // Use csvGames (fresh) not games (stale) for the ownership estimation check
+    const effectiveGames = csvGames.length > 0 ? csvGames : games;
+    if (effectiveGames.length > 0) {
+      // Build a temporary vegasMap from csvGames since state setters are async
+      const tempVegas = {};
+      effectiveGames.forEach(g => {
+        const homeImpl = (g.total / 2) - (g.homeSpread / 2);
+        const awayImpl = (g.total / 2) + (g.homeSpread / 2);
+        tempVegas[g.home] = { total: g.total, impliedPts: homeImpl, spread: g.homeSpread, moneyline: g.homeML, opponent: g.away, gameStr: `${g.away}@${g.home}`, isHome: true };
+        tempVegas[g.away] = { total: g.total, impliedPts: awayImpl, spread: -g.homeSpread, moneyline: g.awayML, opponent: g.home, gameStr: `${g.away}@${g.home}`, isHome: false };
+      });
+      const parsed = parsePlayers(text, defaultOwn, {}, tempVegas, autoExcluded, cascadeRules, {}, dvpMap, playoffMode);
       const newOwn = { ...defaultOwn };
-      parsed.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, vegasMap); });
+      parsed.forEach(p => { newOwn[p.name.toLowerCase()] = estimateOwnership(p, tempVegas); });
       setOwnershipMap(newOwn);
       rebuildPlayers(text, newOwn, {}, autoExcluded);
     }
@@ -1612,7 +1651,7 @@ function App() {
       <div style={S.hdr}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
-          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.7 · PLAYOFF MODE · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.7.1 · CSV SLATE AUTO-LOAD · MAXRESULTS4U BUSINESS SOLUTIONS</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
@@ -2107,7 +2146,7 @@ function App() {
         </div>
       )}
 
-      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.7</div>
+      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.7.1</div>
     </div>
   );
 }
