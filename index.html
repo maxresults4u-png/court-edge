@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Court Edge - NBA DFS Optimizer v5.7.3</title>
+<title>Court Edge - NBA DFS Optimizer v5.7.4</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.7.3...</div></div>
+<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.7.4...</div></div>
 <script>
 (function () {
   function showErrorOverlay(message, line, stack) {
@@ -1004,45 +1004,79 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     }
   }
 
-  // [v5.7.3] TRUE EMERGENCY FALLBACK — if we still have zero lineups, build naive
-  // greedy lineups with ONLY salary+position constraints (no stack, no minUnique, no
-  // exposure caps). This guarantees at least SOMETHING gets returned rather than 0.
-  // Previously, narrow slates or timing issues could leave users staring at an empty
-  // result screen with no way forward.
+  // [v5.7.4] EMERGENCY FALLBACK — rewritten to actually work.
+  // v5.7.3 version picked top-score first, which exhausted budget after 5 expensive picks
+  // and failed to find cheap enough fillers for remaining slots. Now we fill CHEAPEST-first
+  // to guarantee salary feasibility, then UPGRADE slots to hit the MIN_SALARY_USED floor.
   if (allCandidates.length === 0) {
     const emergencyAttempts = Math.max(count * 8, 80);
+    const pool = players.filter(p => !excludedNames.includes(p.name));
     for (let attempt = 0; attempt < emergencyAttempts; attempt++) {
-      // Shuffle scoring slightly per attempt to get varied lineups
-      const shuffled = [...players]
-        .filter(p => !excludedNames.includes(p.name))
-        .map(p => ({ ...p, _emScore: (p.projMean || p.fppg || 0) + (Math.random() - 0.5) * 8 + attempt * 0.1 }))
-        .sort((a, b) => b._emScore - a._emScore);
-      // Simple greedy fill: C, then PG/PG, SG/SG, SF/SF, PF/PF
       const slotsNeeded = ["C", "PG", "PG", "SG", "SG", "SF", "SF", "PF", "PF"];
       const used2 = new Set(lockedNames);
       const lineup = [];
       let salary = 0;
       let ok = true;
+
+      // Step 1: Fill each slot with the CHEAPEST eligible player (with small randomization).
+      // This guarantees we stay under the $60k cap at every step.
       for (const slot of slotsNeeded) {
-        const remaining = slotsNeeded.length - lineup.length - 1;
-        const minNeed = remaining * 3500;
-        const pick = shuffled.find(p =>
-          !used2.has(p.name) &&
-          p.positions && p.positions.includes(slot) &&
-          salary + p.salary <= RULES.SALARY_CAP &&
-          salary + p.salary + minNeed <= RULES.SALARY_CAP
-        );
-        if (!pick) { ok = false; break; }
+        const candidates = pool
+          .filter(p => !used2.has(p.name) && p.positions && p.positions.includes(slot))
+          .map(p => ({ ...p, _pickScore: p.salary + (Math.random() - 0.5) * 800 })) // cheap first, slight noise
+          .sort((a, b) => a._pickScore - b._pickScore)
+          .slice(0, 6); // top 6 cheapest — adds variety across attempts
+        if (!candidates.length) { ok = false; break; }
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
         used2.add(pick.name);
         lineup.push({ ...pick, slot });
         salary += pick.salary;
       }
       if (!ok || lineup.length !== 9) continue;
-      if (salary < RULES.MIN_SALARY_USED) continue;
+
+      // Step 2: Upgrade slots until we hit MIN_SALARY_USED.
+      // Replace cheapest players with more expensive same-position alternatives,
+      // always staying under the $60k cap.
+      let upgradeAttempts = 0;
+      while (salary < RULES.MIN_SALARY_USED && upgradeAttempts < 30) {
+        upgradeAttempts++;
+        // Find the lineup slot that has the most expensive available upgrade
+        let bestUpgrade = null;
+        for (let i = 0; i < lineup.length; i++) {
+          const current = lineup[i];
+          const slot = current.slot;
+          const budgetLeft = RULES.SALARY_CAP - salary + current.salary;
+          const alternatives = pool.filter(p =>
+            !used2.has(p.name) &&
+            p.positions && p.positions.includes(slot) &&
+            p.salary > current.salary &&
+            p.salary <= budgetLeft
+          );
+          if (!alternatives.length) continue;
+          // Pick the most expensive alternative that fits (biggest single-step upgrade)
+          const bestAlt = alternatives.reduce((a, b) => b.salary > a.salary ? b : a);
+          const deltaSalary = bestAlt.salary - current.salary;
+          if (!bestUpgrade || deltaSalary > bestUpgrade.delta) {
+            bestUpgrade = { idx: i, newPlayer: bestAlt, delta: deltaSalary };
+          }
+        }
+        if (!bestUpgrade) break; // no upgrades available
+        const oldPlayer = lineup[bestUpgrade.idx];
+        used2.delete(oldPlayer.name);
+        used2.add(bestUpgrade.newPlayer.name);
+        lineup[bestUpgrade.idx] = { ...bestUpgrade.newPlayer, slot: oldPlayer.slot };
+        salary += bestUpgrade.delta;
+      }
+
+      // Final validation
+      if (salary < RULES.MIN_SALARY_USED || salary > RULES.SALARY_CAP) continue;
       const key = lineupKey(lineup);
       if (used.has(key)) continue;
       used.add(key);
-      lineup._type = "emergency"; lineup._hasStack = lineupHasStack(lineup); lineup._hasBringBack = false; lineup._stackGame = null;
+      lineup._type = "emergency";
+      lineup._hasStack = lineupHasStack(lineup);
+      lineup._hasBringBack = false;
+      lineup._stackGame = null;
       allCandidates.push(lineup);
       if (allCandidates.length >= count) break;
     }
@@ -1734,7 +1768,9 @@ function App() {
         setSelectedLineup(0);
         setLastGenTime(new Date());
         if (arr.length === 0) {
-          setGenStatus(`⚠️ Generated 0 lineups in ${dur}ms. Player pool: ${players.length}. Games: ${effectiveGames.length}. Locked: ${lockedNames.length}. Excluded: ${excludedNames.length}. Try disabling playoff mode or reducing locks/exclusions.`);
+          const dbg = (typeof window !== "undefined" && window.__courtEdgeDebug) || {};
+          const byType = dbg.byType || {};
+          setGenStatus(`⚠️ Generated 0 lineups in ${dur}ms. Pool: ${players.length}. Games: ${effectiveGames.length}. Excluded: ${excludedNames.length}. candidates: C${byType.chalk||0}/L${byType.leverage||0}/T${byType.tournament||0}/M${byType.mixed||0}/E${byType.emergency||0}. stackReq: ${dbg.requireStack ? "yes" : "no"}.`);
         } else {
           // [v5.7.3] Include debug internals so we can see where candidates came from
           const dbg = (typeof window !== "undefined" && window.__courtEdgeDebug) || {};
@@ -1788,7 +1824,7 @@ function App() {
       <div style={S.hdr}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
-          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.7.3 · EMERGENCY FALLBACK + DEEP DIAGNOSTICS · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.7.4 · FIXED EMERGENCY FALLBACK · MAXRESULTS4U BUSINESS SOLUTIONS</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
@@ -2304,7 +2340,7 @@ function App() {
         </div>
       )}
 
-      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.7.3</div>
+      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.7.4</div>
     </div>
   );
 }
