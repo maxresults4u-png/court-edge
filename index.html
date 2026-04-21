@@ -581,6 +581,8 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     projected.statLine = buildStatLine(projected, teamMap, dvpMap, minBoostForStats);
     players.push(projected);
   }
+  // [v5.8] Tag each player with pool-relative leverage tier before returning
+  classifyLeverageTier(players);
   return players.sort((a, b) => b.score - a.score);
 }
 
@@ -831,7 +833,7 @@ function lineupMinUnique(a, b) {
   return Math.max(0, 9 - shared);
 }
 
-function selectPortfolio(candidates, desiredCount) {
+function selectPortfolio(candidates, desiredCount, slateSize = 8) {
   const selected = [];
   const exposure = {};
   // [v5.7] Two-pass selection with clean exposure enforcement.
@@ -843,7 +845,8 @@ function selectPortfolio(candidates, desiredCount) {
   const hardCap = Math.max(2, Math.floor(desiredCount * maxExposure));
   // Relaxed cap = absolute ceiling. At 75% of portfolio, still enforces diversity.
   const relaxedCap = Math.max(hardCap + 1, Math.ceil(desiredCount * 0.75));
-  const minUnique = desiredCount >= 100 ? 2 : desiredCount >= 50 ? 2 : desiredCount >= 15 ? 3 : 3;
+  // [v5.8] Slate-aware diversity. Small slates force more unique players per pair.
+  const minUnique = slateSize <= 3 ? 4 : slateSize <= 5 ? 3 : (desiredCount >= 15 ? 3 : 3);
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
 
   // Pass 1: strict hardCap enforcement
@@ -851,6 +854,8 @@ function selectPortfolio(candidates, desiredCount) {
     if (selected.length >= desiredCount) break;
     if (selected.some(existing => lineupMinUnique(existing, lu) < minUnique)) continue;
     if (lu.some(p => (exposure[p.name] || 0) + 1 > hardCap)) continue;
+   // [v5.8] Strict cumulative-ownership cap for tournament lineups
+    if (lu._type === "tournament" && lineupCumOwn(lu) > GPP_CUMOWN_STRICT) continue;
     selected.push(lu);
     lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
@@ -1001,6 +1006,8 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
       const pool = buildCandidatePool(players, lockedNames, forcedExcludes, stackTeams, bringBackTeams, type, attempt, candidateExposure, genSoFar).slice(0, 50);
       const lu = buildLineup(pool, lockedNames, forcedExcludes, type, stackTeams, bringBackTeams, requireStack, minStack);
       if (!lu || lu.length !== 9) continue;
+     // [v5.8] Tournament leverage gate — must contain a sub-12% owned, value>=5 play
+      if (type === "tournament" && !lineupHasLeverage(lu)) continue;
       const key = lineupKey(lu);
       if (used.has(key)) continue;
       used.add(key);
