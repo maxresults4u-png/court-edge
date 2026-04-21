@@ -126,7 +126,34 @@ const RULES = {
   POSITIONS: { PG: 2, SG: 2, SF: 2, PF: 2, C: 1 },
 };
 const POSITION_ORDER = ["PG", "SG", "SF", "PF", "C"];
+// [v5.8] LEVERAGE THRESHOLDS — Apr 20 Fadeaway post-mortem.
+// Winner ran Harden at 6.7% own for 53 FP. Lineups missing a "Harden slot"
+// (sub-12% owned + value >= 5.0) cannot win GPPs on small slates.
+const LEVERAGE_OWN_MAX = 12;
+const LEVERAGE_VALUE_MIN = 5.0;
+const GPP_CUMOWN_STRICT = 230;
+const GPP_CUMOWN_RELAXED = 260;
 
+function lineupHasLeverage(lineup) {
+  return lineup.some(p => (p.ownership || 100) < LEVERAGE_OWN_MAX && (p.value || 0) >= LEVERAGE_VALUE_MIN);
+}
+function lineupCumOwn(lineup) {
+  return lineup.reduce((s, p) => s + (p.ownership || 0), 0);
+}
+function classifyLeverageTier(pool) {
+  if (!pool || pool.length === 0) return;
+  const values = pool.map(p => p.value || 0).filter(v => v > 0).sort((a, b) => b - a);
+  if (values.length === 0) return;
+  const p30 = values[Math.floor(values.length * 0.30)] || 0;
+  const p40 = values[Math.floor(values.length * 0.40)] || 0;
+  pool.forEach(p => {
+    const v = p.value || 0, own = p.ownership || 0;
+    if (v >= p30 && own < LEVERAGE_OWN_MAX && v >= LEVERAGE_VALUE_MIN) p.leverageTier = "ELITE";
+    else if (v >= p40 && own < 15 && v >= 4.0) p.leverageTier = "GOOD";
+    else if (own >= 35) p.leverageTier = "CHALK";
+    else p.leverageTier = "NEUTRAL";
+  });
+}
 function toStatMuseSlug(name) { return name.toLowerCase().replace(/['']/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-"); }
 function statMuseUrl(name) { return `https://www.statmuse.com/nba/ask/${toStatMuseSlug(name)}-fanduel-stat-log`; }
 function ownershipBucket(own) { if (own >= 30) return "chalk"; if (own >= 10) return "mid"; if (own >= 5) return "low"; return "punt"; }
