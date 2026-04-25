@@ -289,6 +289,131 @@ function convertLineupToManualCore(lineup, allPlayers) {
 window.__courtEdgeCoreMode = window.__courtEdgeCoreMode || false;
 window.__courtEdgeOpenSlot = window.__courtEdgeOpenSlot || null;
 
+// ============================================================================
+// v5.8.1+ MANUAL CORE CODE LAYER
+// Uses the exact doubly-even self-dual [8,4,4] extended Hamming code as a
+// structural filter for 8-man manual cores. We do NOT encode player names
+// directly; we encode the 8-man core's structural fingerprint into 8 bits,
+// project it to the nearest codeword, and reward cores that are both:
+//   1) close to a valid doubly-even self-dual codeword
+//   2) far from other selected cores in code space
+// This keeps the portfolio from collapsing into hidden clones.
+// ============================================================================
+const E8_CODE_BASIS = [
+  [1,1,1,1,1,1,1,1],
+  [1,1,1,1,0,0,0,0],
+  [1,1,0,0,1,1,0,0],
+  [1,0,1,0,1,0,1,0],
+];
+
+function bitWeight(bits) {
+  return (bits || []).reduce((s, b) => s + (b ? 1 : 0), 0);
+}
+function bitString(bits) {
+  return (bits || []).join("");
+}
+function xorBits(a, b) {
+  return a.map((v, i) => ((v || 0) ^ (b[i] || 0)) ? 1 : 0);
+}
+function hammingBits(a, b) {
+  let d = 0;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) d++;
+  }
+  return d;
+}
+function mulRowVecMod2(row, vec) {
+  let out = 0;
+  for (let i = 0; i < row.length; i++) out ^= ((row[i] || 0) & (vec[i] || 0));
+  return out ? 1 : 0;
+}
+function buildE8Codewords() {
+  const seen = new Set();
+  const out = [];
+  for (let mask = 0; mask < 16; mask++) {
+    let word = [0,0,0,0,0,0,0,0];
+    for (let i = 0; i < E8_CODE_BASIS.length; i++) {
+      if ((mask >> i) & 1) word = xorBits(word, E8_CODE_BASIS[i]);
+    }
+    const key = bitString(word);
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push({ bits: word, key, weight: bitWeight(word) });
+    }
+  }
+  return out;
+}
+const E8_CODEWORDS = buildE8Codewords();
+
+function coreStructuralBits(lineup) {
+  const rp = realPlayers(lineup);
+  const teamCounts = {};
+  const gameCounts = {};
+  rp.forEach(p => {
+    teamCounts[p.team] = (teamCounts[p.team] || 0) + 1;
+    const g = p.game || "NA";
+    gameCounts[g] = (gameCounts[g] || 0) + 1;
+  });
+
+  const sameTeamMax = Object.values(teamCounts).length ? Math.max(...Object.values(teamCounts)) : 0;
+  const sameGameMax = Object.values(gameCounts).length ? Math.max(...Object.values(gameCounts)) : 0;
+  const anchors = rp.filter(p => (p.fppg || 0) >= RULES.ANCHOR_FPPG_THRESHOLD).length;
+  const valueCore = rp.filter(p => (p.value || 0) >= 5).length;
+  const leverageCore = rp.filter(p => ((p.ownership || 100) < LEVERAGE_OWN_MAX && (p.value || 0) >= LEVERAGE_VALUE_MIN) || p.leverageTier === "ELITE").length;
+  const chalkCore = rp.filter(p => (p.ownership || 0) >= 25).length;
+  const cumOwn = rp.reduce((s, p) => s + (p.ownership || 0), 0);
+  const coreSalary = rp.reduce((s, p) => s + (p.salary || 0), 0);
+  const salaryLeft = RULES.SALARY_CAP - coreSalary;
+
+  return [
+    leverageCore >= 1 ? 1 : 0,                        // b0: real leverage piece present
+    chalkCore >= 3 ? 1 : 0,                           // b1: chalk-heavy core
+    anchors >= 2 ? 1 : 0,                             // b2: two-anchor shell
+    sameTeamMax >= 3 ? 1 : 0,                         // b3: concentrated same-team stack
+    sameGameMax >= 4 ? 1 : 0,                         // b4: concentrated same-game stack
+    valueCore >= 3 ? 1 : 0,                           // b5: value-heavy shell
+    cumOwn <= 150 ? 1 : 0,                            // b6: ownership-controlled core
+    (salaryLeft >= 4200 && salaryLeft <= 9800) ? 1 : 0, // b7: viable manual-pivot salary band
+  ];
+}
+
+function nearestE8Codeword(bits) {
+  let best = null;
+  for (const word of E8_CODEWORDS) {
+    const dist = hammingBits(bits, word.bits);
+    if (!best || dist < best.distance || (dist === best.distance && word.weight > best.weight)) {
+      best = { bits: word.bits.slice(), key: word.key, weight: word.weight, distance: dist };
+    }
+  }
+  return best || { bits: bits.slice(), key: bitString(bits), weight: bitWeight(bits), distance: 0 };
+}
+
+function coreCodeDistance(a, b) {
+  if (!a || !b || !a._manualCore || !b._manualCore || !a._codeWordBits || !b._codeWordBits) return null;
+  return hammingBits(a._codeWordBits, b._codeWordBits);
+}
+
+function applyE8CodeOverlay(lineup) {
+  if (!lineup || !lineup._manualCore) return lineup;
+  const bits = coreStructuralBits(lineup);
+  const nearest = nearestE8Codeword(bits);
+  const syndrome = E8_CODE_BASIS.map(row => mulRowVecMod2(row, bits));
+  const syndromeWeight = bitWeight(syndrome);
+
+  lineup._codeBitsVec = bits.slice();
+  lineup._codeBits = bitString(bits);
+  lineup._codeWordBits = nearest.bits.slice();
+  lineup._codeWord = nearest.key;
+  lineup._codeDistance = nearest.distance;
+  lineup._codeSyndromeVec = syndrome.slice();
+  lineup._codeSyndrome = bitString(syndrome);
+  lineup._codeValid = nearest.distance === 0 && syndromeWeight === 0;
+  lineup._codeWeight = nearest.weight;
+  lineup._codeScore = (lineup._codeValid ? 2.4 : 0) - nearest.distance * 1.15 - syndromeWeight * 0.45;
+
+  return lineup;
+}
+
 function buildTeamMap(games) {
   const teamMap = {};
   for (const g of games) {
@@ -975,50 +1100,60 @@ function lineupMinUnique(a, b) {
 function selectPortfolio(candidates, desiredCount, slateSize = 8) {
   const selected = [];
   const exposure = {};
-  // [v5.7] Two-pass selection with clean exposure enforcement.
-  // Pass 1 uses strict hardCap, pass 2 relaxes to relaxedCap if portfolio is short.
-  // NO MORE safety-net fill that bypassed caps — that's what let Sharpe hit 100%.
-  // Result: portfolio may be slightly smaller than requested on narrow slates,
-  // which is the correct behavior (better 8 diverse lineups than 11 locked ones).
   const maxExposure = desiredCount <= 3 ? 0.67 : desiredCount <= 5 ? 0.65 : desiredCount <= 10 ? 0.60 : desiredCount <= 30 ? 0.50 : desiredCount <= 75 ? 0.40 : 0.33;
   const hardCap = Math.max(2, Math.floor(desiredCount * maxExposure));
-  // Relaxed cap = absolute ceiling. At 75% of portfolio, still enforces diversity.
   const relaxedCap = Math.max(hardCap + 1, Math.ceil(desiredCount * 0.75));
-  // [v5.8] Slate-aware diversity. Small slates force more unique players per pair.
-  const minUnique = slateSize <= 3 ? 4 : slateSize <= 5 ? 3 : (desiredCount >= 15 ? 3 : 3);
+  const minUnique = slateSize <= 3 ? 4 : slateSize <= 5 ? 3 : 3;
+  const minCodeDistance = 4;
+  const relaxedCodeDistance = 2;
   const sorted = [...candidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
 
-  // Pass 1: strict hardCap enforcement
   for (const lu of sorted) {
     if (selected.length >= desiredCount) break;
     if (selected.some(existing => lineupMinUnique(existing, lu) < minUnique)) continue;
-    if (lu.some(p => (exposure[p.name] || 0) + 1 > hardCap)) continue;
-   // [v5.8] Strict cumulative-ownership cap for tournament lineups
+    if (lu._manualCore && selected.some(existing => {
+      const d = coreCodeDistance(existing, lu);
+      return d !== null && d < minCodeDistance;
+    })) continue;
+    if (realPlayers(lu).some(p => (exposure[p.name] || 0) + 1 > hardCap)) continue;
     if (lu._type === "tournament" && lineupCumOwn(lu) > GPP_CUMOWN_STRICT) continue;
     selected.push(lu);
-    lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
+    realPlayers(lu).forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
   }
 
-  // Pass 2: relax to relaxedCap — prefer least-similar lineups
   if (selected.length < desiredCount) {
     const remaining = sorted.filter(lu => !selected.includes(lu));
     remaining.sort((a, b) => {
-      const simA = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, a))) : 0;
-      const simB = selected.length ? Math.max(...selected.map(s => 9 - lineupMinUnique(s, b))) : 0;
-      return simA - simB; // least similar first
+      const simA = selected.length ? Math.max(...selected.map(s => Math.max(realPlayers(a).length, realPlayers(s).length) - lineupMinUnique(s, a))) : 0;
+      const simB = selected.length ? Math.max(...selected.map(s => Math.max(realPlayers(b).length, realPlayers(s).length) - lineupMinUnique(s, b))) : 0;
+      const codeA = (selected.length && a._manualCore)
+        ? Math.max(...selected.map(s => {
+            const d = coreCodeDistance(s, a);
+            return d === null ? 0 : (8 - d);
+          }))
+        : 0;
+      const codeB = (selected.length && b._manualCore)
+        ? Math.max(...selected.map(s => {
+            const d = coreCodeDistance(s, b);
+            return d === null ? 0 : (8 - d);
+          }))
+        : 0;
+      return (simA + codeA) - (simB + codeB);
     });
-    // [v5.8.1] Pass 2 must also enforce minUnique (relaxed by 1, floor of 2)
     const relaxedMinUnique = Math.max(2, minUnique - 1);
     for (const lu of remaining) {
       if (selected.length >= desiredCount) break;
-      if (lu.some(p => (exposure[p.name] || 0) + 1 > relaxedCap)) continue;
+      if (realPlayers(lu).some(p => (exposure[p.name] || 0) + 1 > relaxedCap)) continue;
       if (selected.some(existing => lineupMinUnique(existing, lu) < relaxedMinUnique)) continue;
+      if (lu._manualCore && selected.some(existing => {
+        const d = coreCodeDistance(existing, lu);
+        return d !== null && d < relaxedCodeDistance;
+      })) continue;
       selected.push(lu);
-      lu.forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
+      realPlayers(lu).forEach(p => { exposure[p.name] = (exposure[p.name] || 0) + 1; });
     }
   }
 
-  // Portfolio may be short if slate is too narrow — that's OK, user sees smaller count
   return selected.slice(0, desiredCount);
 }
 
@@ -1277,37 +1412,52 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
 
   if (allCandidates.length === 0) return [];
 
+  const coreCfg = getCoreModeConfig();
+  let scoredCandidates = allCandidates;
+  if (coreCfg.coreMode) {
+    scoredCandidates = allCandidates.map(lu => {
+      const shell = lu._manualCore ? lu : convertLineupToManualCore(lu, players);
+      return applyE8CodeOverlay(shell);
+    });
+    if (typeof window !== "undefined" && window.__courtEdgeDebug) {
+      window.__courtEdgeDebug.coreMode = true;
+      window.__courtEdgeDebug.codeProtectedCandidates = scoredCandidates.filter(lu => lu._manualCore).length;
+    }
+  }
+
   const simIterations = Math.min(200, Math.max(80, 60 + count * 6));
   const sims = simulateSlate(players.slice(0, 70), simIterations);
-  allCandidates.forEach(lu => {
+  scoredCandidates.forEach(lu => {
     const simScore = scoreLineupAcrossSims(lu, sims);
     const stats = lineupStats(lu);
+    const codeAdj = lu._manualCore ? (lu._codeScore || 0) : 0;
     lu._simMean = round1(simScore.mean);
     lu._simP25 = round1(simScore.p25);
     lu._simP75 = round1(simScore.p75);
     lu._simP90 = round1(simScore.p90);
     lu._simP99 = round1(simScore.p99);
     if (lu._type === "chalk") {
-      lu._portfolioScore = simScore.mean * 0.55 + simScore.p25 * 0.35 + simScore.p75 * 0.10 - stats.avgOwn * 0.05;
+      lu._portfolioScore = simScore.mean * 0.55 + simScore.p25 * 0.35 + simScore.p75 * 0.10 - stats.avgOwn * 0.05 + codeAdj;
     } else if (lu._type === "tournament") {
-      lu._portfolioScore = simScore.mean * 0.18 + simScore.p90 * 0.35 + simScore.p99 * 0.42 + (lu._hasBringBack ? 3.0 : 0) + (lu._hasStack ? 2.5 : 0) - stats.avgOwn * 0.10;
+      lu._portfolioScore = simScore.mean * 0.18 + simScore.p90 * 0.35 + simScore.p99 * 0.42 + (lu._hasBringBack ? 3.0 : 0) + (lu._hasStack ? 2.5 : 0) - stats.avgOwn * 0.10 + codeAdj;
     } else {
-      lu._portfolioScore = simScore.mean * 0.40 + simScore.p75 * 0.25 + simScore.p90 * 0.25 + (lu._hasStack ? 2.0 : 0) + (lu._hasBringBack ? 1.5 : 0) - stats.avgOwn * 0.08;
+      lu._portfolioScore = simScore.mean * 0.40 + simScore.p75 * 0.25 + simScore.p90 * 0.25 + (lu._hasStack ? 2.0 : 0) + (lu._hasBringBack ? 1.5 : 0) - stats.avgOwn * 0.08 + codeAdj;
     }
   });
-  // [v5.7.3] Run portfolio selection, then apply last-resort fallback if it rejected everything
- // [v5.8.1] Pass slate size so selectPortfolio can calibrate minUnique
+
   const slateSize = gamesList ? gamesList.length : 8;
-  let selected = selectPortfolio(allCandidates, count, slateSize);
-  if (selected.length === 0 && allCandidates.length > 0) {
-    // [v5.8.1] Rescue fallback now enforces diversity instead of slicing blindly.
-    // Was producing clone lineups when Pass 1+2 both returned empty on small slates.
-    const sortedRescue = [...allCandidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
+  let selected = selectPortfolio(scoredCandidates, count, slateSize);
+  if (selected.length === 0 && scoredCandidates.length > 0) {
+    const sortedRescue = [...scoredCandidates].sort((a, b) => (b._portfolioScore || 0) - (a._portfolioScore || 0));
     const rescueMinUnique = slateSize <= 3 ? 3 : 2;
     const rescued = [];
     for (const lu of sortedRescue) {
       if (rescued.length >= count) break;
       if (rescued.some(existing => lineupMinUnique(existing, lu) < rescueMinUnique)) continue;
+      if (lu._manualCore && rescued.some(existing => {
+        const d = coreCodeDistance(existing, lu);
+        return d !== null && d < 2;
+      })) continue;
       rescued.push(lu);
     }
     selected = rescued;
@@ -1527,6 +1677,7 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
           {lineup._hasStack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e" }}>STACK</span>}
           {lineup._hasBringBack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#a78bfa22", color: "#a78bfa" }}>BB</span>}
           {lineup._manualCore && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#0f3b5d", color: "#7dd3fc" }}>OPEN {lineup._openSlot}</span>}
+          {lineup._manualCore && lineup._codeDistance !== undefined && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: lineup._codeDistance === 0 ? "#153b22" : "#3b2f12", color: lineup._codeDistance === 0 ? "#86efac" : "#fcd34d" }}>CODE d{lineup._codeDistance}</span>}
           <Tip text={`Projected lineup total: ${stats.proj.toFixed(1)} FD pts. ${lineup._manualCore ? "Uses the top legal finisher as a proxy so the 8-man shell still scores as a full lineup." : "All 9 players combined after Vegas + DvP + injury adjustments."} GPP target: 310+ to cash meaningfully.`} wide>
                   <span style={{ color: "#64b587", fontWeight: 600 }}>{stats.proj.toFixed(1)}</span>
                 </Tip>
@@ -1745,7 +1896,28 @@ function App() {
   // [v5.7] Playoff Mode — applies tiered FPPG haircut to reflect playoff rotation/defense.
   // Default ON during April-June (playoff window). Toggle on upload screen.
   const [playoffMode, setPlayoffMode] = useState(true);
+  const [manualCoreMode, setManualCoreMode] = useState(() => {
+    try { return typeof window !== "undefined" && window.__courtEdgeCoreMode === true; } catch { return false; }
+  });
   const fileRef = useRef();
+
+  const toggleManualCoreMode = () => {
+    const next = !manualCoreMode;
+    setManualCoreMode(next);
+    try {
+      if (typeof window !== "undefined") {
+        window.__courtEdgeCoreMode = next;
+        if (next && !POSITION_ORDER.includes(window.__courtEdgeOpenSlot || "")) {
+          window.__courtEdgeOpenSlot = null;
+        }
+      }
+    } catch {}
+    setGenStatus(
+      next
+        ? "🧩 Manual 8-man core mode ON. Court Edge still solves a legal 9-man lineup first, then opens 1 slot for you to choose."
+        : "🧩 Manual 8-man core mode OFF. Court Edge will generate full 9-man lineups."
+    );
+  };
 
   const rebuildPlayers = useCallback((csv, ownMap, smMap, outNames) => {
     const parsed = parsePlayers(csv, ownMap, smMap, vegasMap, outNames, cascadeRules, {}, dvpMap, playoffMode);
@@ -1955,7 +2127,7 @@ function App() {
         const dur = Date.now() - t0;
         const arr = Array.isArray(lus) ? lus : [];
         const coreCfg = getCoreModeConfig();
-        const finalLineups = coreCfg.coreMode ? arr.map(lu => convertLineupToManualCore(lu, players)) : arr;
+        const finalLineups = coreCfg.coreMode ? arr.map(lu => (lu && lu._manualCore ? lu : convertLineupToManualCore(lu, players))) : arr;
         setLineups(finalLineups);
         setSelectedLineup(0);
         setLastGenTime(new Date());
@@ -1970,7 +2142,7 @@ function App() {
           const emergencyNote = byType.emergency > 0 ? ` · ⚠️ ${byType.emergency} from EMERGENCY fallback (no stacks)` : "";
           setGenStatus(
             `✅ Generated ${finalLineups.length}/${safeCount} lineups in ${dur}ms · ${effectiveGames.length} games · playoff ${playoffMode ? "ON" : "OFF"} · candidates: C${byType.chalk||0}/L${byType.leverage||0}/T${byType.tournament||0}/M${byType.mixed||0}${emergencyNote}` +
-            (coreCfg.coreMode ? ` · MANUAL ${coreCfg.requestedOpenSlot || "AUTO"} SLOT MODE` : "")
+            (coreCfg.coreMode ? ` · MANUAL ${coreCfg.requestedOpenSlot || "AUTO"} SLOT MODE · [8,4,4] CODE FILTER` : "")
           );
           setStep("results");
           setActiveTab("lineups");
@@ -2237,6 +2409,25 @@ function App() {
                     </button>
                   ))}
                 </div>
+                <button
+                  onClick={toggleManualCoreMode}
+                  style={{
+                    width: "100%",
+                    marginBottom: 12,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: `1px solid ${manualCoreMode ? "#22c55e" : "#1e3040"}`,
+                    background: manualCoreMode ? "#0a1a0a" : "#0a1520",
+                    color: manualCoreMode ? "#22c55e" : "#94a3b8",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontWeight: 700,
+                    fontSize: 11,
+                    letterSpacing: 1
+                  }}
+                >
+                  {manualCoreMode ? "🧩 MANUAL 8-MAN MODE: ON" : "🧩 MANUAL 8-MAN MODE: OFF"}
+                </button>
                 <div style={{ fontSize: 10, color: "#4a6a80", marginBottom: 4, letterSpacing: 1 }}>LINEUP COUNT</div>
                 <input type="range" min="1" max="150" value={lineupCount} onChange={e => setLineupCount(+e.target.value)} style={{ width: "100%", marginBottom: 4 }} />
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 12 }}>
@@ -2384,6 +2575,11 @@ function App() {
                           {lu._finishers && lu._finishers.length > 0 && (
                             <div style={{ marginTop: 6, color: "#94a3b8" }}>
                               Top finishers: {lu._finishers.slice(0, 3).map(p => `${p.name} ($${p.salary.toLocaleString()})`).join(" · ")}
+                            </div>
+                          )}
+                          {lu._codeBits && (
+                            <div style={{ marginTop: 6, color: "#7dd3fc" }}>
+                              Code layer: [8,4,4] self-dual / doubly-even · bits {lu._codeBits} → word {lu._codeWord} · d={lu._codeDistance} · syndrome {lu._codeSyndrome}
                             </div>
                           )}
                         </>
