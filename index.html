@@ -144,10 +144,10 @@ const GPP_CUMOWN_STRICT = 230;
 const GPP_CUMOWN_RELAXED = 260;
 
 function lineupHasLeverage(lineup) {
-  return lineup.some(p => (p.ownership || 100) < LEVERAGE_OWN_MAX && (p.value || 0) >= LEVERAGE_VALUE_MIN);
+  return realPlayers(lineup).some(p => (p.ownership || 100) < LEVERAGE_OWN_MAX && (p.value || 0) >= LEVERAGE_VALUE_MIN);
 }
 function lineupCumOwn(lineup) {
-  return lineup.reduce((s, p) => s + (p.ownership || 0), 0);
+  return scoringPlayers(lineup).reduce((s, p) => s + (p.ownership || 0), 0);
 }
 function classifyLeverageTier(pool) {
   if (!pool || pool.length === 0) return;
@@ -170,6 +170,124 @@ function round1(n) { return +((Number.isFinite(n) ? n : 0).toFixed(1)); }
 function round2(n) { return +((Number.isFinite(n) ? n : 0).toFixed(2)); }
 function safeNum(v, fallback = 0) { return Number.isFinite(v) ? v : fallback; }
 function clamp(x, min, max) { return Math.max(min, Math.min(max, x)); }
+
+function realPlayers(lineup) {
+  return (lineup || []).filter(p => p && !p._isOpenSlot);
+}
+
+function scoringPlayers(lineup) {
+  const core = realPlayers(lineup);
+  if (lineup && lineup._evalFinisher) return [...core, lineup._evalFinisher];
+  return core;
+}
+
+function getCoreModeConfig() {
+  const coreMode = typeof window !== "undefined" && window.__courtEdgeCoreMode === true;
+  const requestedOpenSlot =
+    typeof window !== "undefined" && POSITION_ORDER.includes(window.__courtEdgeOpenSlot || "")
+      ? window.__courtEdgeOpenSlot
+      : null;
+  return { coreMode, requestedOpenSlot };
+}
+
+function chooseOpenPlayer(lineup, forcedSlot = null) {
+  const pool = forcedSlot ? realPlayers(lineup).filter(p => p.slot === forcedSlot) : realPlayers(lineup);
+  if (!pool.length) return null;
+
+  const ranked = pool
+    .filter(p => !p._isOpenSlot)
+    .map(p => {
+      const rawKeepScore =
+        (p.score || 0) +
+        (p.projMean || p.fppg || 0) * 0.35 +
+        ((p.leverageTier === "ELITE") ? 1.0 : 0) -
+        ((p.ownership || 0) * 0.02);
+      const anchorShield = (p.fppg || 0) >= RULES.ANCHOR_FPPG_THRESHOLD ? 999 : 0;
+      return { p, keepScore: rawKeepScore + anchorShield };
+    })
+    .sort((a, b) => a.keepScore - b.keepScore);
+
+  return ranked.length ? ranked[0].p : null;
+}
+
+function buildManualFinisherPool(coreLineup, allPlayers, openSlot, strategyType = "mixed", stackTeams = [], bringBackTeams = []) {
+  const used = new Set(realPlayers(coreLineup).map(p => p.name));
+  const coreSalary = realPlayers(coreLineup).reduce((s, p) => s + (p.salary || 0), 0);
+  const weights = getStrategyWeights(strategyType);
+  const maxSalaryAllowed = RULES.SALARY_CAP - coreSalary;
+  const minSalaryNeeded = Math.max(3500, RULES.MIN_SALARY_USED - coreSalary);
+
+  return allPlayers
+    .filter(p =>
+      !used.has(p.name) &&
+      p.positions &&
+      p.positions.includes(openSlot) &&
+      p.salary >= minSalaryNeeded &&
+      p.salary <= maxSalaryAllowed
+    )
+    .map(p => ({
+      ...p,
+      _finishScore:
+        playerObjective(p, weights, stackTeams, bringBackTeams) +
+        ((p.leverageTier === "ELITE") ? 1.25 : 0) +
+        (p.statMuseFD ? 0.40 : 0)
+    }))
+    .sort((a, b) => b._finishScore - a._finishScore)
+    .slice(0, 8);
+}
+
+function convertLineupToManualCore(lineup, allPlayers) {
+  const cfg = getCoreModeConfig();
+  if (!cfg.coreMode) return lineup;
+
+  const openPlayer = chooseOpenPlayer(lineup, cfg.requestedOpenSlot);
+  if (!openPlayer) return lineup;
+
+  const core = lineup.filter(p => !(p.name === openPlayer.name && p.slot === openPlayer.slot));
+  const finishers = buildManualFinisherPool(core, allPlayers, openPlayer.slot, lineup._type || "mixed");
+
+  if (!finishers.length) return lineup;
+
+  const coreSalary = core.reduce((s, p) => s + (p.salary || 0), 0);
+  const placeholder = {
+    name: `CHOOSE ${openPlayer.slot}`,
+    slot: openPlayer.slot,
+    positions: [openPlayer.slot],
+    salary: 0,
+    fppg: 0,
+    projMean: 0,
+    projCeiling: 0,
+    ownership: 0,
+    team: "OPEN",
+    _isOpenSlot: true,
+  };
+
+  const proxyFinisher = finishers[0] || null;
+  const shell = [...core, placeholder];
+  shell._manualCore = true;
+  shell._openSlot = openPlayer.slot;
+  shell._openedPlayer = openPlayer;
+  shell._finishers = finishers;
+  shell._evalFinisher = proxyFinisher;
+  shell._coreSalary = coreSalary;
+  shell._salaryLeft = RULES.SALARY_CAP - coreSalary;
+
+  shell._type = lineup._type;
+  shell._hasStack = lineup._hasStack;
+  shell._hasBringBack = lineup._hasBringBack;
+  shell._stackGame = lineup._stackGame;
+  shell._simMean = lineup._simMean;
+  shell._simP25 = lineup._simP25;
+  shell._simP75 = lineup._simP75;
+  shell._simP90 = lineup._simP90;
+  shell._simP99 = lineup._simP99;
+  shell._portfolioScore = lineup._portfolioScore;
+
+  return shell;
+}
+
+window.__courtEdgeCoreMode = window.__courtEdgeCoreMode || false;
+window.__courtEdgeOpenSlot = window.__courtEdgeOpenSlot || null;
 
 function buildTeamMap(games) {
   const teamMap = {};
@@ -646,16 +764,21 @@ function enumerateLockedAssignments(lockedPlayers, slots) {
 }
 function lineupHasStack(lineup, minStackSize = 2) {
   const counts = {};
-  lineup.forEach(p => { counts[p.team] = (counts[p.team] || 0) + 1; });
+  realPlayers(lineup).forEach(p => { counts[p.team] = (counts[p.team] || 0) + 1; });
   return Object.values(counts).some(c => c >= minStackSize);
 }
 function lineupHasBringBack(lineup, stackTeams, bringBackTeams) {
   if (!stackTeams.length || !bringBackTeams.length) return false;
-  const hasStack = lineup.some(p => stackTeams.includes(p.team));
-  const hasBB = lineup.some(p => bringBackTeams.includes(p.team));
+  const rp = realPlayers(lineup);
+  const hasStack = rp.some(p => stackTeams.includes(p.team));
+  const hasBB = rp.some(p => bringBackTeams.includes(p.team));
   return hasStack && hasBB;
 }
-function lineupKey(lu) { return lu.map(p => p.name).sort().join("|"); }
+function lineupKey(lu) {
+  const names = realPlayers(lu).map(p => p.name).sort();
+  const openTag = lu && lu._openSlot ? `OPEN:${lu._openSlot}` : "";
+  return [...names, openTag].join("|");
+}
 
 function buildCandidatePool(players, lockedNames, excludedNames, stackTeams, bringBackTeams, strategyType, attempt, candidateExposure = {}, generatedSoFar = 0) {
   const weights = getStrategyWeights(strategyType);
@@ -831,7 +954,8 @@ function simulateSlate(players, iterations = 240) {
 }
 
 function scoreLineupAcrossSims(lineup, sims) {
-  const totals = sims.map(sim => lineup.reduce((sum, p) => sum + (sim[p.name] || 0), 0)).sort((a, b) => a - b);
+  const evalPlayers = scoringPlayers(lineup);
+  const totals = sims.map(sim => evalPlayers.reduce((sum, p) => sum + (sim[p.name] || p.projMean || p.fppg || 0), 0)).sort((a, b) => a - b);
   const mean = totals.reduce((a, b) => a + b, 0) / Math.max(totals.length, 1);
   const p25 = totals[Math.floor(totals.length * 0.25)] ?? mean;
   const p75 = totals[Math.floor(totals.length * 0.75)] ?? mean;
@@ -841,10 +965,11 @@ function scoreLineupAcrossSims(lineup, sims) {
 }
 
 function lineupMinUnique(a, b) {
-  const setA = new Set(a.map(p => p.name));
+  const aNames = new Set(realPlayers(a).map(p => p.name));
+  const bReal = realPlayers(b);
   let shared = 0;
-  b.forEach(p => { if (setA.has(p.name)) shared++; });
-  return Math.max(0, 9 - shared);
+  bReal.forEach(p => { if (aNames.has(p.name)) shared++; });
+  return Math.max(0, Math.max(realPlayers(a).length, bReal.length) - shared);
 }
 
 function selectPortfolio(candidates, desiredCount, slateSize = 8) {
@@ -898,15 +1023,16 @@ function selectPortfolio(candidates, desiredCount, slateSize = 8) {
 }
 
 function lineupStats(lu) {
+  const evalPlayers = scoringPlayers(lu);
   return {
-    total: lu.reduce((s, p) => s + p.salary, 0),
-    proj: lu.reduce((s, p) => s + p.fppg, 0),
-    avgOwn: lu.reduce((s, p) => s + p.ownership, 0) / lu.length,
-    cumOwn: lu.reduce((s, p) => s + p.ownership, 0),
-    chalk: lu.filter(p => p.ownership >= 30).length,
-    mid: lu.filter(p => p.ownership >= 10 && p.ownership < 30).length,
-    punt: lu.filter(p => p.ownership < 5).length,
-    anchor: lu.reduce((best, p) => p.fppg > best.fppg ? p : best, lu[0]),
+    total: evalPlayers.reduce((s, p) => s + (p.salary || 0), 0),
+    proj: evalPlayers.reduce((s, p) => s + (p.fppg || 0), 0),
+    avgOwn: evalPlayers.length ? evalPlayers.reduce((s, p) => s + (p.ownership || 0), 0) / evalPlayers.length : 0,
+    cumOwn: evalPlayers.reduce((s, p) => s + (p.ownership || 0), 0),
+    chalk: evalPlayers.filter(p => (p.ownership || 0) >= 30).length,
+    mid: evalPlayers.filter(p => (p.ownership || 0) >= 10 && (p.ownership || 0) < 30).length,
+    punt: evalPlayers.filter(p => (p.ownership || 0) < 5).length,
+    anchor: evalPlayers.length ? evalPlayers.reduce((best, p) => p.fppg > best.fppg ? p : best, evalPlayers[0]) : null,
   };
 }
 
@@ -1214,8 +1340,9 @@ function applyCascades(outPlayers, ownershipMap, cascadeRules) {
 function buildLineupRows(lineups) {
   const rows = [];
   for (const lu of lineups) {
+    const rp = realPlayers(lu);
     const bySlot = { PG: [], SG: [], SF: [], PF: [], C: [] };
-    lu.forEach(p => { if (bySlot[p.slot]) bySlot[p.slot].push(p); });
+    rp.forEach(p => { if (bySlot[p.slot]) bySlot[p.slot].push(p); });
     const ordered = [
       bySlot.PG[0], bySlot.PG[1],
       bySlot.SG[0], bySlot.SG[1],
@@ -1223,7 +1350,7 @@ function buildLineupRows(lineups) {
       bySlot.PF[0], bySlot.PF[1],
       bySlot.C[0]
     ];
-    if (ordered.some(p => !p)) {
+    if (ordered.some(p => !p || p._isOpenSlot)) {
       console.warn("Skipping lineup — missing slot:", lu.map(p=>p.slot+":"+p.name).join(", "));
       continue;
     }
@@ -1399,7 +1526,8 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
           {lineup._type && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 700, background: lineup._type === "chalk" ? "#f59e0b22" : lineup._type === "leverage" ? "#22c55e22" : lineup._type === "tournament" ? "#a78bfa22" : "#60a5fa22", color: lineup._type === "chalk" ? "#f59e0b" : lineup._type === "leverage" ? "#22c55e" : lineup._type === "tournament" ? "#a78bfa" : "#60a5fa" }}>{lineup._type.toUpperCase().slice(0,5)}</span>}
           {lineup._hasStack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#16a34a22", color: "#22c55e" }}>STACK</span>}
           {lineup._hasBringBack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#a78bfa22", color: "#a78bfa" }}>BB</span>}
-          <Tip text={`Projected lineup total: ${stats.proj.toFixed(1)} FD pts. All 9 players combined after Vegas + DvP + injury adjustments. GPP target: 310+ to cash meaningfully.`} wide>
+          {lineup._manualCore && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#0f3b5d", color: "#7dd3fc" }}>OPEN {lineup._openSlot}</span>}
+          <Tip text={`Projected lineup total: ${stats.proj.toFixed(1)} FD pts. ${lineup._manualCore ? "Uses the top legal finisher as a proxy so the 8-man shell still scores as a full lineup." : "All 9 players combined after Vegas + DvP + injury adjustments."} GPP target: 310+ to cash meaningfully.`} wide>
                   <span style={{ color: "#64b587", fontWeight: 600 }}>{stats.proj.toFixed(1)}</span>
                 </Tip>
           <span style={{ color: "#94a3b8" }}>${stats.total.toLocaleString()}</span>
@@ -1826,10 +1954,12 @@ function App() {
         const lus = generateLineupsWithStrategy(players, safeCount, lockedNames, excludedNames, effectiveVegasGames, lineupStrategy);
         const dur = Date.now() - t0;
         const arr = Array.isArray(lus) ? lus : [];
-        setLineups(arr);
+        const coreCfg = getCoreModeConfig();
+        const finalLineups = coreCfg.coreMode ? arr.map(lu => convertLineupToManualCore(lu, players)) : arr;
+        setLineups(finalLineups);
         setSelectedLineup(0);
         setLastGenTime(new Date());
-        if (arr.length === 0) {
+        if (finalLineups.length === 0) {
           const dbg = (typeof window !== "undefined" && window.__courtEdgeDebug) || {};
           const byType = dbg.byType || {};
           setGenStatus(`⚠️ Generated 0 lineups in ${dur}ms. Pool: ${players.length}. Games: ${effectiveGames.length}. Excluded: ${excludedNames.length}. candidates: C${byType.chalk||0}/L${byType.leverage||0}/T${byType.tournament||0}/M${byType.mixed||0}/E${byType.emergency||0}. stackReq: ${dbg.requireStack ? "yes" : "no"}.`);
@@ -1838,7 +1968,10 @@ function App() {
           const dbg = (typeof window !== "undefined" && window.__courtEdgeDebug) || {};
           const byType = dbg.byType || {};
           const emergencyNote = byType.emergency > 0 ? ` · ⚠️ ${byType.emergency} from EMERGENCY fallback (no stacks)` : "";
-          setGenStatus(`✅ Generated ${arr.length}/${safeCount} lineups in ${dur}ms · ${effectiveGames.length} games · playoff ${playoffMode ? "ON" : "OFF"} · candidates: C${byType.chalk||0}/L${byType.leverage||0}/T${byType.tournament||0}/M${byType.mixed||0}${emergencyNote}`);
+          setGenStatus(
+            `✅ Generated ${finalLineups.length}/${safeCount} lineups in ${dur}ms · ${effectiveGames.length} games · playoff ${playoffMode ? "ON" : "OFF"} · candidates: C${byType.chalk||0}/L${byType.leverage||0}/T${byType.tournament||0}/M${byType.mixed||0}${emergencyNote}` +
+            (coreCfg.coreMode ? ` · MANUAL ${coreCfg.requestedOpenSlot || "AUTO"} SLOT MODE` : "")
+          );
           setStep("results");
           setActiveTab("lineups");
         }
@@ -1850,7 +1983,27 @@ function App() {
     });
   };
 
-  const handleExport = () => { if (!lineups.length) return; const csv = exportLineupsToFanDuel(lineups); const timestamp = new Date().toISOString().slice(0,10); downloadCSV(csv, `court-edge-lineups-${timestamp}.csv`); };
+  const handleExport = () => {
+    if (!lineups.length) return;
+    if (lineups.some(lu => lu._manualCore)) {
+      setGenStatus("⚠️ Manual 8-man core mode is active. Finish the open slot yourself before exporting to FanDuel.");
+      return;
+    }
+    const csv = exportLineupsToFanDuel(lineups);
+    const timestamp = new Date().toISOString().slice(0,10);
+    downloadCSV(csv, `court-edge-lineups-${timestamp}.csv`);
+  };
+
+  const handleTemplateExport = () => {
+    if (!lineups.length) return;
+    if (lineups.some(lu => lu._manualCore)) {
+      setGenStatus("⚠️ Manual 8-man core mode is active. Finish the open slot yourself before exporting a FanDuel template.");
+      return;
+    }
+    const csv = exportLineupsToFanDuelTemplate(lineups);
+    const ts = new Date().toISOString().slice(0,10);
+    downloadCSV(csv, `fanduel-template-${ts}.csv`);
+  };
 
   const applyExclusions = (next, removedName = null) => {
     const uniqueNext = [...new Set(next)];
@@ -2157,11 +2310,7 @@ function App() {
                 <button style={S.btn("warning")} onClick={handleExport}>[↓] EXPORT CSV</button>
                 <button
                   style={{ ...S.btn("ghost"), fontSize: 10, padding: "9px 12px" }}
-                  onClick={() => {
-                    const csv = exportLineupsToFanDuelTemplate(lineups);
-                    const ts = new Date().toISOString().slice(0,10);
-                    downloadCSV(csv, `fanduel-template-${ts}.csv`);
-                  }}
+                  onClick={handleTemplateExport}
                 >
                   [↓] FD TEMPLATE
                 </button>
@@ -2229,7 +2378,20 @@ function App() {
                       </tbody>
                     </table>
                     <div style={{ marginTop: 14, padding: 10, background: "#0a1a2a", border: "1px solid #3b82f644", borderRadius: 6, fontSize: 10, color: "#60a5fa" }}>
-                      <strong>Export:</strong> Click [↓] EXPORT CSV above to download all {lineups.length} lineups. Upload to FanDuel contest lobby → "Upload Lineups".
+                      {lu._manualCore ? (
+                        <>
+                          <strong>Manual Finish:</strong> Open <span style={{ color: "#7dd3fc" }}>{lu._openSlot}</span> · approx salary left <span style={{ color: "#e2e8f0" }}>${(lu._salaryLeft || 0).toLocaleString()}</span>.
+                          {lu._finishers && lu._finishers.length > 0 && (
+                            <div style={{ marginTop: 6, color: "#94a3b8" }}>
+                              Top finishers: {lu._finishers.slice(0, 3).map(p => `${p.name} ($${p.salary.toLocaleString()})`).join(" · ")}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <strong>Export:</strong> Click [↓] EXPORT CSV above to download all {lineups.length} lineups. Upload to FanDuel contest lobby → "Upload Lineups".
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -2374,7 +2536,7 @@ function App() {
               <div style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa", letterSpacing: 1, marginBottom: 14 }}>EXPOSURE - {lineups.length} LINEUPS</div>
               {(() => {
                 const exp = {};
-                lineups.forEach(lu => lu.forEach(p => { exp[p.name] = (exp[p.name] || 0) + 1; }));
+                lineups.forEach(lu => realPlayers(lu).forEach(p => { exp[p.name] = (exp[p.name] || 0) + 1; }));
                 return (
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                     <thead><tr>{["PLAYER","APPS","EXP%","OWN%","PROJ","POS"].map(h => <th key={h} style={{ padding: "7px 8px", textAlign: "left", color: "#3b6280", fontSize: 9, borderBottom: "1px solid #1e3040" }}>{h}</th>)}</tr></thead>
