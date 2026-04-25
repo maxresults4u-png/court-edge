@@ -217,7 +217,7 @@ function buildManualFinisherPool(coreLineup, allPlayers, openSlot, strategyType 
   const maxSalaryAllowed = RULES.SALARY_CAP - coreSalary;
   const minSalaryNeeded = Math.max(3500, RULES.MIN_SALARY_USED - coreSalary);
 
-  return allPlayers
+  const prelim = allPlayers
     .filter(p =>
       !used.has(p.name) &&
       p.positions &&
@@ -225,15 +225,31 @@ function buildManualFinisherPool(coreLineup, allPlayers, openSlot, strategyType 
       p.salary >= minSalaryNeeded &&
       p.salary <= maxSalaryAllowed
     )
-    .map(p => ({
-      ...p,
-      _finishScore:
+    .map(p => {
+      const baseScore =
         playerObjective(p, weights, stackTeams, bringBackTeams) +
         ((p.leverageTier === "ELITE") ? 1.25 : 0) +
-        (p.statMuseFD ? 0.40 : 0)
-    }))
-    .sort((a, b) => b._finishScore - a._finishScore)
+        (p.statMuseFD ? 0.40 : 0);
+      return {
+        ...p,
+        _finishBase: baseScore
+      };
+    })
+    .sort((a, b) => b._finishBase - a._finishBase)
     .slice(0, 8);
+
+  return prelim.map((p, idx) => {
+    const fibWeight = fibRankWeight(idx);
+    const fibBand = fibBandForRank(idx + 1);
+    const fibScore = p._finishBase + fibWeight * 0.75;
+    return {
+      ...p,
+      _fibRank: idx + 1,
+      _fibWeight: round2(fibWeight),
+      _fibBand: fibBand,
+      _finishScore: fibScore
+    };
+  });
 }
 
 function convertLineupToManualCore(lineup, allPlayers) {
@@ -288,6 +304,44 @@ function convertLineupToManualCore(lineup, allPlayers) {
 
 window.__courtEdgeCoreMode = window.__courtEdgeCoreMode || false;
 window.__courtEdgeOpenSlot = window.__courtEdgeOpenSlot || null;
+
+// ============================================================================
+// v5.8.2+ FIBONACCI OVERLAY
+// Uses φ-weighted 3/5/8 branching on the manual finisher pool.
+// Purpose:
+//   1) reward shells that have strong OPTIONAL endings, not just one forced ending
+//   2) preserve manual flexibility with a Fibonacci-shaped finisher tree
+//   3) add a second portfolio-control layer on top of the E8 code filter
+// ============================================================================
+const PHI = (1 + Math.sqrt(5)) / 2;
+const INV_PHI = 1 / PHI;
+const FIB_WINDOWS = [3, 5, 8];
+const FIB_NUMBERS = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+
+function average(nums) {
+  if (!nums || !nums.length) return 0;
+  return nums.reduce((s, n) => s + (Number.isFinite(n) ? n : 0), 0) / nums.length;
+}
+function fibRankWeight(rankZeroBased) {
+  return Math.pow(INV_PHI, Math.max(0, rankZeroBased));
+}
+function nearestFibNumber(n) {
+  let best = FIB_NUMBERS[0];
+  let bestDist = Math.abs(n - best);
+  for (const f of FIB_NUMBERS) {
+    const d = Math.abs(n - f);
+    if (d < bestDist) { best = f; bestDist = d; }
+  }
+  return best;
+}
+function fibWindowAverage(values, windowSize) {
+  return average((values || []).slice(0, windowSize));
+}
+function fibBandForRank(rankOneBased) {
+  if (rankOneBased <= 3) return "TOP3";
+  if (rankOneBased <= 5) return "TOP5";
+  return "TOP8";
+}
 
 // ============================================================================
 // v5.8.1+ MANUAL CORE CODE LAYER
@@ -410,6 +464,50 @@ function applyE8CodeOverlay(lineup) {
   lineup._codeValid = nearest.distance === 0 && syndromeWeight === 0;
   lineup._codeWeight = nearest.weight;
   lineup._codeScore = (lineup._codeValid ? 2.4 : 0) - nearest.distance * 1.15 - syndromeWeight * 0.45;
+
+  return lineup;
+}
+
+function applyFibOverlay(lineup) {
+  if (!lineup || !lineup._manualCore) return lineup;
+  const finishers = (lineup._finishers || []).slice(0, 8);
+  if (!finishers.length) {
+    lineup._fibTop3 = 0;
+    lineup._fibTop5 = 0;
+    lineup._fibTop8 = 0;
+    lineup._fibScore = 0;
+    lineup._fibLeverageCount = 0;
+    lineup._fibSalaryFib = 0;
+    lineup._fibSalaryDistance = 0;
+    return lineup;
+  }
+
+  const finishScores = finishers.map(p => p._finishScore || p._finishBase || 0);
+  const top3 = fibWindowAverage(finishScores, 3);
+  const top5 = fibWindowAverage(finishScores, 5);
+  const top8 = fibWindowAverage(finishScores, 8);
+  const leverageCount = finishers.filter(p =>
+    p.leverageTier === "ELITE" || ((p.ownership || 100) < LEVERAGE_OWN_MAX && (p.value || 0) >= LEVERAGE_VALUE_MIN)
+  ).length;
+
+  const salaryLeftK = Math.max(1, Math.round((lineup._salaryLeft || 0) / 1000));
+  const fibSalaryTarget = nearestFibNumber(salaryLeftK);
+  const fibSalaryDistance = Math.abs(salaryLeftK - fibSalaryTarget);
+
+  lineup._fibTop3 = round2(top3);
+  lineup._fibTop5 = round2(top5);
+  lineup._fibTop8 = round2(top8);
+  lineup._fibLeverageCount = leverageCount;
+  lineup._fibSalaryFib = fibSalaryTarget;
+  lineup._fibSalaryDistance = fibSalaryDistance;
+  lineup._fibShape = "3/5/8";
+  lineup._fibScore = round2(
+    top3 * 0.03 +
+    top5 * 0.02 +
+    top8 * 0.01 +
+    Math.min(leverageCount, 3) * 0.18 -
+    fibSalaryDistance * 0.12
+  );
 
   return lineup;
 }
@@ -1417,7 +1515,9 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
   if (coreCfg.coreMode) {
     scoredCandidates = allCandidates.map(lu => {
       const shell = lu._manualCore ? lu : convertLineupToManualCore(lu, players);
-      return applyE8CodeOverlay(shell);
+      applyE8CodeOverlay(shell);
+      applyFibOverlay(shell);
+      return shell;
     });
     if (typeof window !== "undefined" && window.__courtEdgeDebug) {
       window.__courtEdgeDebug.coreMode = true;
@@ -1431,17 +1531,18 @@ function generateLineupsWithStrategy(players, count, lockedNames, excludedNames,
     const simScore = scoreLineupAcrossSims(lu, sims);
     const stats = lineupStats(lu);
     const codeAdj = lu._manualCore ? (lu._codeScore || 0) : 0;
+    const fibAdj = lu._manualCore ? (lu._fibScore || 0) : 0;
     lu._simMean = round1(simScore.mean);
     lu._simP25 = round1(simScore.p25);
     lu._simP75 = round1(simScore.p75);
     lu._simP90 = round1(simScore.p90);
     lu._simP99 = round1(simScore.p99);
     if (lu._type === "chalk") {
-      lu._portfolioScore = simScore.mean * 0.55 + simScore.p25 * 0.35 + simScore.p75 * 0.10 - stats.avgOwn * 0.05 + codeAdj;
+      lu._portfolioScore = simScore.mean * 0.55 + simScore.p25 * 0.35 + simScore.p75 * 0.10 - stats.avgOwn * 0.05 + codeAdj + fibAdj;
     } else if (lu._type === "tournament") {
-      lu._portfolioScore = simScore.mean * 0.18 + simScore.p90 * 0.35 + simScore.p99 * 0.42 + (lu._hasBringBack ? 3.0 : 0) + (lu._hasStack ? 2.5 : 0) - stats.avgOwn * 0.10 + codeAdj;
+      lu._portfolioScore = simScore.mean * 0.18 + simScore.p90 * 0.35 + simScore.p99 * 0.42 + (lu._hasBringBack ? 3.0 : 0) + (lu._hasStack ? 2.5 : 0) - stats.avgOwn * 0.10 + codeAdj + fibAdj;
     } else {
-      lu._portfolioScore = simScore.mean * 0.40 + simScore.p75 * 0.25 + simScore.p90 * 0.25 + (lu._hasStack ? 2.0 : 0) + (lu._hasBringBack ? 1.5 : 0) - stats.avgOwn * 0.08 + codeAdj;
+      lu._portfolioScore = simScore.mean * 0.40 + simScore.p75 * 0.25 + simScore.p90 * 0.25 + (lu._hasStack ? 2.0 : 0) + (lu._hasBringBack ? 1.5 : 0) - stats.avgOwn * 0.08 + codeAdj + fibAdj;
     }
   });
 
@@ -1678,6 +1779,7 @@ function LineupCard({ lineup, index, isSelected, onSelect }) {
           {lineup._hasBringBack && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#a78bfa22", color: "#a78bfa" }}>BB</span>}
           {lineup._manualCore && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#0f3b5d", color: "#7dd3fc" }}>OPEN {lineup._openSlot}</span>}
           {lineup._manualCore && lineup._codeDistance !== undefined && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: lineup._codeDistance === 0 ? "#153b22" : "#3b2f12", color: lineup._codeDistance === 0 ? "#86efac" : "#fcd34d" }}>CODE d{lineup._codeDistance}</span>}
+          {lineup._manualCore && lineup._fibScore !== undefined && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#2c1f4d", color: "#c4b5fd" }}>FIB {lineup._fibShape || "3/5/8"}</span>}
           <Tip text={`Projected lineup total: ${stats.proj.toFixed(1)} FD pts. ${lineup._manualCore ? "Uses the top legal finisher as a proxy so the 8-man shell still scores as a full lineup." : "All 9 players combined after Vegas + DvP + injury adjustments."} GPP target: 310+ to cash meaningfully.`} wide>
                   <span style={{ color: "#64b587", fontWeight: 600 }}>{stats.proj.toFixed(1)}</span>
                 </Tip>
@@ -2574,7 +2676,12 @@ function App() {
                           <strong>Manual Finish:</strong> Open <span style={{ color: "#7dd3fc" }}>{lu._openSlot}</span> · approx salary left <span style={{ color: "#e2e8f0" }}>${(lu._salaryLeft || 0).toLocaleString()}</span>.
                           {lu._finishers && lu._finishers.length > 0 && (
                             <div style={{ marginTop: 6, color: "#94a3b8" }}>
-                              Top finishers: {lu._finishers.slice(0, 3).map(p => `${p.name} ($${p.salary.toLocaleString()})`).join(" · ")}
+                              Top finishers: {lu._finishers.slice(0, 3).map(p => `#${p._fibRank} ${p.name} ($${p.salary.toLocaleString()})`).join(" · ")}
+                            </div>
+                          )}
+                          {lu._fibScore !== undefined && (
+                            <div style={{ marginTop: 6, color: "#c4b5fd" }}>
+                              Fib layer: φ-ranked {lu._fibShape || "3/5/8"} finisher tree · top3 {lu._fibTop3} · top5 {lu._fibTop5} · top8 {lu._fibTop8} · leverage {lu._fibLeverageCount} · salary band {lu._fibSalaryFib}k · score {lu._fibScore >= 0 ? "+" : ""}{lu._fibScore}
                             </div>
                           )}
                           {lu._codeBits && (
