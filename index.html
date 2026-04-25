@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Court Edge - NBA DFS Optimizer v5.8.1</title>
+<title>Court Edge - NBA DFS Optimizer v5.8.1a</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.7.4...</div></div>
+<div id="root"><div style="color:#60a5fa;font-family:monospace;padding:40px;">Loading Court Edge v5.8.1a...</div></div>
 <script>
 (function () {
   function showErrorOverlay(message, line, stack) {
@@ -170,6 +170,10 @@ function round1(n) { return +((Number.isFinite(n) ? n : 0).toFixed(1)); }
 function round2(n) { return +((Number.isFinite(n) ? n : 0).toFixed(2)); }
 function safeNum(v, fallback = 0) { return Number.isFinite(v) ? v : fallback; }
 function clamp(x, min, max) { return Math.max(min, Math.min(max, x)); }
+
+function normalizeGameKey(gameStr) {
+  return String(gameStr || "").trim().toUpperCase();
+}
 
 function realPlayers(lineup) {
   return (lineup || []).filter(p => p && !p._isOpenSlot);
@@ -855,6 +859,10 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
   const players = [];
   const projectionBoosts = buildProjectionBoostMap(outPlayers, cascadeRules);
   const idCol = headers.findIndex(h => h === "id" || h === "playerid" || h === "player_id");
+  const allowedTeams = new Set(Object.keys(teamMap || {}).map(t => String(t || "").trim().toUpperCase()).filter(Boolean));
+  const allowedGameKeys = new Set(
+    Object.values(teamMap || {}).map(v => normalizeGameKey(v?.gameStr)).filter(Boolean)
+  );
   // Pre-compute auto minute cascades from OUT players
   const _rawPlayers = [];
   for (let i = 1; i < lines.length; i++) {
@@ -865,9 +873,12 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     // [v5.7] Apply playoff FPPG haircut to the raw source, so cascade math uses adjusted rates
     if (playoffMode && f2 > 0) f2 = playoffAdjust(f2);
     const s2 = parseInt(get2("salary")) || 0;
-    const t2 = get2("team"); const inj2 = get2("injuryindicator") || "";
+    const t2 = get2("team");
+    const g2 = normalizeGameKey(get2("game"));
+    const inj2 = get2("injuryindicator") || "";
     const pos2 = (get2("rosterposition")||get2("position")).split("/").map(p=>p.trim()).filter(p=>POSITION_ORDER.includes(p));
-    if (n2 && s2 && f2 && inj2 !== "O" && pos2.length) _rawPlayers.push({name:n2,fppg:f2,csvFppg:f2,salary:s2,team:t2,positions:pos2,minutes:0});
+    const onActiveSlate = allowedGameKeys.size === 0 || allowedGameKeys.has(g2) || allowedTeams.has(String(t2 || "").trim().toUpperCase());
+    if (n2 && s2 && f2 && inj2 !== "O" && pos2.length && onActiveSlate) _rawPlayers.push({name:n2,fppg:f2,csvFppg:f2,salary:s2,team:t2,positions:pos2,minutes:0});
   }
   // [v5.3] Also cascade players marked OUT in the CSV itself
   const _csvOutPlayers = [];
@@ -881,8 +892,10 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     if (playoffMode && _cf > 0) _cf = playoffAdjust(_cf);
     const _cs = parseInt(_cget("salary")) || 0;
     const _ct = _cget("team");
+    const _cg = normalizeGameKey(_cget("game"));
     const _cpos = (_cget("rosterposition")||_cget("position")).split("/").map(p=>p.trim()).filter(p=>POSITION_ORDER.includes(p));
-    if (_cn && _cinj === "O" && _cf > 0 && _cs > 0 && _cpos.length) {
+    const _onActiveSlate = allowedGameKeys.size === 0 || allowedGameKeys.has(_cg) || allowedTeams.has(String(_ct || "").trim().toUpperCase());
+    if (_cn && _cinj === "O" && _cf > 0 && _cs > 0 && _cpos.length && _onActiveSlate) {
       _csvOutPlayers.push({name:_cn, fppg:_cf, csvFppg:_cf, salary:_cs, team:_ct, positions:_cpos, minutes:0});
     }
   }
@@ -906,9 +919,11 @@ function parsePlayers(csvText, ownershipMap, statMuseMap = {}, teamMap = {}, out
     const played = parseInt(get("played")) || 0;
     const team = get("team");
     const game = get("game");
+    const normalizedGame = normalizeGameKey(game);
     const posRaw = get("rosterposition") || get("position");
     const positions = posRaw.split("/").map(p => p.trim()).filter(p => POSITION_ORDER.includes(p));
-    if (!name || !salary || !csvFppg || injury === "O" || positions.length === 0) continue;
+    const onActiveSlate = allowedGameKeys.size === 0 || allowedGameKeys.has(normalizedGame) || allowedTeams.has(String(team || "").trim().toUpperCase());
+    if (!name || !salary || !csvFppg || injury === "O" || positions.length === 0 || !onActiveSlate) continue;
     const key = name.toLowerCase();
     const smData = statMuseMap[key];
     const baseFppg = smData?.fdAvg || csvFppg;
@@ -2297,6 +2312,17 @@ function App() {
     // eslint-disable-next-line
   }, [games, dvpMap, playoffMode]);
 
+  useEffect(() => {
+    if (!csvText) return;
+    if (lineups.length > 0) {
+      setLineups([]);
+      setSelectedLineup(0);
+      setGenStatus("⚡ Slate changed — removed-game players were cleared from the pool. Regenerate lineups.");
+      if (step === "results") setStep("build");
+    }
+    // eslint-disable-next-line
+  }, [games]);
+
   const S = {
     app: { minHeight: "100vh", background: "#060e18", color: "#e2e8f0", fontFamily: "'IBM Plex Mono', monospace", paddingBottom: 40 },
     hdr: { background: "linear-gradient(180deg,#0a1f35 0%,#060e18 100%)", borderBottom: "1px solid #1e3040", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" },
@@ -2313,7 +2339,7 @@ function App() {
       <div style={S.hdr}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "#60a5fa" }}>COURT EDGE</div>
-          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.8.1 · DIVERSITY HARDENING · MAXRESULTS4U BUSINESS SOLUTIONS</div>
+          <div style={{ fontSize: 9, color: "#3b82f6", letterSpacing: 3 }}>NBA DFS OPTIMIZER v5.8.1a · DIVERSITY HARDENING · MAXRESULTS4U BUSINESS SOLUTIONS</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {[["upload","1.UPLOAD"],["build","2.BUILD"],["results","3.RESULTS"]].map(([st, label]) => <button key={st} style={S.pill(step === st)} onClick={() => players.length > 0 && setStep(st)}>{label}</button>)}
@@ -2867,7 +2893,7 @@ function App() {
         </div>
       )}
 
-      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.8.1</div>
+      <div style={{ textAlign: "center", padding: "20px", fontSize: 9, color: "#3b6280", letterSpacing: 2 }}>MAXRESULTS4U BUSINESS SOLUTIONS · COURT EDGE v5.8.1a</div>
     </div>
   );
 }
